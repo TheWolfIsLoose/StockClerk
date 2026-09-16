@@ -458,13 +458,18 @@ function MF:Build()
     scrollBar:SetPoint("TOPLEFT",     scrollBox, "TOPRIGHT",    2, 0)
     scrollBar:SetPoint("BOTTOMLEFT",  scrollBox, "BOTTOMRIGHT", 2, 0)
 
-    local dataProvider = CreateDataProvider()
-    local scrollView   = CreateScrollBoxListLinearView()
-    scrollView:SetDataProvider(dataProvider)
+    -- Order matters: current builds validate that the element factory is
+    -- set before a DataProvider is attached, otherwise SetDataProvider
+    -- errors out with "elementFactory was nil". Configure the view first,
+    -- initialize with the scroll bar, then hand off the DataProvider.
+    local scrollView = CreateScrollBoxListLinearView()
     scrollView:SetElementInitializer("Button", InitializeRow)
     scrollView:SetElementExtent(ROW_HEIGHT)
 
     ScrollUtil.InitScrollBoxListWithScrollBar(scrollBox, scrollBar, scrollView)
+
+    local dataProvider = CreateDataProvider()
+    scrollView:SetDataProvider(dataProvider)
 
     self.frame        = f
     self.scrollBox    = scrollBox
