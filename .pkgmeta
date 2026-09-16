@@ -1,0 +1,21 @@
+# Stock Clerk - BigWigsMods packager config
+# https://github.com/BigWigsMods/packager
+#
+# When we wire up release.sh / GitHub Actions, this file drives what
+# ships to CurseForge / Wago / WoWInterface. Files listed under
+# `ignore` are stripped from the packaged zip.
+
+package-as: StockClerk
+
+manual-changelog:
+  filename: CHANGELOG.md
+  markup-type: markdown
+
+# Dev-only files that must never appear in packaged releases.
+ignore:
+  - update.bat        # local one-click dev updater (Windows)
+  - README.md         # dev-facing repo readme, not user-facing docs
+  - Dev              # dev seed lists (also gated by @debug@ in the TOC)
+  - .github          # CI workflows
+  - .gitignore
+  - .pkgmeta

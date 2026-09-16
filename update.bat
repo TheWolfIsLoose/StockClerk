@@ -1,5 +1,10 @@
 @echo off
-REM Stock Clerk - one-click updater
+REM Stock Clerk - one-click updater  [DEV ONLY, DO NOT SHIP]
+REM
+REM This file is a local dev convenience. It MUST NOT be included in
+REM any packaged release uploaded to CurseForge, Wago, or WoWInterface.
+REM The .pkgmeta ignore list excludes it from packaged builds.
+REM
 REM Double-click this file to pull the latest version from GitHub.
 REM After it finishes, type /reload in WoW.
 
