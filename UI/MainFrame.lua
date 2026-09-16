@@ -329,6 +329,15 @@ function MF:Build()
     f:SetMovable(true)
     f:EnableMouse(true)
 
+    -- Body background. PortraitFrameTemplate in current builds only provides
+    -- the border chrome; the inner panel is transparent, so we paint an
+    -- opaque dark backdrop over the frame area (inset to leave the border).
+    local body = f:CreateTexture(nil, "BACKGROUND", nil, -8)
+    body:SetTexture(WHITE_TEX)
+    body:SetVertexColor(0.06, 0.06, 0.08, 0.94)
+    body:SetPoint("TOPLEFT", 8, -22)
+    body:SetPoint("BOTTOMRIGHT", -8, 8)
+
     -- Title + portrait
     f:SetTitle(L.MAIN_TITLE or "Stock Clerk")
     if f.SetPortraitToAsset then
