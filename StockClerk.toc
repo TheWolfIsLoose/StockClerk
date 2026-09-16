@@ -1,0 +1,25 @@
+## Interface: 120100
+## Title: Stock Clerk
+## Notes: Per-character consumable restock lists with automated bank/mail/vendor pulls and AH shopping.
+## Author: Jakerator
+## Version: @project-version@
+## IconTexture: Interface\ICONS\INV_Misc_Note_01
+## SavedVariables: StockClerkDB
+## SavedVariablesPerCharacter: StockClerkCharDB
+## X-Category: Inventory
+
+Libs\Libs.xml
+
+Locale.lua
+DB.lua
+ItemResolver.lua
+Inventory.lua
+Core.lua
+
+Sources\Bags.lua
+
+UI\MainFrame.lua
+
+#@debug@
+Dev\RecommendedLists.lua
+#@end-debug@
