@@ -29,11 +29,18 @@ manual-changelog:
 # entry silently breaks the ignore rule for that entry in the BigWigsMods
 # packager, which is why an earlier dry-run leaked update.bat / Dev / README.
 #
-# All dev docs, notes, and utilities live under Dev/ so the single
-# `Dev` entry covers them. The remaining three are repo-root config
-# files that packager/git need at build time but don't belong in the
-# shipped zip.
+# Dev docs, notes, and utilities live under Dev/, so the single `Dev`
+# entry covers them. The remaining entries are repo-root files that
+# git/packager/GitHub need at build time but don't belong in the
+# shipped zip:
+#   README.md    -- GitHub renders this as the repo landing page, so
+#                   it has to live at root; irrelevant to end-users
+#                   of the shipped addon.
+#   .gitignore   -- git-only.
+#   .pkgmeta     -- this file; packager-only.
+#   .github      -- CI/hooks if we ever add them.
 ignore:
+  - README.md
   - Dev
   - .github
   - .gitignore
