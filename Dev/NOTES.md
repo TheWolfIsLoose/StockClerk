@@ -223,6 +223,25 @@ character would try to buy the same items.
 
 ---
 
+## Wave 2: bank / warband auto-open+close (2026-09-16)
+
+AH auto-open+close now works via PLAYER_INTERACTION_MANAGER_FRAME_SHOW
+/HIDE. Same treatment for the personal bank and warband bank is a
+natural companion feature and pairs directly with the planned
+"auto-pull from bank" automation.
+
+Events to hook:
+  - `BANKFRAME_OPENED` / `BANKFRAME_CLOSED` (personal bank)
+  - `PLAYER_INTERACTION_MANAGER_FRAME_SHOW/HIDE` with
+    Enum.PlayerInteractionType.BankBanker (or the warband equivalent
+    -- verify against Interaction Manager enum in 12.1)
+
+Same `openedByBank` / `openedByWarband` flag pattern as the AH path.
+Only close if we opened it, so a user with SC pinned open doesn't
+lose their window every time they visit the bank.
+
+---
+
 ## Integration reference: Syndicator (added 2026-09-16)
 
 Syndicator (by plusmouse; Interface 120100+) is the industry-standard
