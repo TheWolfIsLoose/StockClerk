@@ -1511,8 +1511,20 @@ function MF:Build()
         self._addBtnFocused = false
     end
 
-    addBtn:SetScript("OnKeyDown", function(_, key)
+    addBtn:SetScript("OnKeyDown", function(self, key)
         if not MF._addBtnFocused then return end
+        -- CRITICAL: re-assert propagation on EVERY key, like the root
+        -- frame's OnKeyDown does. SetPropagateKeyboardInput is sticky
+        -- per-frame across keypresses: FocusAddButton set it false, so
+        -- any key this handler doesn't explicitly own would otherwise
+        -- be eaten for as long as the Add button holds focus -- game
+        -- bindings, movement, chat, Esc-out, everything. That's the
+        -- "addon ate my keyboard" class. Consume only what we handle.
+        if key ~= "TAB" and key ~= "ENTER" and key ~= "SPACE" and key ~= "ESCAPE" then
+            self:SetPropagateKeyboardInput(true)
+            return
+        end
+        self:SetPropagateKeyboardInput(false)
         if key == "TAB" then
             -- Defer BOTH the blur and the focus transfer by one frame
             -- so the current Tab keystroke is fully consumed by this
@@ -1533,9 +1545,9 @@ function MF:Build()
             end)
         elseif key == "ENTER" or key == "SPACE" then
             DoAdd()
-            -- DoAdd clears the editbox focuses on success. Keep keyboard
-            -- focus on the Add button so the user can immediately Shift+
-            -- Tab back to Price Cap or Tab into the list without a mouse.
+            -- DoAdd clears the editbox focuses on success. Keyboard
+            -- focus stays on the Add button (so Shift+Tab back to Price
+            -- Cap works) -- safe now that unhandled keys propagate.
         elseif key == "ESCAPE" then
             MF:BlurAddButton()
         end

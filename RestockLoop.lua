@@ -74,6 +74,51 @@ local function Status(msg)
 end
 
 -- ---------------------------------------------------------------------------
+-- Session purchase ledger (itemID -> { qty, baseHave })
+--
+-- WHY: AH commodity purchases are delivered by MAIL, not straight to bags,
+-- so Inventory:GetCount (bags-only) doesn't reflect a successful buy until
+-- the user loots their mailbox. Without this ledger the shortfall math
+-- (short = need - have) never sees the purchase, and every press of
+-- "Restock at AH" re-buys everything it just bought. That was the live
+-- user bug: repeated Restock presses kept re-purchasing with no memory
+-- of prior success.
+--
+-- Recording each success as (qty bought, bag count at buy time) lets the
+-- shortfall math treat those units as provisionally owned. When the user
+-- loots the mail, the bag count rises by qty and effectivePending()
+-- decays to zero on its own -- no event watching needed. Session-scoped
+-- on purpose: never persisted, so no stale-offset hazard across logouts.
+-- ---------------------------------------------------------------------------
+Loop.pendingBuys = {}
+
+function Loop:_RecordPurchase(itemID, qty)
+    local haveNow = ADDON.Inventory:GetCount(itemID) or 0
+    local cur = self.pendingBuys[itemID]
+    if cur then
+        -- Stack onto the same baseline so decay still works after the
+        -- mail from the FIRST purchase is looted.
+        cur.qty = cur.qty + qty
+    else
+        self.pendingBuys[itemID] = { qty = qty, baseHave = haveNow }
+    end
+end
+
+-- Bag count + outstanding (mailed-but-unlooted) purchases from this
+-- session. Decays automatically as the bag count catches up.
+function Loop:_EffectiveHave(itemID)
+    local have = ADDON.Inventory:GetCount(itemID) or 0
+    local p = self.pendingBuys[itemID]
+    if not p then return have end
+    local unlooted = math.max(0, p.qty - math.max(0, have - p.baseHave))
+    if unlooted <= 0 then
+        self.pendingBuys[itemID] = nil -- fully absorbed, stop tracking
+        return have
+    end
+    return have + unlooted
+end
+
+-- ---------------------------------------------------------------------------
 -- Build the shortfall queue. Sorted by biggest shortfall first so
 -- raid-critical stuff comes up before nice-to-haves. Each entry carries
 -- lastPrice for the budget allocator.
@@ -81,7 +126,10 @@ end
 local function BuildQueue()
     local q = {}
     for _, it in ipairs(ADDON.DB:GetSortedItems()) do
-        local have = ADDON.Inventory:GetCount(it.itemID) or 0
+        -- _EffectiveHave, not raw bag count: items we successfully bought
+        -- earlier this session are sitting in the mailbox and must count
+        -- toward the shortfall or we buy them again on the next press.
+        local have = Loop:_EffectiveHave(it.itemID)
         local short = it.need - have
         if short > 0 then
             q[#q + 1] = {
@@ -222,8 +270,10 @@ function Loop:Advance()
         item.name, self.state.index, #self.state.queue))
 
     -- Re-derive short in case we bought some in a prior loop iteration
-    -- and the count has updated.
-    local have = ADDON.Inventory:GetCount(item.itemID) or 0
+    -- and the count has updated. _EffectiveHave folds in this session's
+    -- mailed-but-unlooted purchases so successive loop iterations and
+    -- successive whole loops don't re-buy what already succeeded.
+    local have = Loop:_EffectiveHave(item.itemID)
     local short = item.need - have
     if short <= 0 then
         DebugPrint(("skip id=%d, already restocked (%d/%d)"):format(item.itemID, have, item.need))
@@ -359,13 +409,20 @@ function Loop:_OnConfirm(plan)
             if self.state.budgetLeft then
                 self.state.budgetLeft = math.max(0, self.state.budgetLeft - spent)
             end
+            -- Record in the session ledger BEFORE logging/status so the
+            -- very next shortfall computation (next Advance, or the next
+            -- manual Restock press) sees these units as provisionally
+            -- owned. Items arrive by mail; bags-only counts won't show
+            -- them until the user loots, and the ledger decays away as
+            -- soon as they do.
+            self:_RecordPurchase(plan.itemID, plan.planQuantity)
             if ADDON.Log then
                 ADDON.Log:Emit("buy_success", plan.itemID, {
                     qty         = plan.planQuantity,
                     spentCopper = spent,
                 })
             end
-            Status(("|cff4ade80Bought %d %s for %s|r"):format(
+            Status(("|cff4ade80Bought %d %s for %s (via mail)|r"):format(
                 plan.planQuantity, plan.name, GetCoinTextureString(spent)))
         else
             if ADDON.Log then
