@@ -453,9 +453,11 @@ local function BuildRow(row)
     -- the needCell so it lands exactly where the value was. The needCell
     -- carries the border animation; the editor just needs a slightly
     -- darker fill so the caret has enough contrast.
+    -- SetColorTexture (not WHITE_TEX+SetVertexColor) so the editor bg
+    -- actually paints on retail Midnight -- see LogFrame's ApplyFill
+    -- comment for the atlas-alpha gotcha.
     row.needEditBg = row:CreateTexture(nil, "BACKGROUND")
-    row.needEditBg:SetTexture(WHITE_TEX)
-    row.needEditBg:SetVertexColor(Palette.bgDark[1], Palette.bgDark[2], Palette.bgDark[3], 1)
+    row.needEditBg:SetColorTexture(Palette.bgDark[1], Palette.bgDark[2], Palette.bgDark[3], 1)
     row.needEditBg:Hide()
 
     row.needEdit = CreateFrame("EditBox", nil, row)
@@ -466,6 +468,13 @@ local function BuildRow(row)
     row.needEdit:SetJustifyH("CENTER")
     row.needEdit:SetSize(56, 20)
     row.needEdit:SetPoint("CENTER", row.needCell, "CENTER")
+    -- Explicitly single-line + keyboard-enabled + non-propagating so
+    -- Enter routes to OnEnterPressed and only OnEnterPressed. Belt-and-
+    -- suspenders: without SetMultiLine(false) some retail builds route
+    -- Enter to OnTextChanged (newline) instead of OnEnterPressed, which
+    -- makes the field feel like it "only commits on click-away".
+    row.needEdit:SetMultiLine(false)
+    row.needEdit:EnableKeyboard(true)
     row.needEditBg:SetPoint("TOPLEFT",     row.needEdit, "TOPLEFT",     -4, 2)
     row.needEditBg:SetPoint("BOTTOMRIGHT", row.needEdit, "BOTTOMRIGHT",  4, -2)
     row.needEdit:SetFrameLevel(row.needCell:GetFrameLevel() + 1)
@@ -476,15 +485,19 @@ local function BuildRow(row)
     -- The cap cell already carries the flat black border and brand-mint
     -- focus animation — the editor just needs a slightly darker fill so
     -- the caret has enough contrast.
+    -- See row.needEditBg above for why SetColorTexture rather than the
+    -- WHITE_TEX+SetVertexColor atlas path.
     row.priceEditBg = row:CreateTexture(nil, "BACKGROUND")
-    row.priceEditBg:SetTexture(WHITE_TEX)
-    row.priceEditBg:SetVertexColor(Palette.bgDark[1], Palette.bgDark[2], Palette.bgDark[3], 1)
+    row.priceEditBg:SetColorTexture(Palette.bgDark[1], Palette.bgDark[2], Palette.bgDark[3], 1)
     row.priceEditBg:Hide()
 
     row.priceEdit = CreateFrame("EditBox", nil, row)
     row.priceEdit:SetFontObject("GameFontHighlight")
     row.priceEdit:SetAutoFocus(false)
     row.priceEdit:SetNumeric(true)
+    -- See row.needEdit above for why single-line + explicit keyboard.
+    row.priceEdit:SetMultiLine(false)
+    row.priceEdit:EnableKeyboard(true)
     row.priceEdit:SetMaxLetters(7)
     row.priceEdit:SetJustifyH("CENTER")
     row.priceEdit:SetSize(72, 20)
@@ -1242,6 +1255,42 @@ function MF:Build()
     end)
     MF._cogBtn = cogBtn
 
+    -- Activity-log toggle (QA-13). Sits left of the cog in the header.
+    -- Uses three drawn mint bars for the "hamburger" glyph -- WoW's stock
+    -- fonts don't include U+2261, and SetColorTexture rectangles are
+    -- always available and tint cleanly on hover.
+    local logBtn = CreateFrame("Button", nil, header)
+    logBtn:SetSize(22, 22)
+    logBtn:SetPoint("RIGHT", cogBtn, "LEFT", -2, 0)
+    local logGlyph = {}
+    for i = 1, 3 do
+        local bar = logBtn:CreateTexture(nil, "OVERLAY")
+        bar:SetColorTexture(0.85, 0.85, 0.85, 1)
+        bar:SetSize(12, 2)
+        bar:SetPoint("CENTER", 0, 4 - (i - 1) * 4)
+        logGlyph[i] = bar
+    end
+    logBtn:SetScript("OnEnter", function(self)
+        for _, b in ipairs(logGlyph) do
+            b:SetColorTexture(Palette.brand[1], Palette.brand[2], Palette.brand[3], 1)
+        end
+        GameTooltip:SetOwner(self, "ANCHOR_BOTTOM")
+        GameTooltip:SetText("Activity log")
+        GameTooltip:Show()
+    end)
+    logBtn:SetScript("OnLeave", function()
+        for _, b in ipairs(logGlyph) do
+            b:SetColorTexture(0.85, 0.85, 0.85, 1)
+        end
+        GameTooltip:Hide()
+    end)
+    logBtn:SetScript("OnClick", function()
+        if ADDON.LogFrame and ADDON.LogFrame.Toggle then
+            ADDON.LogFrame:Toggle()
+        end
+    end)
+    MF._logBtn = logBtn
+
     -- ---- Toolbar (add item + controls) ---------------------------------
     -- Sits directly under the header. No fill; the labels + editboxes
     -- provide enough visual weight. Ends with a 1px black bottom border
@@ -1603,51 +1652,14 @@ function MF:Build()
     footerSep:SetPoint("TOPRIGHT", 0, 0)
     PixelSnap(footerSep)
 
+    -- Status bar spans the footer from the left inset up to just before
+    -- the Close button (Close is 80w right-anchored at -12, so we stop
+    -- at -100 to leave a 6px gap).
     local statusBar = footer:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
     statusBar:SetPoint("LEFT", 14, 0)
-    statusBar:SetPoint("RIGHT", footer, "RIGHT", -260, 0)
+    statusBar:SetPoint("RIGHT", footer, "RIGHT", -100, 0)
     statusBar:SetJustifyH("LEFT")
     self.statusBar = statusBar
-
-    -- Log toggle button (QA-13). Sits between the status text and the
-    -- Close button. Small (28px) so it doesn't crowd the primary actions.
-    -- Uses a plain drawn three-bar "hamburger" glyph (three 12x2 mint
-    -- rectangles stacked with 2px gaps) rather than a Unicode text glyph,
-    -- because WoW's stock fonts render U+2261 as a placeholder. Drawn
-    -- rectangles are always available and tint cleanly on hover.
-    local logBtn = CreateFrame("Button", nil, footer)
-    logBtn:SetSize(28, 22)
-    logBtn:SetPoint("RIGHT", -100, 0)   -- close (80w+12) + gap = 100
-    StyleButton(logBtn)
-    local logGlyph = {}
-    for i = 1, 3 do
-        local bar = logBtn:CreateTexture(nil, "OVERLAY")
-        bar:SetColorTexture(0.85, 0.85, 0.85, 1)
-        bar:SetSize(12, 2)
-        -- Center the middle bar, stack the others 4px above/below.
-        bar:SetPoint("CENTER", 0, 4 - (i - 1) * 4)
-        logGlyph[i] = bar
-    end
-    logBtn:SetScript("OnEnter", function(self)
-        for _, b in ipairs(logGlyph) do
-            b:SetColorTexture(Palette.brand[1], Palette.brand[2], Palette.brand[3], 1)
-        end
-        GameTooltip:SetOwner(self, "ANCHOR_TOP")
-        GameTooltip:SetText("Activity log")
-        GameTooltip:Show()
-    end)
-    logBtn:SetScript("OnLeave", function()
-        for _, b in ipairs(logGlyph) do
-            b:SetColorTexture(0.85, 0.85, 0.85, 1)
-        end
-        GameTooltip:Hide()
-    end)
-    logBtn:SetScript("OnClick", function()
-        if ADDON.LogFrame and ADDON.LogFrame.Toggle then
-            ADDON.LogFrame:Toggle()
-        end
-    end)
-    MF._logBtn = logBtn
 
     local closeBtn = CreateFrame("Button", nil, footer)
     closeBtn:SetSize(80, 22)
@@ -1858,8 +1870,19 @@ function MF:RefreshRestockBtn(shortCount)
     end
 end
 
+-- Set the footer status text. Also mirrors the message into the activity
+-- log so the sidecar reads as a persistent history of the same status
+-- stream the footer shows -- "Searching AH for...", "Cheapest: 100g",
+-- "Cap for X set to 50g", loop tick messages, etc. This is intentional:
+-- the log is meant to be the durable record of the same human-readable
+-- feedback that used to only exist for a fraction of a second in the
+-- footer before the next status overwrote it. Empty strings are still
+-- passed to the footer (to clear it) but skipped in the log.
 function MF:SetStatus(text)
     if self.statusBar then self.statusBar:SetText(text or "") end
+    if text and text ~= "" and ADDON.Log and ADDON.Log.Emit then
+        ADDON.Log:Emit("status", nil, { text = text })
+    end
 end
 
 -- ---------------------------------------------------------------------------

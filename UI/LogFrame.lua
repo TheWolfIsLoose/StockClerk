@@ -167,6 +167,13 @@ local function FormatEntry(e)
             p.fromCopper and CoinText(p.fromCopper) or "none",
             p.toCopper   and CoinText(p.toCopper)   or "none")
 
+    elseif e.kind == "status" then
+        -- Passthrough. SetStatus messages arrive already coloured and
+        -- fully formatted (e.g. "|cffff8888AH search failed|r ...") so
+        -- we render them verbatim. This is what makes the sidecar act
+        -- as a persistent history of the footer status stream.
+        line = tostring(p.text or "")
+
     else
         line = ("|cff888888%s|r"):format(tostring(e.kind))
     end
