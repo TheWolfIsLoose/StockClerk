@@ -1113,20 +1113,24 @@ function MF:Build()
     -- Sits under the hint; no fill (matches atrocity's headerless section
     -- headers — the labels themselves + the 1px bottom border are enough).
     -- Labels in brand mint (accent = section-header rule).
-    -- Header frame right edge is anchored directly to the window frame
-    -- (`f`) with a hardcoded -22px inset, NOT to listHolder or scrollBox.
-    -- Reason: listHolder anchors TOPLEFT to headers (BOTTOMLEFT), so
-    -- anchoring headers back to any descendant of listHolder produces a
-    -- circular dependency ("Cannot anchor to a region dependent on it").
-    -- The -22 matches the row-right-edge exactly: listHolder is inset 4px
-    -- from f, scrollBox is inset 18px from listHolder for the scroll bar,
-    -- rows live inside scrollBox. So row.RIGHT = f.RIGHT - 22. Every
-    -- RIGHT-anchored offset in MakeHeader now shares the exact same origin
-    -- as the same-numbered offset in BuildRow.
+    -- Header frame stretches FULL window width (TOPRIGHT anchored to `f`'s
+    -- TOPRIGHT with 0 inset) so its band matches the toolbar/footer bands
+    -- for aesthetic uniformity — no visible cutoff before the scroll bar.
+    -- Anchoring to a descendant of listHolder would produce a circular
+    -- dependency (listHolder anchors TOPLEFT to headers, BOTTOMLEFT), so
+    -- `f` is the only safe reference here.
+    --
+    -- The header labels themselves (built by MakeHeader below) use RIGHT-
+    -- anchored offsets that must reference the row-right-edge, NOT the
+    -- header-frame-right-edge. Rows live inside scrollBox which is inset
+    -- 22px from f (listHolder 4px + scroll bar 18px), so we compensate by
+    -- passing xOffset - 22 to every RIGHT- or CENTER-anchored MakeHeader
+    -- call (see ROW_RIGHT_INSET below).
+    local ROW_RIGHT_INSET = 22
     local headers = CreateFrame("Frame", nil, f)
     headers:SetHeight(20)
     headers:SetPoint("TOPLEFT", hint, "BOTTOMLEFT", -12, -4)
-    headers:SetPoint("TOPRIGHT", f, "TOPRIGHT", -22, 0)
+    headers:SetPoint("TOPRIGHT", f, "TOPRIGHT", 0, 0)
     -- Same whisper-band as the toolbar. Reads as "column-header strip" so
     -- the labels have visual weight even without a colored fill of their own.
     ApplyBand(headers, Palette.bandTint)
@@ -1146,6 +1150,9 @@ function MF:Build()
     --              value like Have, where the cell has no chrome)
     --   "center" — label CENTER at xOffset from headers' RIGHT (matches the
     --              cell's center anchor — use for every cell-based column)
+    -- Right/center modes automatically shift xOffset LEFT by ROW_RIGHT_INSET
+    -- so the caller can pass the same offset used in BuildRow (which is
+    -- relative to row.RIGHT) even though headers is anchored to f.RIGHT.
     local function MakeHeader(text, mode, xOffset)
         local fs = headers:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
         fs:SetTextColor(Palette.brand[1], Palette.brand[2], Palette.brand[3], 1)
@@ -1153,9 +1160,9 @@ function MF:Build()
         if mode == "left" then
             fs:SetPoint("LEFT", headers, "LEFT", xOffset, 0)
         elseif mode == "right" then
-            fs:SetPoint("RIGHT", headers, "RIGHT", xOffset, 0)
+            fs:SetPoint("RIGHT", headers, "RIGHT", xOffset - ROW_RIGHT_INSET, 0)
         else -- center
-            fs:SetPoint("CENTER", headers, "RIGHT", xOffset, 0)
+            fs:SetPoint("CENTER", headers, "RIGHT", xOffset - ROW_RIGHT_INSET, 0)
         end
         return fs
     end
