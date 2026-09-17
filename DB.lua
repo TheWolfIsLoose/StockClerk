@@ -4,10 +4,23 @@
     for the per-character consumable list.
 
     Schema:
-      char.items = { [itemID:number] = { need = number, addedAt = timestamp } }
+      char.items = {
+        [itemID:number] = {
+          need      = number,
+          maxPrice  = copper,          -- optional; nil = no cap set
+          addedAt   = timestamp,
+          lastPrice = { copper, seenAt, source },   -- optional; QA-11
+        }
+      }
       char.uiPos = { point, x, y }           -- last MainFrame position
       global.templates = { [name] = { [itemID] = need, ... } }
-      global.settings  = { autoOpenAtAH = bool, ... }
+      global.settings  = {
+        autoOpenAtAH   = bool,
+        autoPurchase   = bool,      -- QA-10 opt-in auto-purchase master switch
+        autoBudgetGold = number|nil, -- QA-10a per-loop budget cap (gold)
+        lastPriceTTL   = number,     -- QA-11 seconds before "Last Seen" dims
+      }
+      global.log      = array of entries (see Log.lua)
 
     We keep the on-disk shape stable across versions; any new field lives
     inside `defaults` so AceDB fills it in on load without a migration.
@@ -31,8 +44,11 @@ DB.defaults = {
     global = {
         templates = {},
         settings  = {
-            autoOpenAtAH = true,
-            debugSeeded  = false,   -- so /clerk seed only runs once by default
+            autoOpenAtAH   = true,
+            debugSeeded    = false,     -- so /clerk seed only runs once by default
+            autoPurchase   = false,     -- QA-10; user must opt in explicitly
+            autoBudgetGold = nil,       -- QA-10a; required to be set before auto runs
+            lastPriceTTL   = 24 * 3600, -- QA-11; 24h before Last Seen dims
         },
     },
 }
@@ -77,10 +93,11 @@ function DB:GetSortedItems()
     for itemID, entry in pairs(self.char.items) do
         local name = C_Item.GetItemInfo(itemID) or ("item:" .. itemID)
         list[#list + 1] = {
-            itemID   = itemID,
-            need     = entry.need,
-            name     = name,
-            maxPrice = entry.maxPrice, -- copper, may be nil ("no cap set")
+            itemID    = itemID,
+            need      = entry.need,
+            name      = name,
+            maxPrice  = entry.maxPrice,  -- copper, may be nil ("no cap set")
+            lastPrice = entry.lastPrice, -- { copper, seenAt, source } or nil
         }
     end
     table.sort(list, function(a, b)
@@ -120,6 +137,24 @@ function DB:SetItemMaxPrice(itemID, maxPriceCopper)
     local entry = self.char.items[itemID]
     if not entry then return end
     entry.maxPrice = maxPriceCopper
+end
+
+-- QA-11: stamp the most-recent observed unit price for an item. Sources:
+--   "click"  - piggybacked on a left-click AH search from the row list
+--   "loop"   - piggybacked on the restock loop's per-item search
+--   "manual" - user-initiated re-price (reserved for future)
+-- Silently no-ops if the item isn't currently tracked (a stale search
+-- callback firing after remove shouldn't create a phantom entry).
+function DB:StampLastPrice(itemID, copperPerUnit, source)
+    itemID = tonumber(itemID)
+    if not itemID or not copperPerUnit or copperPerUnit <= 0 then return end
+    local entry = self.char.items[itemID]
+    if not entry then return end
+    entry.lastPrice = {
+        copper = copperPerUnit,
+        seenAt = time(),
+        source = source or "unknown",
+    }
 end
 
 function DB:RemoveItem(itemID)

@@ -88,7 +88,10 @@ end
 -- where results is a sorted-by-price array of
 --   { unitPrice = copper, quantity = N, owners = {...} }
 -- Or (false, errorString) on failure/timeout.
-function AH:SearchItem(itemID, callback)
+-- priceSource lets QA-11's StampLastPrice attribute the observation to a
+-- source ("click" from a row left-click, "loop" from the restock loop's
+-- per-item search). Optional; defaults to "unknown" if omitted.
+function AH:SearchItem(itemID, callback, priceSource)
     if not itemID then
         if callback then callback(false, "no itemID") end
         return
@@ -102,9 +105,10 @@ function AH:SearchItem(itemID, callback)
         Finish(false, "superseded")
     end
 
-    self.state.mode     = "search"
-    self.state.itemID   = itemID
-    self.state.callback = callback
+    self.state.mode        = "search"
+    self.state.itemID      = itemID
+    self.state.callback    = callback
+    self.state.priceSource = priceSource or "unknown"
 
     DebugPrint("SendSearchQuery id=" .. itemID)
     local itemKey = C_AuctionHouse.MakeItemKey(itemID)
@@ -149,7 +153,8 @@ function AH:BuyUpTo(itemID, quantity, maxUnitPrice, callback)
         return
     end
 
-    -- Step 1: run a fresh search so we're working from live data.
+    -- Step 1: run a fresh search so we're working from live data. Tag the
+    -- search with priceSource="loop" so QA-11's stamp attributes correctly.
     self:SearchItem(itemID, function(ok, resultsOrErr)
         if not ok then
             if callback then callback(false, "search failed: " .. tostring(resultsOrErr)) end
@@ -197,7 +202,7 @@ function AH:BuyUpTo(itemID, quantity, maxUnitPrice, callback)
                 requestedQty   = quantity,
             })
         end
-    end)
+    end, "loop")
 end
 
 -- ---------------------------------------------------------------------------
@@ -238,6 +243,25 @@ function AH:OnCommoditySearchUpdated(itemID)
     if self.state.mode ~= "search" or self.state.itemID ~= itemID then return end
     DebugPrint("search results in for id=" .. itemID)
     local results = GatherResults(itemID)
+
+    -- QA-11: piggyback the search result to stamp the cheapest unit price
+    -- as this item's lastPrice. Source "click" vs "loop" is tracked by the
+    -- caller through AH.state.priceSource (see SearchItem). Free data --
+    -- no extra query, no rate-limit budget consumed.
+    local cheapest = results[1] and results[1].unitPrice or nil
+    if cheapest and ADDON.DB and ADDON.DB.StampLastPrice then
+        ADDON.DB:StampLastPrice(itemID, cheapest, self.state.priceSource or "unknown")
+    end
+
+    -- QA-13: audit trail. Zero listings still logged (0 listings is
+    -- useful signal -- server is empty for that item right now).
+    if ADDON.Log then
+        ADDON.Log:Emit("ah_search", itemID, {
+            unitPriceCopper = cheapest,
+            listings        = #results,
+        })
+    end
+
     Finish(true, results)
 end
 

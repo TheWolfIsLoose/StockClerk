@@ -365,17 +365,26 @@ local function BuildRow(row)
     -- centered under its header.
     row.name = row:CreateFontString(nil, "OVERLAY", "GameFontNormal")
     row.name:SetPoint("LEFT", row.icon, "RIGHT", 8, 0)
-    row.name:SetPoint("RIGHT", row, "RIGHT", -330, 0)
+    -- Widened right inset (-330 -> -400) to make room for the new
+    -- Last Seen column between Cap and Status.
+    row.name:SetPoint("RIGHT", row, "RIGHT", -400, 0)
     row.name:SetJustifyH("LEFT")
     row.name:SetWordWrap(false)
 
     -- Have column: pure display of the bags-only count, with a dim
     -- (+N bank/warband/reagent) suffix if the stash is non-empty. No
     -- cell chrome and no click affordance — this value only comes from
-    -- inventory, the user never edits it here. Right-edge-aligned at -270
-    -- so the number tucks flush against the Need cell's left edge.
+    -- inventory, the user never edits it here.
+    --
+    -- Column layout (v0.3, post QA-11 Last Seen insert):
+    --   Have   right edge -340
+    --   Need   right edge -270, width 56 -> left -326, center -298
+    --   Cap    right edge -180, width 72 -> left -252, center -216
+    --   LastSeen right edge -104, width 60 -> left -164, center -134  (new)
+    --   Status right edge -36,  width 52 -> left  -88, center  -62
+    --   trash  right edge -6,   width 18
     row.have = row:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
-    row.have:SetPoint("RIGHT", row, "RIGHT", -270, 0)
+    row.have:SetPoint("RIGHT", row, "RIGHT", -340, 0)
     row.have:SetJustifyH("RIGHT")
 
     -- Need column: dedicated editable cell for the target count. Styled
@@ -383,7 +392,7 @@ local function BuildRow(row)
     -- brand border fade in on hover, click opens an inline editor in place.
     row.needCell = CreateFrame("Button", nil, row)
     row.needCell:SetSize(56, 20)
-    row.needCell:SetPoint("RIGHT", row, "RIGHT", -200, 0)
+    row.needCell:SetPoint("RIGHT", row, "RIGHT", -270, 0)
     row.needCell:RegisterForClicks("LeftButtonUp", "RightButtonUp")
     row.needCell:SetFrameLevel(row:GetFrameLevel() + 2)
 
@@ -415,7 +424,7 @@ local function BuildRow(row)
     -- vs 56) to comfortably hold 4-digit gold values like "9999g".
     row.capCell = CreateFrame("Button", nil, row)
     row.capCell:SetSize(72, 20)
-    row.capCell:SetPoint("RIGHT", row, "RIGHT", -110, 0)
+    row.capCell:SetPoint("RIGHT", row, "RIGHT", -180, 0)
     row.capCell:RegisterForClicks("LeftButtonUp", "RightButtonUp")
     row.capCell:SetFrameLevel(row:GetFrameLevel() + 2)
 
@@ -484,6 +493,37 @@ local function BuildRow(row)
     row.priceEditBg:SetPoint("BOTTOMRIGHT", row.priceEdit, "BOTTOMRIGHT",  4, -2)
     row.priceEdit:SetFrameLevel(row.capCell:GetFrameLevel() + 1)
     row.priceEdit:Hide()
+
+    -- Last Seen column (QA-11): dim display of the most recently observed
+    -- unit price, or an em-dash if we've never seen it. Not clickable --
+    -- the value updates automatically on every AH search (row-click or
+    -- restock loop). Tooltip on hover: "1250g -- 2h ago via loop".
+    row.lastSeen = row:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    row.lastSeen:SetPoint("RIGHT", row, "RIGHT", -104, 0)
+    row.lastSeen:SetWidth(60)
+    row.lastSeen:SetJustifyH("RIGHT")
+    -- Invisible mouse target sized to the column so tooltips still work.
+    row.lastSeenHit = CreateFrame("Frame", nil, row)
+    row.lastSeenHit:SetSize(60, 20)
+    row.lastSeenHit:SetPoint("RIGHT", row, "RIGHT", -104, 0)
+    row.lastSeenHit:EnableMouse(true)
+    row.lastSeenHit:SetScript("OnEnter", function(self)
+        local r = self:GetParent()
+        if not r or not r._lastPrice then return end
+        local lp = r._lastPrice
+        local ago = time() - (lp.seenAt or 0)
+        local agoText
+        if ago < 60 then agoText = ago .. "s ago"
+        elseif ago < 3600 then agoText = math.floor(ago/60) .. "m ago"
+        elseif ago < 86400 then agoText = math.floor(ago/3600) .. "h ago"
+        else agoText = math.floor(ago/86400) .. "d ago" end
+        GameTooltip:SetOwner(self, "ANCHOR_TOP")
+        GameTooltip:SetText("Last seen at AH")
+        GameTooltip:AddLine(GetCoinTextureString(lp.copper) .. " per unit", 1, 1, 1)
+        GameTooltip:AddLine(agoText .. " · via " .. (lp.source or "?"), 0.7, 0.7, 0.7)
+        GameTooltip:Show()
+    end)
+    row.lastSeenHit:SetScript("OnLeave", function() GameTooltip:Hide() end)
 
     -- Status pill (ok / -N) - Status column.
     -- Flat, 1px black border, subtle fill. The COLORED TEXT (green ok /
@@ -560,6 +600,8 @@ local function BuildRow(row)
            and AuctionHouseFrame and AuctionHouseFrame:IsShown() then
             local id = self._itemID
             MF:SetStatus(("Searching AH for %s..."):format(self.name:GetText() or ("item:" .. id)))
+            -- "click" source tag lets QA-11 attribute this lastPrice stamp
+            -- to the user's manual row click vs the restock loop's auto search.
             ADDON.AH:SearchItem(id, function(ok, results)
                 if not ok then
                     MF:SetStatus("|cffff8888AH search failed: " .. tostring(results) .. "|r")
@@ -569,10 +611,13 @@ local function BuildRow(row)
                 if cheapest then
                     MF:SetStatus(("Cheapest: %s / unit (%d listings)"):format(
                         GetCoinTextureString(cheapest), #results))
+                    -- QA-11: row list refresh so the Last Seen column
+                    -- picks up the new stamp immediately.
+                    MF:Refresh()
                 else
                     MF:SetStatus("No auctions found")
                 end
-            end)
+            end, "click")
         end
     end)
     row:RegisterForClicks("LeftButtonUp")
@@ -678,11 +723,17 @@ local function BuildRow(row)
         local newNeed = tonumber(r.needEdit:GetText())
         local changed = false
         if newNeed and newNeed > 0 and r._itemID and newNeed ~= r._need then
+            local oldNeed = r._need
             ADDON.DB:SetItem(r._itemID, newNeed)
             r._need = newNeed
             -- Update the inline fontstring immediately so the user sees
             -- the new value even though we skip the full Refresh.
             if r.need then r.need:SetText(tostring(newNeed)) end
+            if ADDON.Log then
+                ADDON.Log:Emit("target_change", r._itemID, {
+                    from = oldNeed, to = newNeed,
+                })
+            end
             changed = true
         end
         CloseNeedEdit(r)
@@ -743,6 +794,7 @@ local function BuildRow(row)
             local priceGold = tonumber(raw)
             local maxPriceCopper = (priceGold and priceGold > 0) and (priceGold * 10000) or nil
             if maxPriceCopper ~= r._maxPrice then
+                local oldMax = r._maxPrice
                 ADDON.DB:SetItemMaxPrice(r._itemID, maxPriceCopper)
                 r._maxPrice = maxPriceCopper
                 local name = r.name:GetText() or ("item:" .. r._itemID)
@@ -750,6 +802,11 @@ local function BuildRow(row)
                     MF:SetStatus(("Cap for %s set to %dg"):format(name, priceGold))
                 else
                     MF:SetStatus(("Cap cleared for %s"):format(name))
+                end
+                if ADDON.Log then
+                    ADDON.Log:Emit("cap_change", r._itemID, {
+                        fromCopper = oldMax, toCopper = maxPriceCopper,
+                    })
                 end
                 -- Update the inline fontstring so the change is visible
                 -- without a full Refresh.
@@ -848,13 +905,40 @@ local function InitializeRow(row, data)
     -- Cap column value. Dim '--' when no cap; brand-mint when set. The
     -- number is the emphasized element in the row (per atrocity's rule:
     -- accent color goes on the value, not on the chrome).
+    --
+    -- When auto-purchase is ON but this item has no cap set, we swap the
+    -- em-dash for a dim moon glyph so the user can at-a-glance see which
+    -- rows will be skipped by an auto run (QA-10 visual affordance).
+    local autoOn = ADDON.DB:Settings().autoPurchase == true
     if data.maxPrice then
         -- Use a lighter tint of the brand hue for the value itself — pure
         -- Brand mint #98FF98 on near-black reads cleanly at small sizes
         -- (same tone the addon uses in tooltip headers and status text).
         row.cap:SetText(("|cff98FF98%dg|r"):format(math.floor(data.maxPrice / 10000)))
+    elseif autoOn then
+        -- Moon = "asleep" / "skipped by auto". Dim gray so it doesn't
+        -- compete with the mint capped values in the same column.
+        row.cap:SetText("|cff555555\226\152\189|r")
     else
         row.cap:SetText("|cff555555\226\128\148|r") -- em-dash for a real "unset" glyph
+    end
+
+    -- Last Seen column (QA-11): read char.items[id].lastPrice off the
+    -- flattened row entry (DB:GetSortedItems now includes it). Display
+    -- a dim em-dash when there's no observation yet.
+    row._lastPrice = data.lastPrice
+    if data.lastPrice and data.lastPrice.copper then
+        local goldValue = math.floor(data.lastPrice.copper / 10000)
+        if goldValue >= 1 then
+            row.lastSeen:SetText(("|cffCCCCCC%dg|r"):format(goldValue))
+        else
+            -- Sub-gold prices: show silver so mid-market commodities
+            -- (dust, essences) don't collapse to "0g".
+            local silver = math.floor(data.lastPrice.copper / 100)
+            row.lastSeen:SetText(("|cffCCCCCC%ds|r"):format(silver))
+        end
+    else
+        row.lastSeen:SetText("|cff555555\226\128\148|r")
     end
 
     if ADDON.debug then
@@ -884,8 +968,12 @@ local function InitializeRow(row, data)
         local r = self:GetParent()
         local id = r and r._itemID
         if id then
+            local nameForLog = r._itemLink or ("item:" .. id)
             ADDON.DB:RemoveItem(id)
             ADDON.Inventory:Invalidate()
+            if ADDON.Log then
+                ADDON.Log:Emit("remove", id, { name = nameForLog })
+            end
             MF:Refresh()
         end
     end)
@@ -992,9 +1080,12 @@ function MF:Build()
     -- Max: enough vertical room for very long lists on a 4K display,
     -- plus horizontal slack for very-long item names.
     if f.SetResizeBounds then
-        f:SetResizeBounds(640, 320, 1200, 1200)
+        -- Min width bumped 640 -> 720 to accommodate the new Last Seen
+        -- column (QA-11). The column adds ~74px of chrome between Cap
+        -- and Status.
+        f:SetResizeBounds(720, 320, 1200, 1200)
     else
-        f:SetMinResize(640, 320)
+        f:SetMinResize(720, 320)
         f:SetMaxResize(1200, 1200)
     end
     f:EnableMouse(true)
@@ -1028,6 +1119,16 @@ function MF:Build()
     -- doesn't feel 'stuck'.
     tinsert(UISpecialFrames, "StockClerkFrame")
     f:SetScript("OnKeyDown", function(self, key)
+        -- QA-10 kill-switch: Escape stops an active auto-purchase loop.
+        -- We consume the keystroke here (SetPropagateKeyboardInput(false))
+        -- so the game's default Escape behavior (close last opened frame,
+        -- open game menu) doesn't also fire on the same key press. We only
+        -- swallow when we actually acted; otherwise fall through.
+        if key == "ESCAPE" and ADDON.RestockLoop and ADDON.RestockLoop:IsActive() then
+            self:SetPropagateKeyboardInput(false)
+            ADDON.RestockLoop:Stop("user_esc")
+            return
+        end
         -- Always let keys propagate to game bindings by default. Editboxes
         -- swallow keys BEFORE this handler when they have focus, so this
         -- only runs for keystrokes that hit the raw window (no editbox
@@ -1108,6 +1209,34 @@ function MF:Build()
         GameTooltip:Hide()
     end)
     closeX:SetScript("OnClick", function() MF:Hide() end)
+
+    -- Settings cog button (QA-10). Sits immediately left of the close X.
+    -- Uses the standard octagonal cog glyph. Click toggles the small
+    -- SettingsDropdown panel; the panel handles its own anchoring.
+    local cogBtn = CreateFrame("Button", nil, header)
+    cogBtn:SetSize(28, 22)
+    cogBtn:SetPoint("RIGHT", closeX, "LEFT", 0, 0)
+    local cogText = cogBtn:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
+    cogText:SetPoint("CENTER")
+    -- U+2699 GEAR: works in the standard game font on retail.
+    cogText:SetText("\226\154\153")
+    cogText:SetTextColor(0.85, 0.85, 0.85, 1)
+    cogBtn:SetScript("OnEnter", function(self)
+        cogText:SetTextColor(Palette.brand[1], Palette.brand[2], Palette.brand[3], 1)
+        GameTooltip:SetOwner(self, "ANCHOR_BOTTOM")
+        GameTooltip:SetText("Settings")
+        GameTooltip:Show()
+    end)
+    cogBtn:SetScript("OnLeave", function()
+        cogText:SetTextColor(0.85, 0.85, 0.85, 1)
+        GameTooltip:Hide()
+    end)
+    cogBtn:SetScript("OnClick", function(self)
+        if ADDON.SettingsDropdown then
+            ADDON.SettingsDropdown:Toggle(self)
+        end
+    end)
+    MF._cogBtn = cogBtn
 
     -- ---- Toolbar (add item + controls) ---------------------------------
     -- Sits directly under the header. No fill; the labels + editboxes
@@ -1190,6 +1319,13 @@ function MF:Build()
             end
             ADDON.DB:SetItem(resolvedID, need, maxPriceCopper)
             ADDON.Inventory:Invalidate()
+            if ADDON.Log then
+                ADDON.Log:Emit("add", resolvedID, {
+                    name       = name,
+                    need       = need,
+                    capCopper  = maxPriceCopper,
+                })
+            end
             -- Reset all three fields AND clear focus on all three so the
             -- placeholder hooks (which hide while focused) re-show.
             addBox:SetText("")
@@ -1431,10 +1567,17 @@ function MF:Build()
     --   pill:     right at  -36, width 52 -> center at  -36 - 26 =  -62
     -- Have is a right-justified FontString whose right edge sits at -270,
     -- so its header is right-anchored to the same -270 for edge-alignment.
+    -- Header offsets track the row cell offsets updated for the new
+    -- Last Seen column (see BuildRow's layout table).
+    --   needCell: right at -270, width 56 -> center at -270 - 28 = -298
+    --   capCell:  right at -180, width 72 -> center at -180 - 36 = -216
+    --   lastSeen: right at -104, width 60 -> center at -104 - 30 = -134
+    --   pill:     right at  -36, width 52 -> center at  -36 - 26 =  -62
     MakeHeader("Item",      "left",    52)      -- left edge + 40 (icon + 12 pad)
-    MakeHeader("Have",      "right",   -270)    -- right-edge-aligned bags value
-    MakeHeader("Need",      "center",  -228)    -- centered over needCell
-    MakeHeader("Price Cap", "center",  -146)    -- centered over capCell
+    MakeHeader("Have",      "right",   -340)    -- right-edge-aligned bags value
+    MakeHeader("Need",      "center",  -298)    -- centered over needCell
+    MakeHeader("Price Cap", "center",  -216)    -- centered over capCell
+    MakeHeader("Last Seen", "center",  -134)    -- centered over lastSeen (QA-11)
     MakeHeader("Status",    "center",  -62)     -- centered over pill
 
     -- ---- Footer / bottom bar ------------------------------------------
@@ -1461,6 +1604,35 @@ function MF:Build()
     statusBar:SetPoint("RIGHT", footer, "RIGHT", -260, 0)
     statusBar:SetJustifyH("LEFT")
     self.statusBar = statusBar
+
+    -- Log toggle button (QA-13). Sits between the status text and the
+    -- Close button. Small (28px) so it doesn't crowd the primary actions.
+    -- Icon is a stylized "log lines" glyph (three horizontal bars).
+    local logBtn = CreateFrame("Button", nil, footer)
+    logBtn:SetSize(28, 22)
+    logBtn:SetPoint("RIGHT", -100, 0)   -- close (80w+12) + gap = 100
+    StyleButton(logBtn)
+    local logBtnText = logBtn:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+    logBtnText:SetPoint("CENTER")
+    -- U+2261 IDENTICAL TO (three-line "hamburger" glyph)
+    logBtnText:SetText("\226\137\161")
+    logBtnText:SetTextColor(0.85, 0.85, 0.85, 1)
+    logBtn:SetScript("OnEnter", function(self)
+        logBtnText:SetTextColor(Palette.brand[1], Palette.brand[2], Palette.brand[3], 1)
+        GameTooltip:SetOwner(self, "ANCHOR_TOP")
+        GameTooltip:SetText("Activity log")
+        GameTooltip:Show()
+    end)
+    logBtn:SetScript("OnLeave", function()
+        logBtnText:SetTextColor(0.85, 0.85, 0.85, 1)
+        GameTooltip:Hide()
+    end)
+    logBtn:SetScript("OnClick", function()
+        if ADDON.LogFrame and ADDON.LogFrame.Toggle then
+            ADDON.LogFrame:Toggle()
+        end
+    end)
+    MF._logBtn = logBtn
 
     local closeBtn = CreateFrame("Button", nil, footer)
     closeBtn:SetSize(80, 22)

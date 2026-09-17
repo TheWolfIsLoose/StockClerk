@@ -186,6 +186,56 @@ function StockClerk:OnSlashCommand(msg)
         return
     end
 
+    -- QA-13: `/clerk log` toggles the activity log sidecar. Also accepts
+    -- `/clerk log clear` as a quick shortcut for the header "Clear" button.
+    if cmd == "log" then
+        local sub = (rest or ""):match("^(%S+)") or ""
+        if sub:lower() == "clear" then
+            if ADDON.Log and ADDON.Log.Clear then
+                ADDON.Log:Clear()
+                self:Print("Activity log cleared.")
+                if ADDON.LogFrame and ADDON.LogFrame:IsShown() then
+                    ADDON.LogFrame:Refresh()
+                end
+            end
+        else
+            if ADDON.LogFrame and ADDON.LogFrame.Toggle then
+                ADDON.LogFrame:Toggle()
+            end
+        end
+        return
+    end
+
+    -- QA-10: `/clerk auto` prints current auto-purchase state.
+    -- `/clerk auto on|off` toggles it explicitly (no confirmation modal --
+    -- power-user shortcut). Budget must already be set via the settings
+    -- panel.
+    if cmd == "auto" then
+        local sub = (rest or ""):match("^(%S+)") or ""
+        local s = ADDON.DB:Settings()
+        sub = sub:lower()
+        if sub == "on" then
+            s.autoPurchase = true
+            if ADDON.Log then ADDON.Log:Emit("auto_toggle", nil, { on = true }) end
+            self:Print("Auto-purchase: |cff4ade80ON|r")
+        elseif sub == "off" then
+            s.autoPurchase = false
+            if ADDON.Log then ADDON.Log:Emit("auto_toggle", nil, { on = false }) end
+            self:Print("Auto-purchase: |cffff8888OFF|r")
+        else
+            local budget = s.autoBudgetGold and (s.autoBudgetGold .. "g") or "not set"
+            self:Print(("Auto-purchase: %s  ·  budget: %s"):format(
+                s.autoPurchase and "|cff4ade80ON|r" or "|cffff8888OFF|r", budget))
+        end
+        if ADDON.SettingsDropdown and ADDON.SettingsDropdown.Refresh then
+            ADDON.SettingsDropdown:Refresh()
+        end
+        if ADDON.MainFrame and ADDON.MainFrame.Refresh then
+            ADDON.MainFrame:Refresh()
+        end
+        return
+    end
+
     if cmd == "help" or cmd == "?" then
         self:Print(L.HELP_TITLE)
         self:Print(L.HELP_OPEN)

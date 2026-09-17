@@ -65,11 +65,12 @@ audit trail, and per-item historical price sparklines. See
 Stock Clerk stands squarely on the shoulders of some very good addon
 work by other people. Specifically:
 
-- **[Atrocity / Norsken](https://uipacks.wago.io/pack/atrocityui/addons)** —
-  the flat-dark, minimalist aesthetic of Stock Clerk's window (single
+- **[atrocityEssentials](https://www.curseforge.com/wow/addons/atrocityessentials)**
+  and **[NorskenUI](https://github.com/Nrsken/NorskenUI)** — the
+  flat-dark, minimalist aesthetic of Stock Clerk's window (single
   near-black fill, 1px pure-black section separators, no per-row
-  backgrounds, hover-only mint accents) is directly inspired by
-  atrocityEssentials and the atrocityUI aesthetic more broadly.
+  backgrounds, hover-only mint accents) is directly inspired by these
+  two UI kits.
 - **[plusmouse](https://github.com/plusmouse)** — several of Stock
   Clerk's functional patterns are inspired by plusmouse's addons:
   the DataProvider-replaced-on-each-refresh row list pattern (from

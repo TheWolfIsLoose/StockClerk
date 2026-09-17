@@ -12,6 +12,7 @@ Libs\Libs.xml
 
 Locale.lua
 DB.lua
+Log.lua
 ItemResolver.lua
 Inventory.lua
 AH.lua
@@ -23,6 +24,8 @@ RestockLoop.lua
 
 UI\MainFrame.lua
 UI\BuyDialog.lua
+UI\LogFrame.lua
+UI\SettingsDropdown.lua
 
 #@debug@
 Dev\RecommendedLists.lua
