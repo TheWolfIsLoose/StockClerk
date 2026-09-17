@@ -220,3 +220,73 @@ Medium-low for the count-mode split (nice quality-of-life, unlocks
 accurate restocking on the consumer side). Higher for the shopper
 role once Wave 2 auto-buy lands — without shopper awareness, every
 character would try to buy the same items.
+
+---
+
+## Integration reference: Syndicator (added 2026-09-16)
+
+Syndicator (by plusmouse; Interface 120100+) is the industry-standard
+databasing addon that powers Baganator. It already solves the exact
+sub-problem the shopper role needs: **cross-character bag / bank /
+warband / mail counts, persisted even when the character is offline**.
+
+Rather than write our own multi-character cache, detect Syndicator and
+delegate — same pattern we already use for Auctionator on the AH side.
+
+### Detection
+```lua
+local syn = _G.Syndicator
+if syn and syn.API and syn.API.IsReady and syn.API.IsReady() then
+    -- safe to call
+end
+```
+
+### Key API calls (from `Syndicator/API/Main.lua`)
+- `Syndicator.API.GetInventoryInfoByItemID(itemID, sameConnectedRealm, sameFaction)`  
+  Returns a breakdown of which characters/guilds hold that item and how
+  many. This is the whole shopper query in one call.
+- `Syndicator.API.GetAllCharacters()` → list of `"Name-Realm"` keys.
+- `Syndicator.API.GetByCharacterFullName(name)` → full character bag +
+  bank data, offline-safe.
+- `Syndicator.API.GetWarband(index)` → warband bank data (index 1 for
+  the primary warband).
+- `Syndicator.API.GetCurrentCharacter()` → the logged-in character's
+  full-name key, so we can distinguish self vs. alts.
+- `Syndicator.API.IsReady()` → handshake; wait for it before querying.
+
+### SavedVariables (do NOT read directly — use the API)
+- `SYNDICATOR_DATA` — `.Characters[name]`, `.Guilds[name]`, `.Warband[i]`
+- `SYNDICATOR_SUMMARIES` — pre-aggregated by-realm rollups
+
+### Implication for our design
+- **Baseline** (no Syndicator): each character sees only its own bag +
+  bank + warband count via `C_Item.GetItemCount`. Consumer stays in
+  `bagsOnly`, shopper uses `all`.
+- **With Syndicator**: shopper can display *every* consumer's bag count
+  in real terms, with fresh timestamps, without needing us to write
+  our own logout-scan-and-persist code. Big win for the "is anyone
+  short?" view.
+
+### Suggested code structure
+```lua
+-- Inventory.lua (or a new Inventory/Syndicator.lua module)
+local function GetCrossCharacterCount(itemID)
+    if _G.Syndicator and Syndicator.API.IsReady() then
+        local info = Syndicator.API.GetInventoryInfoByItemID(itemID, true, true)
+        -- info is a structured breakdown; sum characters + warband
+        return SumInventoryInfo(info)
+    end
+    -- Fallback: only the current character is visible.
+    return nil
+end
+```
+
+Keeps the dependency **soft** — no TOC entry required, no OptionalDeps
+needed, no breakage if the user doesn't have it installed.
+
+### Related: Baganator
+Baganator is Syndicator's UI consumer, not something we need to talk
+to directly. But it's a good reference for how the Auctionator/
+Syndicator/Baganator ecosystem chains data addons behind UI addons —
+the same shape we're building (Stock Clerk = UI + logic, delegates to
+Syndicator for cross-char data and Auctionator for AH queries).
