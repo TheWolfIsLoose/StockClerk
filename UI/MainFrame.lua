@@ -1227,27 +1227,29 @@ function MF:Build()
     addBtn:SetScript("OnKeyDown", function(_, key)
         if not MF._addBtnFocused then return end
         if key == "TAB" then
-            -- Defer BOTH the blur and the focus transfer by one frame.
-            -- Two reasons:
-            -- 1) If we BlurAddButton() synchronously, it flips
-            --    SetPropagateKeyboardInput back to true and the same
-            --    Tab keystroke can propagate to the newly-focused
-            --    control, re-triggering a Tab there and double-hopping.
-            -- 2) The current Tab is consumed cleanly (propagate stays
-            --    false through the end of this OnKeyDown), so it does
-            --    NOT leak into game chat or the default handler.
-            -- Next frame: blur the button (drops the ring), then move
-            -- focus. Snapshot shift-state now since IsShiftKeyDown may
-            -- have changed by the deferred call.
             local shift = IsShiftKeyDown()
+            if ADDON and ADDON.debug then
+                print(("|cff98ff98[SC]|r addBtn TAB shift=%s size=%s"):format(
+                    tostring(shift),
+                    tostring(MF.dataProvider and MF.dataProvider:GetSize() or "nil")))
+            end
+            -- Defer BOTH the blur and the focus transfer by one frame
+            -- so the current Tab keystroke is fully consumed by this
+            -- OnKeyDown (propagate stays false) and doesn't double-hop
+            -- into the newly-focused control.
             C_Timer.After(0, function()
                 MF:BlurAddButton()
                 if shift then
                     if priceBox then priceBox:SetFocus() end
+                    if ADDON and ADDON.debug then
+                        print("|cff98ff98[SC]|r addBtn -> priceBox focused")
+                    end
                 else
-                    -- Forward from Add button goes into the list; wrap
-                    -- back to addBox if the list is empty.
-                    if not MF:TabToFirstRowCell() then
+                    local ok = MF:TabToFirstRowCell()
+                    if ADDON and ADDON.debug then
+                        print(("|cff98ff98[SC]|r addBtn -> TabToFirstRowCell returned %s"):format(tostring(ok)))
+                    end
+                    if not ok then
                         if addBox then addBox:SetFocus() end
                     end
                 end
@@ -1717,11 +1719,19 @@ function MF:FocusRowCell(dataIndex, cell)
             local d = self.dataProvider:Find(i)
             if d and d.itemID == wantItemID then
                 local frame = self.scrollBox:FindFrame(d)
+                if ADDON and ADDON.debug then
+                    print(("|cff98ff98[SC]|r FocusRowCell deferred: itemID=%s idx=%d frame=%s cell=%s"):format(
+                        tostring(wantItemID), i, tostring(frame), tostring(cell)))
+                end
                 if frame then
                     OpenRowCellEditor(frame, cell)
                 end
                 return
             end
+        end
+        if ADDON and ADDON.debug then
+            print(("|cff98ff98[SC]|r FocusRowCell deferred: itemID=%s NOT FOUND in provider size=%d"):format(
+                tostring(wantItemID), currentSize))
         end
     end)
 end
