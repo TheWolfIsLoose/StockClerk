@@ -155,10 +155,17 @@ local function BuildRow(row)
     row.pill.text:SetPoint("CENTER")
 
     -- Trash button (visible on hover only).
-    -- IMPORTANT: because the trash lives inside the row's rect, moving the
-    -- mouse onto it does NOT fire row:OnLeave in WoW's frame model. We use
-    -- that fact deliberately: the row shows/hides the trash, and the trash
-    -- itself does not touch the tooltip (avoids the ping-pong flicker).
+    --
+    -- Tooltip / trash-visibility model:
+    --   * Both `row:OnEnter/OnLeave` and `trash:OnEnter/OnLeave` route
+    --     to shared helpers (RowEnter / RowLeave). Whichever the mouse is
+    --     over, the row is "hovered" and the trash + tooltip are up.
+    --   * On leave, we defer one frame and check both frames' IsMouseOver.
+    --     If neither is hovered, we tear the tooltip down. This survives
+    --     slow exits through the GameTooltip frame (which is NOT part of
+    --     the row's mouse-over region), which previously caused a stuck
+    --     tooltip because trash:OnEnter had re-shown it with no matching
+    --     hide path.
     row.trash = CreateFrame("Button", nil, row)
     row.trash:SetSize(18, 18)
     row.trash:SetPoint("RIGHT", row, "RIGHT", -8, 0)
@@ -168,35 +175,32 @@ local function BuildRow(row)
     local ht = row.trash:GetHighlightTexture()
     if ht then ht:SetBlendMode("ADD") end
     row.trash:Hide()
-    -- Keep the row's tooltip visible while over the trash; no separate
-    -- tooltip needed — the icon is self-evident (a red X-style pass icon).
-    row.trash:SetScript("OnEnter", function(self)
-        local r = self:GetParent()
-        if r._itemID then ShowItemTooltip(r, r._itemID) end
-    end)
-    row.trash:SetScript("OnLeave", function() end)
     row.trash:RegisterForClicks("LeftButtonUp")
 
-    -- Scripts
-    row:SetScript("OnEnter", function(self)
-        ApplyOverlay(self, unpack(Palette.hover))
-        if self._itemID then
-            ShowItemTooltip(self, self._itemID)
-        end
-        self.trash:Show()
-    end)
-    row:SetScript("OnLeave", function(self)
-        HideOverlay(self)
-        GameTooltip:Hide()
-        -- Only hide the trash once the pointer has actually left both the
-        -- row and the trash button. Deferring by one frame lets us test
-        -- MouseIsOver *after* the transition settles.
+    local function RowEnter(r)
+        ApplyOverlay(r, unpack(Palette.hover))
+        if r._itemID then ShowItemTooltip(r, r._itemID) end
+        r.trash:Show()
+    end
+
+    local function RowLeave(r)
+        -- Defer one frame so IsMouseOver reflects the settled state after
+        -- WoW has processed all pending Enter/Leave dispatches. Then hide
+        -- iff the pointer is truly off both the row and the trash button.
         C_Timer.After(0, function()
-            if not self:IsMouseOver() and not self.trash:IsMouseOver() then
-                self.trash:Hide()
+            if r:IsMouseOver() or r.trash:IsMouseOver() then
+                return -- still hovering some part of the row cluster
             end
+            HideOverlay(r)
+            GameTooltip:Hide()
+            r.trash:Hide()
         end)
-    end)
+    end
+
+    row:SetScript("OnEnter",  function(self) RowEnter(self) end)
+    row:SetScript("OnLeave",  function(self) RowLeave(self) end)
+    row.trash:SetScript("OnEnter", function(self) RowEnter(self:GetParent()) end)
+    row.trash:SetScript("OnLeave", function(self) RowLeave(self:GetParent()) end)
     row:SetScript("OnClick", function(self, mouseButton)
         -- Shift + Left Click -> paste item link into the active chat edit,
         -- matching the standard Blizzard bag/inventory behavior.
@@ -507,32 +511,47 @@ function MF:Build()
 end
 
 -- ---------------------------------------------------------------------------
--- Refresh: rebuild the DataProvider from ADDON.DB
+-- Refresh: rebuild the DataProvider from ADDON.DB.
+-- Follows the Auctionator pattern of replacing the DataProvider each
+-- refresh (see Source/Components/ResultsListing/Mixins/ResultsListing.lua).
+-- Flushing + re-inserting can leave the ScrollView reusing frames without
+-- re-invoking the row initializer, which causes stale counts.
 -- ---------------------------------------------------------------------------
 function MF:Refresh()
-    if not self.frame or not self.dataProvider then return end
-
-    self.dataProvider:Flush()
+    if not self.frame or not self.scrollBox then return end
 
     local items = ADDON.DB:GetSortedItems()
+
     if #items == 0 then
+        -- Empty provider still needs to be swapped in so any prior rows
+        -- are cleared out.
+        local emptyProvider = CreateDataProvider()
+        self.scrollBox:SetDataProvider(emptyProvider, ScrollBoxConstants.RetainScrollPosition)
+        self.dataProvider = emptyProvider
         self.emptyText:Show()
         self:SetStatus("0 items tracked")
         return
     end
     self.emptyText:Hide()
 
+    local newProvider = CreateDataProvider()
     local shortCount = 0
     for i, it in ipairs(items) do
         local have = ADDON.Inventory:GetCount(it.itemID) or 0
         if have < it.need then shortCount = shortCount + 1 end
-        self.dataProvider:Insert({
+        newProvider:Insert({
             itemID = it.itemID,
             name   = it.name,
             need   = it.need,
             _index = i,
         })
     end
+
+    -- Swap the provider. Passing RetainScrollPosition keeps the user's
+    -- scroll offset stable across refreshes so restocking updates don't
+    -- yank the list back to the top.
+    self.scrollBox:SetDataProvider(newProvider, ScrollBoxConstants.RetainScrollPosition)
+    self.dataProvider = newProvider
 
     if shortCount > 0 then
         self:SetStatus(("|cffffd200%d items tracked|r  |cff888888|||r  |cfff87171%d short|r"):format(#items, shortCount))
@@ -548,9 +567,15 @@ end
 -- ---------------------------------------------------------------------------
 -- Show / Hide
 -- ---------------------------------------------------------------------------
+-- Show accepts an optional `fromAH` argument. Only overwrite openedByAH
+-- when the caller explicitly tells us where the show came from -- calling
+-- Show() with no arg (e.g. from a slash command or a Refresh after add)
+-- must not clobber a flag Core.lua just set on our behalf.
 function MF:Show(fromAH)
     self:Build()
-    self.openedByAH = fromAH and true or false
+    if fromAH ~= nil then
+        self.openedByAH = fromAH and true or false
+    end
     self.frame:Show()
     self:Refresh()
 end
