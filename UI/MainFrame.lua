@@ -62,10 +62,25 @@ local ROW_HEIGHT = 30
 -- gold (title, focus borders, section labels).
 -- ---------------------------------------------------------------------------
 local Palette = {
-    -- Backgrounds
-    bgDark        = { 0.031, 0.031, 0.031, 0.94 }, -- #080808 window fill
-    bgLight       = { 0.055, 0.055, 0.055, 0.85 }, -- #0e0e0e card body
-    bgMedium      = { 0.055, 0.055, 0.055, 0.95 }, -- #0e0e0e @ 0.95 controls/buttons
+    -- Backgrounds. Three overlapping opacity tiers, each with a clear role:
+    --   bgDark    = the window itself. Bumped from 0.94 -> 0.97 so world
+    --              art doesn't bleed through the addon body.
+    --   bandTint  = section "banding" — a very thin translucent overlay used
+    --              on the toolbar, header row, and footer. Reads instantly
+    --              as "this is a distinct band" without needing per-section
+    --              borders. Same trick atrocityEssentials uses on its own
+    --              Display Settings / Position / Font Settings headers.
+    --   fieldFill = editable well fill. Toolbar edit boxes, price/need cells
+    --              at rest — gives interactive spots a persistent "sunken"
+    --              tone so a scanning eye can find them without hovering.
+    --   btnRest   = button-at-rest fill so Add / Restock / Close read as
+    --              buttons even before hover. Hover still brightens on top.
+    bgDark        = { 0.031, 0.031, 0.031, 0.97 }, -- window fill (was 0.94)
+    bgLight       = { 0.055, 0.055, 0.055, 0.85 }, -- (unused legacy)
+    bgMedium      = { 0.055, 0.055, 0.055, 0.95 }, -- (legacy — kept for compat)
+    bandTint      = { 1.000, 1.000, 1.000, 0.035 }, -- section-band overlay (light-on-dark)
+    fieldFill     = { 0.000, 0.000, 0.000, 0.55  }, -- editable well fill
+    btnRest       = { 1.000, 1.000, 1.000, 0.045 }, -- button-at-rest fill
     -- Interaction wash: grey D9D9D9 @ 0.15 ("the mouse is here"). Never used
     -- to imply selection or brand — that's the border color's job.
     hoverWash     = { 0.851, 0.851, 0.851, 0.15 },
@@ -119,6 +134,21 @@ local function ApplyFill(frame, color)
     end
     frame._bg:SetVertexColor(color[1], color[2], color[3], color[4] or 1)
     frame._bg:Show()
+end
+
+-- Band overlay: a translucent tint layered ON TOP of the window fill so a
+-- section reads as a distinct band without needing its own opaque color or
+-- an extra border. Draws on BACKGROUND sublevel -6 (above ApplyFill's -8 but
+-- still behind content). Used for toolbar / header row / footer.
+local function ApplyBand(frame, color)
+    if not frame._band then
+        frame._band = frame:CreateTexture(nil, "BACKGROUND", nil, -6)
+        frame._band:SetAllPoints(true)
+        frame._band:SetTexture(WHITE_TEX)
+        PixelSnap(frame._band)
+    end
+    frame._band:SetVertexColor(color[1], color[2], color[3], color[4] or 1)
+    frame._band:Show()
 end
 
 -- BlackBorder: 1px pure-black frame around any region, on the OVERLAY layer
@@ -215,20 +245,26 @@ local function AddHoverWash(btn, insetX, insetY)
 end
 
 -- StyleButton: turn a plain Button into an atrocity-flat button.
--- Flat fill + 1px black border + grey hover wash. Optional press-fill via mouse down.
+-- Two-layer fill so buttons read as filled even against the near-black window:
+--   ApplyFill  -> opaque bgMedium base (BACKGROUND -8)
+--   ApplyBand  -> Palette.btnRest light tint (BACKGROUND -6)
+-- Press feedback swaps the band layer to a brighter/wash tint; hover wash
+-- adds a further overlay on ARTWORK. Border is a 1px black ring on top.
 local function StyleButton(btn, opts)
     opts = opts or {}
     ApplyFill(btn, opts.fill or Palette.bgMedium)
+    ApplyBand(btn, Palette.btnRest)
     AddBlackBorder(btn)
     AddHoverWash(btn)
-    -- Press feedback: darken/lighten fill briefly.
+    -- Press feedback: brighten the tint layer briefly so the button feels
+    -- pressed without losing its base fill.
     btn:HookScript("OnMouseDown", function(self)
         if self:IsEnabled() and self:IsEnabled() ~= 0 then
-            ApplyFill(self, Palette.pressFill)
+            ApplyBand(self, Palette.pressFill)
         end
     end)
     btn:HookScript("OnMouseUp", function(self)
-        ApplyFill(self, opts.fill or Palette.bgMedium)
+        ApplyBand(self, Palette.btnRest)
     end)
     if btn.SetNormalFontObject then
         btn:SetNormalFontObject("GameFontNormal")
@@ -241,7 +277,10 @@ end
 -- container Frame (the container gets the border + fill; the EditBox stays
 -- transparent). Wires up brand-mint border animation on hover/focus.
 local function StyleEditBoxContainer(container, editBox)
-    ApplyFill(container, Palette.bgDark)
+    -- Deeper well fill (Palette.fieldFill = near-black @ 55%) so the box
+    -- reads as an interactive sunken input even when it sits on top of a
+    -- toolbar band that itself is slightly brighter than the window body.
+    ApplyFill(container, Palette.fieldFill)
     AddBlackBorder(container)
     AttachBorderAnimator(container)
     local function toBrand() container._borderAnim.AnimateTo(Palette.brand) end
@@ -348,7 +387,10 @@ local function BuildRow(row)
     row.needCell:RegisterForClicks("LeftButtonUp", "RightButtonUp")
     row.needCell:SetFrameLevel(row:GetFrameLevel() + 2)
 
-    local NEED_FILL_IDLE   = { Palette.bgMedium[1], Palette.bgMedium[2], Palette.bgMedium[3], 0 }
+    -- Faint at-rest fill (was alpha 0). Reads as a clickable well without
+    -- being loud — a scanning eye picks out "editable" cells at a glance.
+    -- Hover ramps to full opacity via NEED_FILL_HOVER.
+    local NEED_FILL_IDLE   = { 0, 0, 0, 0.35 }
     local NEED_FILL_HOVER  = { Palette.bgMedium[1], Palette.bgMedium[2], Palette.bgMedium[3], 1 }
     local NEED_BORDER_IDLE = { Palette.brand[1], Palette.brand[2], Palette.brand[3], 0 }
     ApplyFill(row.needCell, NEED_FILL_IDLE)
@@ -377,7 +419,8 @@ local function BuildRow(row)
     -- the border grows in as brand mint and a subtle dark fill appears,
     -- so the affordance ("this opens something") stays discoverable. All
     -- colours start at alpha 0 and animate up.
-    local CAP_FILL_IDLE = { Palette.bgMedium[1], Palette.bgMedium[2], Palette.bgMedium[3], 0 }
+    -- Same faint at-rest fill as the Need cell (see NEED_FILL_IDLE comment).
+    local CAP_FILL_IDLE = { 0, 0, 0, 0.35 }
     local CAP_FILL_HOVER = { Palette.bgMedium[1], Palette.bgMedium[2], Palette.bgMedium[3], 1 }
     local CAP_BORDER_IDLE = { Palette.brand[1], Palette.brand[2], Palette.brand[3], 0 }
     ApplyFill(row.capCell, CAP_FILL_IDLE)
@@ -823,7 +866,9 @@ local function MakeEditBox(parent, labelText, width, isNumeric, maxLetters, plac
         ph:SetPoint("RIGHT", eb, "RIGHT", 0, 0)
         ph:SetJustifyH("LEFT")
         ph:SetText(placeholder)
-        ph:SetTextColor(0.55, 0.55, 0.55, 1)
+        -- Slightly brighter than pure textMuted so hints stay legible on the
+        -- new banded toolbar without competing with real user input.
+        ph:SetTextColor(0.62, 0.62, 0.62, 1)
 
         local function refresh()
             local hasText = eb:GetText() ~= ""
@@ -902,6 +947,10 @@ function MF:Build()
     header:SetPoint("TOPLEFT", 0, 0)
     header:SetPoint("TOPRIGHT", 0, 0)
     header:EnableMouse(true)
+    -- Same whisper-band as toolbar/headers/footer so all four framing
+    -- regions share one hierarchy language ("any lighter strip = structural
+    -- band, list body stays untinted").
+    ApplyBand(header, Palette.bandTint)
     header:RegisterForDrag("LeftButton")
     header:SetScript("OnDragStart", function() f:StartMoving() end)
     header:SetScript("OnDragStop", function()
@@ -953,6 +1002,10 @@ function MF:Build()
     toolbar:SetHeight(48)
     toolbar:SetPoint("TOPLEFT", header, "BOTTOMLEFT", 0, 0)
     toolbar:SetPoint("TOPRIGHT", header, "BOTTOMRIGHT", 0, 0)
+    -- Layer 1: subtle brighter band so the toolbar reads as its own strip
+    -- above the list, atrocity-style. Alpha is intentionally tiny (~3.5%)
+    -- so it's a whisper, not a stripe.
+    ApplyBand(toolbar, Palette.bandTint)
 
     local toolbarSep = toolbar:CreateTexture(nil, "OVERLAY", nil, 6)
     toolbarSep:SetTexture(WHITE_TEX)
@@ -1022,7 +1075,9 @@ function MF:Build()
     hint:SetPoint("TOPLEFT", toolbar, "BOTTOMLEFT", 12, -6)
     hint:SetPoint("TOPRIGHT", toolbar, "BOTTOMRIGHT", -12, -6)
     hint:SetJustifyH("LEFT")
-    hint:SetText("|cff888888Shift+Click to link \194\183 Click 'x' to remove \194\183 Click a value to edit it \194\183 Left-click a row (AH open) to search|r")
+    -- Dimmer than the toolbar band so this recedes visually — it's help text,
+    -- not primary content. Alpha via a slightly darker grey than before.
+    hint:SetText("|cff6a6a6aShift+Click to link \194\183 Click 'x' to remove \194\183 Click a value to edit it \194\183 Left-click a row (AH open) to search|r")
 
     -- ---- Column headers -----------------------------------------------
     -- Sits under the hint; no fill (matches atrocity's headerless section
@@ -1037,6 +1092,9 @@ function MF:Build()
     local headers = CreateFrame("Frame", nil, f)
     headers:SetHeight(20)
     headers:SetPoint("TOPLEFT", hint, "BOTTOMLEFT", -12, -4)
+    -- Same whisper-band as the toolbar. Reads as "column-header strip" so
+    -- the labels have visual weight even without a colored fill of their own.
+    ApplyBand(headers, Palette.bandTint)
 
     local headersSep = headers:CreateTexture(nil, "OVERLAY", nil, 6)
     headersSep:SetTexture(WHITE_TEX)
@@ -1086,6 +1144,9 @@ function MF:Build()
     footer:SetHeight(38)
     footer:SetPoint("BOTTOMLEFT", 0, 0)
     footer:SetPoint("BOTTOMRIGHT", 0, 0)
+    -- Same whisper-band as toolbar/headers so the footer feels like a
+    -- balanced counterweight to the toolbar, not just an afterthought row.
+    ApplyBand(footer, Palette.bandTint)
 
     local footerSep = footer:CreateTexture(nil, "OVERLAY", nil, 6)
     footerSep:SetTexture(WHITE_TEX)
