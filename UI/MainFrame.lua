@@ -959,13 +959,19 @@ function MF:Build()
     f:SetClampedToScreen(true)
     f:SetMovable(true)
     f:SetResizable(true)
-    -- Min: everything the toolbar needs to fit + a couple of visible rows.
-    -- Max: enough vertical room for very long lists on a 4K display, plus
-    -- horizontal slack for extra-long item names.
+    -- Min width is driven by the toolbar row (widest fixed thing in the
+    -- window): 12 pad + 240 (Item) + 12 + 100 (Target) + 12 + 120 (Price
+    -- Cap) + 12 + 96 (Add) + 12 pad = 616. Rounded up to 640 for a bit
+    -- of visual breathing room; QA-1 was pinned at 560 which clipped
+    -- Add Item off the right edge and wrapped the hint text.
+    -- Min height keeps enough room for the toolbar + hint + column
+    -- headers + a couple of rows + footer.
+    -- Max: enough vertical room for very long lists on a 4K display,
+    -- plus horizontal slack for very-long item names.
     if f.SetResizeBounds then
-        f:SetResizeBounds(560, 320, 1200, 1200)
+        f:SetResizeBounds(640, 320, 1200, 1200)
     else
-        f:SetMinResize(560, 320)
+        f:SetMinResize(640, 320)
         f:SetMaxResize(1200, 1200)
     end
     f:EnableMouse(true)
@@ -1125,10 +1131,27 @@ function MF:Build()
             end
             ADDON.DB:SetItem(itemID, need, maxPriceCopper)
             ADDON.Inventory:Invalidate()
+            -- QA-3: reset ALL THREE toolbar fields after a successful add
+            -- so the next entry starts from a clean state and shows the
+            -- placeholder hints again. Previously countBox retained the
+            -- last-entered value, causing surprise adds at old targets.
             addBox:SetText("")
+            countBox:SetText("")
             priceBox:SetText("")
             local pMsg = maxPriceCopper and (", cap %dg"):format(priceGold) or ""
-            MF:SetStatus(("Added %s (need %d%s)"):format(name, need, pMsg))
+            -- QA-2 guardrail: when the user typed a name (not an itemID),
+            -- Blizzard's C_Item.GetItemInfo(name) returns exactly ONE
+            -- itemID even when several items share the same display name
+            -- (rank 1/2/3 craft variants, seasonal duplicates, etc). The
+            -- addon can't enumerate the alternatives from the API, so we
+            -- append a soft hint to the status line reminding the user
+            -- that if the resolved quality is wrong they should re-add
+            -- by exact itemID. Only shown when the input wasn't already
+            -- an itemID (numeric input is unambiguous).
+            local wasNumericInput = tonumber(input) ~= nil
+            local suffix = wasNumericInput and ""
+                or (" \194\183 |cff888888id:%d if wrong quality|r"):format(itemID)
+            MF:SetStatus(("Added %s (need %d%s)%s"):format(name, need, pMsg, suffix))
             MF:Refresh()
         end)
     end
