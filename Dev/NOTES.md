@@ -216,6 +216,15 @@ Simplest automation, biggest immediate win. `AutoLootMailItem` on
 target. Reuses the existing `pendingBuys` ledger — once mail is looted,
 decrement the ledger (which we already track).
 
+**MUST be opt-in (user-approved 2026-09-17).** Several established
+addons already do mail auto-collect (Postal, MailCollector, etc.) and
+users may already have one running. Stock Clerk's mail auto-collect
+ships **off by default** with an explicit toggle in the settings
+dropdown ("Auto-loot mailbox attachments for tracked items").
+Enabling it should also warn the user if a known mail-automation
+addon is loaded (`IsAddOnLoaded("Postal")` etc.) so they can avoid
+two addons fighting over the same inbox.
+
 **W2-B: Bank auto-pull + bank auto-open/close**
 
 Pair these together. Bank auto-open mirrors the AH auto-open+close
