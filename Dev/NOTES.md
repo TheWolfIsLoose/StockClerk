@@ -359,3 +359,199 @@ to revert if the aesthetic doesn't land or if we hit a licensing snag.
 Keep the current Blizz-native fallbacks in the code path (e.g. via a
 `Palette.assets = "atrocity" or "blizzard"` toggle) so users on
 low-memory setups or with texture-pack conflicts have an escape hatch.
+
+---
+
+## Post-v0.2.0 QA-derived backlog (added 2026-09-17)
+
+Compiled from the v0.2.0 pre-release QA sweep. Bugs QA-1/3/6/7/8 were
+hotfixed for v0.2.0 (see CHANGELOG). QA-2 got a soft guardrail (status-
+line hint on name-based adds); full fix is v0.3 work. The rest below
+are features / longer-horizon watchlist items.
+
+### QA-2 (v0.3 — proper quality-tier disambiguation)
+
+Name-based adds are non-deterministic across items sharing a display
+name (rank 1/2/3 craft variants especially). Blizzard doesn't expose
+name -> multiple-itemIDs to addons, so we can't enumerate at resolve
+time.
+
+Options, ordered from cheapest to richest UX:
+
+1. **Shift-click into add box shortcut.** User Shift-clicks an item in
+   bags / recipe UI / AH; the linked item's exact ID is inserted into
+   the Item field. This works today for chat edits; extend the addBox's
+   OnHyperlinkClick or InsertLink hook. Zero ambiguity for anything the
+   user can find in-game.
+2. **Local recent-encounters cache.** Every time C_Item.GetItemInfo
+   fires for an item, remember `{name -> {itemIDs...}}` in
+   SavedVariables. When the user types a name that matches a cached
+   set with >1 ID, refuse and show a small chooser popup listing the
+   candidates with their quality tier indicator. Fills up naturally
+   as the user plays.
+3. **Auctionator / trade-skills scan piggyback.** If Auctionator is
+   installed, borrow its item database (it maintains a name-index of
+   everything it's ever seen at the AH). Fallback to option 2 when
+   Auctionator isn't present.
+
+Rec: ship (1) as a quick win, ship (2) alongside as the guardrail,
+consider (3) only if it doesn't stretch scope.
+
+### QA-10 (feature — opt-in full auto-purchase)
+
+Single global toggle in a settings surface, no per-item override. The
+per-item **price cap is the fail-safe**: auto-purchase only ever acts
+on items with a set cap. Uncapped items are visible but never
+auto-bought. Design contract that must be visible in the UI:
+
+- Toggle sits in a settings panel (opens from a header cog icon).
+  Tooltip on hover states the contract in plain English.
+- One-time confirmation modal when enabling: "Auto-purchase is ON.
+  Only capped items will be bought. N items have no cap set; they
+  will be skipped. Continue?"
+- Row-level indicator (dim moon glyph? crossed-out coin?) on items
+  with no cap while auto is on, so it's obvious at a glance which
+  rows are excluded.
+- Esc kill-switch: pressing Esc while a purchase loop is active
+  cancels it immediately (regardless of window focus).
+- Qty delta sanity check: if a single BuyMerchantItem or AH bid would
+  push have above `need + 2*need` (i.e. more than triple the target),
+  refuse it and log to the sidecar activity log.
+- Per-run spend ceiling — required, see QA-10a.
+
+**v1 scope: commodities only.** Non-commodity auctions have quirks
+(item-of-the-day, bind-on-account rules, buyout vs bid) that add too
+much surface area for the first iteration.
+
+### QA-10a (feature — per-session spend cap + budget allocation)
+
+Spend cap is REQUIRED when auto is on, not optional. Naive top-down
+iteration causes tail starvation: the first few short items eat the
+whole budget and the rest of the list gets nothing. This is a real
+problem for cheap-but-many vs expensive-but-few stockpiles.
+
+Recommended v1 strategy: **two-pass proportional + spillover.**
+
+- Pass 1 (allocation): for each short item, compute demand-value =
+  `(need - have) * est_unit_price` where est_unit_price is the last
+  known price (see QA-11). Scale each demand-value slice down
+  proportionally so their sum fits under the budget. Convert each
+  slice back into a target unit count.
+- Pass 2 (spillover): after pass 1's target counts are executed, any
+  budget left over redistributes to items still short, prioritizing
+  those with the largest remaining shortfall. Repeat until either
+  the budget is exhausted or no items are still short.
+
+End-of-loop summary in the sidecar log (see QA-13):
+`Spent Xg of Yg. N items still short: [names]. M items now at target.`
+
+Open sub-question: **per-loop reset or rolling per-play-session cap?**
+Argument for per-loop: user explicitly initiates each restock so
+they'd expect the budget to reset. Argument for rolling: prevents
+'run the loop 20 times to get around the cap' abuse of your own
+guardrail. Rec: per-loop cap for v1, add a rolling cap toggle later
+if the abuse pattern materializes.
+
+Depends on QA-11 for reasonably accurate est_unit_price. Without it
+pass 1 is effectively 'equal shares'.
+
+### QA-11 (feature — last-known-price column)
+
+New per-item schema field:
+```lua
+char.items[itemID].lastPrice = {
+    copper = 12500,         -- copper per unit
+    seenAt = 1758067200,    -- unix ts
+    source = "click"|"scan" -- how we saw it
+}
+```
+
+Population strategy, in order of user friction:
+
+1. **Piggyback the left-click-to-search flow.** Every time the user
+   left-clicks a row while AH is open, we already run a search. Grab
+   the cheapest unit price from those results and stamp it. Free,
+   no new UI, no rate-limit concerns.
+2. **Optional AH-open sweep.** Setting: "Update all prices when the
+   AH opens." Runs `C_AuctionHouse.SendSearchQuery` for each tracked
+   item, rate-limited (100/min budget; back off automatically on
+   throttle events). Cancellable via a small progress toast.
+3. **Stale-only sweep.** Same as (2) but only re-queries items whose
+   lastPrice.seenAt is older than a TTL (24h default, configurable).
+
+Column: 'Last Seen' between Price Cap and Status. Dim the text when
+older than the TTL. Empty state shows a dim em-dash.
+
+Ship path 1 first (piggyback), then add the AH-open sweep with the
+stale-only variant behind a toggle.
+
+Powers QA-10a budget-allocation accuracy and QA-14 historical trend.
+
+### QA-12 (watchlist — post-release AH edge cases)
+
+Not v0.2.0 blocking. Broader user base is required to flush these
+out because they need real-world timing / server load / cross-realm
+config combinations:
+
+- Throttled queries (C_AuctionHouse rate limit backoff behavior)
+- Mid-purchase disconnect (partial confirmation state on relog)
+- Partial fills (asked for 100, got 87, did we bank the balance?)
+- Cross-realm auction house quirks (region-wide commodities market)
+- BFA-era 'commodities queue' interactions if any legacy code path
+  hits it
+
+Track user reports post-soft-release and open concrete tickets from
+them; don't preemptively harden without a reproducible case.
+
+### QA-13 (feature — sidecar activity log window)
+
+Extricate the statusBar into a docked sidecar frame. Statusbar today
+is a single line that gets overwritten; a sidecar gives us proper
+audit trail and enables analytics.
+
+Log entries (timestamped, all persisted):
+
+- add / remove item
+- target change (from -> to)
+- cap change (from -> to)
+- AH search (item, cheapest, listings count)
+- purchase attempt (item, qty, unit price, source)
+- purchase completion (item, qty, spent)
+- purchase skip (item, reason: over cap / no cap set / at target)
+- loop start, loop stop (with duration, spent, items touched)
+
+Storage: SavedVariables ring buffer, account-wide for cross-alt
+auditing. Cap ~500 entries; oldest evicted first.
+
+Header aggregation surface (top of the sidecar): total purchases,
+total gold spent, per-item breakdown (units bought, gold spent,
+avg unit price).
+
+Filter chips: All | Purchases only | This session | Per-item (opens
+a submenu of tracked items).
+
+Toggle via a footer button (log icon), OR a slash command `/sc log`.
+
+Makes the addon feel like a proper tool with an audit trail vs
+fire-and-forget. Groundwork for QA-14.
+
+### QA-14 (feature — historical expenditure mapping, v0.4-ish)
+
+Extends QA-13 into per-item time-series. Sparkline drawn inline in
+each row (right of the Status pill); right-click to open a full chart
+in an overlay panel.
+
+Enables:
+
+- "Is now a good time to buy?" — current AH price vs trailing 30-day
+  median (green if below, yellow if within 10%, red if above).
+- "Am I getting ripped off?" — user's purchase history for this item
+  vs current AH cheapest. Flags anomalies.
+- Total holdings value ticker at window footer.
+
+Data source: append every `lastPrice` observation (from QA-11) to a
+per-item history array. Cap ~200 obs per item; downsample older
+entries into daily/weekly buckets to keep SavedVariables size bounded.
+
+Green/yellow/red color band vs the USER's own price history, not
+some external oracle, so the addon stays fully self-contained.

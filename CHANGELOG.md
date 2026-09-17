@@ -5,6 +5,29 @@
 First public release. Consolidates all Wave 1 / Wave 1.5 work plus a
 full visual reskin.
 
+### Pre-release polish
+
+- **Resizable window** with a drag handle in the bottom-right corner
+  (Blizzard-native SizeGrabber texture). Minimum width 640, maximum
+  1200x1200. Size and position persist per character.
+- **Tab / Shift+Tab navigation** across the whole editable surface in
+  row-major order: Item -> Target -> Price Cap -> row 1 Need -> row 1
+  Price Cap -> row 2 Need -> ... and wraps. If the next cell isn't
+  currently on screen the list scrolls to it automatically.
+- **Inline edits commit on blur** as well as on Enter. Tabbing or
+  clicking away no longer discards the pending value. Escape still
+  cancels.
+- **Row cell values stay visible on hover.** Previously the higher-
+  level cell fill occluded the value on hover; the FontStrings are
+  now parented to the cell itself so they draw over the fill.
+- **Placeholder hints** in all three toolbar fields; the fields also
+  clear back to their placeholders after a successful add.
+- **Column-header band** stretches flush to the right edge of the
+  window, matching the toolbar and footer bands.
+- **Ambiguous-name hint.** When you add an item by name, the status
+  line now shows the resolved itemID so you can re-add by exact ID if
+  the resolver picked the wrong quality variant.
+
 ### New
 
 - **Auction House integration.** With the AH open, left-click a tracked
