@@ -1098,9 +1098,15 @@ function MF:Build()
     -- Boxes start empty; the hints disappear the moment the user focuses.
     -- countBox empty falls back to 20 in DoAdd; priceBox empty means "no
     -- cap" — both semantics are unchanged from the previous default.
-    local addEB   = MakeEditBox(toolbar, L.PROMPT_ADD_ITEM or "Item name or ID", 240, false, nil,   "Flask of the Shattered Sun")
-    local countEB = MakeEditBox(toolbar, "Target",                                100, true,  5,     "20")
-    local priceEB = MakeEditBox(toolbar, "Price Cap / Unit",                      120, true,  7,     "none")
+    -- v0.2.0 scope: itemID-only. Item name resolution is deferred to a
+    -- future release (see Dev/NOTES QA-2 backlog) because Blizzard's API
+    -- returns non-deterministic matches when a name maps to multiple
+    -- itemIDs (rank 1/2/3 craft variants, event duplicates), and there's
+    -- no addon-facing enumerate-by-name endpoint to disambiguate.
+    -- Numeric-only input avoids the ambiguity entirely.
+    local addEB   = MakeEditBox(toolbar, "Item ID",         240, true,  8,     "e.g. 212283")
+    local countEB = MakeEditBox(toolbar, "Target",          100, true,  5,     "20")
+    local priceEB = MakeEditBox(toolbar, "Price Cap / Unit", 120, true,  7,     "none")
     local addBox   = addEB.editBox
     local countBox = countEB.editBox
     local priceBox = priceEB.editBox
@@ -1119,39 +1125,42 @@ function MF:Build()
     addBtnText:SetTextColor(1, 1, 1, 1)
 
     local function DoAdd()
-        local input = addBox:GetText()
-        if not input or input == "" then return end
+        local raw = addBox:GetText()
+        if not raw or raw == "" then return end
+        -- itemID-only path. Strict validation: reject anything that isn't
+        -- a positive integer, including item links (users can still
+        -- Shift-click into chat, extract the numeric id, and paste it).
+        -- Full 'paste an item link and extract the id' UX is v0.3 work.
+        local itemID = tonumber(raw)
+        if not itemID or itemID <= 0 or math.floor(itemID) ~= itemID then
+            MF:SetStatus("|cffff8888Item ID must be a number (e.g. 212283)|r")
+            return
+        end
         local need = tonumber(countBox:GetText()) or 20
         local priceGold = tonumber(priceBox:GetText())
         local maxPriceCopper = (priceGold and priceGold > 0) and (priceGold * 10000) or nil
-        ADDON.ItemResolver:Resolve(input, function(itemID, name, _)
-            if not itemID then
-                MF:SetStatus("|cffff8888" .. tostring(name) .. "|r")
+
+        -- ItemResolver still runs (async cache-warm path) so we get the
+        -- item's canonical name + link for the status message and for
+        -- the row display. Failure just means the id doesn't exist on
+        -- the client -- we log it and bail without adding.
+        ADDON.ItemResolver:Resolve(itemID, function(resolvedID, name, _)
+            if not resolvedID then
+                MF:SetStatus(("|cffff8888Unknown item ID: %d|r"):format(itemID))
                 return
             end
-            ADDON.DB:SetItem(itemID, need, maxPriceCopper)
+            ADDON.DB:SetItem(resolvedID, need, maxPriceCopper)
             ADDON.Inventory:Invalidate()
-            -- QA-3: reset ALL THREE toolbar fields after a successful add
-            -- so the next entry starts from a clean state and shows the
-            -- placeholder hints again. Previously countBox retained the
-            -- last-entered value, causing surprise adds at old targets.
+            -- Reset all three fields AND clear focus on all three so the
+            -- placeholder hooks (which hide while focused) re-show.
             addBox:SetText("")
             countBox:SetText("")
             priceBox:SetText("")
+            addBox:ClearFocus()
+            countBox:ClearFocus()
+            priceBox:ClearFocus()
             local pMsg = maxPriceCopper and (", cap %dg"):format(priceGold) or ""
-            -- QA-2 guardrail: when the user typed a name (not an itemID),
-            -- Blizzard's C_Item.GetItemInfo(name) returns exactly ONE
-            -- itemID even when several items share the same display name
-            -- (rank 1/2/3 craft variants, seasonal duplicates, etc). The
-            -- addon can't enumerate the alternatives from the API, so we
-            -- append a soft hint to the status line reminding the user
-            -- that if the resolved quality is wrong they should re-add
-            -- by exact itemID. Only shown when the input wasn't already
-            -- an itemID (numeric input is unambiguous).
-            local wasNumericInput = tonumber(input) ~= nil
-            local suffix = wasNumericInput and ""
-                or (" \194\183 |cff888888id:%d if wrong quality|r"):format(itemID)
-            MF:SetStatus(("Added %s (need %d%s)%s"):format(name, need, pMsg, suffix))
+            MF:SetStatus(("Added %s (need %d%s)"):format(name, need, pMsg))
             MF:Refresh()
         end)
     end
@@ -1546,27 +1555,53 @@ local function OpenRowCellEditor(row, cell)
 end
 
 -- Given a data index in the current provider, focus its Nth cell.
--- Scrolls the list first if the row isn't currently rendered.
+--
+-- We ALWAYS defer the actual open by one frame via C_Timer.After(0).
+-- Reason: when this is called from a Tab keystroke, the *source* editor
+-- is losing focus at the same moment, which triggers OnEditFocusLost ->
+-- CommitNeedEdit/CommitPriceEdit -> MF:Refresh() -> the DataProvider is
+-- replaced and every row Frame is potentially rebound to a different
+-- element. Resolving FindFrame(elementData) BEFORE that settles gives a
+-- stale Button and the open silently no-ops on the second row.
+-- Deferring lets the blur commit + Refresh + rebind complete, then we
+-- re-lookup the current elementData (fresh from the new provider) and
+-- open its Button.
 function MF:FocusRowCell(dataIndex, cell)
     if not self.scrollBox or not self.dataProvider then return end
     local size = self.dataProvider:GetSize()
     if size == 0 or dataIndex < 1 or dataIndex > size then return end
-    local elementData = self.dataProvider:Find(dataIndex)
-    if not elementData then return end
 
-    local frame = self.scrollBox:FindFrame(elementData)
-    if frame then
-        OpenRowCellEditor(frame, cell)
-        return
-    end
-    -- Off-screen: scroll into view, then open on the next frame so the
-    -- ScrollView has spawned or rebound the Button.
+    -- Snapshot the itemID at request time so we can re-locate the row
+    -- after any refresh that fires between now and the deferred open.
+    -- Using itemID rather than the elementData table itself because the
+    -- provider gets fully rebuilt across Refresh() calls.
+    local seed = self.dataProvider:Find(dataIndex)
+    if not seed then return end
+    local wantItemID = seed.itemID
+
+    -- Scroll the target index into view first. If it's already visible
+    -- this is a no-op; if it isn't, we need this call BEFORE the defer
+    -- so the ScrollView has a frame's worth of time to spawn the Button.
     self.scrollBox:ScrollToElementDataIndex(dataIndex,
         ScrollBoxConstants.AlignCenter,
         ScrollBoxConstants.NoScrollInterpolation)
+
     C_Timer.After(0, function()
-        local f2 = self.scrollBox and self.scrollBox:FindFrame(elementData)
-        if f2 then OpenRowCellEditor(f2, cell) end
+        if not (self.scrollBox and self.dataProvider) then return end
+        -- Re-resolve the elementData by itemID against the CURRENT
+        -- provider. The row might have moved in the sort order if
+        -- something else refreshed the list, but the itemID is stable.
+        local currentSize = self.dataProvider:GetSize()
+        for i = 1, currentSize do
+            local d = self.dataProvider:Find(i)
+            if d and d.itemID == wantItemID then
+                local frame = self.scrollBox:FindFrame(d)
+                if frame then
+                    OpenRowCellEditor(frame, cell)
+                end
+                return
+            end
+        end
     end)
 end
 
