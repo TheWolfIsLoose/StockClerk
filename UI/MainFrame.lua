@@ -1227,29 +1227,19 @@ function MF:Build()
     addBtn:SetScript("OnKeyDown", function(_, key)
         if not MF._addBtnFocused then return end
         if key == "TAB" then
-            local shift = IsShiftKeyDown()
-            if ADDON and ADDON.debug then
-                print(("|cff98ff98[SC]|r addBtn TAB shift=%s size=%s"):format(
-                    tostring(shift),
-                    tostring(MF.dataProvider and MF.dataProvider:GetSize() or "nil")))
-            end
             -- Defer BOTH the blur and the focus transfer by one frame
             -- so the current Tab keystroke is fully consumed by this
             -- OnKeyDown (propagate stays false) and doesn't double-hop
             -- into the newly-focused control.
+            local shift = IsShiftKeyDown()
             C_Timer.After(0, function()
                 MF:BlurAddButton()
                 if shift then
                     if priceBox then priceBox:SetFocus() end
-                    if ADDON and ADDON.debug then
-                        print("|cff98ff98[SC]|r addBtn -> priceBox focused")
-                    end
                 else
-                    local ok = MF:TabToFirstRowCell()
-                    if ADDON and ADDON.debug then
-                        print(("|cff98ff98[SC]|r addBtn -> TabToFirstRowCell returned %s"):format(tostring(ok)))
-                    end
-                    if not ok then
+                    -- Forward from Add button goes into the list; wrap
+                    -- back to addBox if the list is empty.
+                    if not MF:TabToFirstRowCell() then
                         if addBox then addBox:SetFocus() end
                     end
                 end
@@ -1705,8 +1695,16 @@ function MF:FocusRowCell(dataIndex, cell)
     -- Scroll the target index into view first. If it's already visible
     -- this is a no-op; if it isn't, we need this call BEFORE the defer
     -- so the ScrollView has a frame's worth of time to spawn the Button.
+    --
+    -- Blizzard signature: ScrollToElementDataIndex(dataIndex, alignment,
+    -- offset, noInterpolation). We were previously passing
+    -- ScrollBoxConstants.NoScrollInterpolation (a BOOLEAN) into the
+    -- `offset` slot, which throws 'attempt to perform arithmetic on
+    -- local offset (a boolean value)' inside ScrollBox.lua:850. Correct
+    -- placement: nil offset, boolean in the fourth slot.
     self.scrollBox:ScrollToElementDataIndex(dataIndex,
         ScrollBoxConstants.AlignCenter,
+        nil,
         ScrollBoxConstants.NoScrollInterpolation)
 
     C_Timer.After(0, function()
@@ -1719,19 +1717,11 @@ function MF:FocusRowCell(dataIndex, cell)
             local d = self.dataProvider:Find(i)
             if d and d.itemID == wantItemID then
                 local frame = self.scrollBox:FindFrame(d)
-                if ADDON and ADDON.debug then
-                    print(("|cff98ff98[SC]|r FocusRowCell deferred: itemID=%s idx=%d frame=%s cell=%s"):format(
-                        tostring(wantItemID), i, tostring(frame), tostring(cell)))
-                end
                 if frame then
                     OpenRowCellEditor(frame, cell)
                 end
                 return
             end
-        end
-        if ADDON and ADDON.debug then
-            print(("|cff98ff98[SC]|r FocusRowCell deferred: itemID=%s NOT FOUND in provider size=%d"):format(
-                tostring(wantItemID), currentSize))
         end
     end)
 end
