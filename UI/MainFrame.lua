@@ -1237,27 +1237,22 @@ function MF:Build()
     self.restockBtn = restockBtn
 
     -- ---- Resize grip (bottom-right corner) -----------------------------
-    -- Small transparent hit region at the very corner of the window with a
-    -- subtle diagonal-line texture (two 1px stripes drawn in Palette.brand
-    -- at low alpha) so the affordance is visible without competing with
-    -- the flat aesthetic. StartSizing("BOTTOMRIGHT") lets Blizzard's frame
-    -- resize handle everything; SetResizeBounds above enforces the min/max.
+    -- Uses Blizzard's built-in ChatIM SizeGrabber textures — the same
+    -- diagonal-hash art the chat frame uses — so the affordance reads as
+    -- native and stays inside its 16x16 bounding box (no rotation math,
+    -- no bleed past the window border). SetResizeBounds above enforces
+    -- the min/max; this Button just triggers StartSizing.
+    local GRIP_UP        = "Interface\\ChatFrame\\UI-ChatIM-SizeGrabber-Up"
+    local GRIP_DOWN      = "Interface\\ChatFrame\\UI-ChatIM-SizeGrabber-Down"
+    local GRIP_HIGHLIGHT = "Interface\\ChatFrame\\UI-ChatIM-SizeGrabber-Highlight"
     local grip = CreateFrame("Button", nil, f)
     grip:SetSize(16, 16)
     grip:SetPoint("BOTTOMRIGHT", f, "BOTTOMRIGHT", -1, 1)
     grip:SetFrameLevel(f:GetFrameLevel() + 5)
     grip:EnableMouse(true)
-    -- Two thin diagonal stripes as the affordance mark.
-    for i, offset in ipairs({ 3, 7 }) do
-        local stripe = grip:CreateTexture(nil, "OVERLAY", nil, 7)
-        stripe:SetTexture(WHITE_TEX)
-        stripe:SetColorTexture(Palette.brand[1], Palette.brand[2], Palette.brand[3], 0.35)
-        stripe:SetSize(10, 1)
-        stripe:SetPoint("BOTTOMRIGHT", grip, "BOTTOMRIGHT", -offset, offset)
-        -- Rotate to a 45° diagonal.
-        stripe:SetRotation(math.rad(-45))
-        PixelSnap(stripe)
-    end
+    grip:SetNormalTexture(GRIP_UP)
+    grip:SetPushedTexture(GRIP_DOWN)
+    grip:SetHighlightTexture(GRIP_HIGHLIGHT)
     grip:SetScript("OnMouseDown", function(_, button)
         if button == "LeftButton" then f:StartSizing("BOTTOMRIGHT") end
     end)
