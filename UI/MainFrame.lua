@@ -1227,17 +1227,31 @@ function MF:Build()
     addBtn:SetScript("OnKeyDown", function(_, key)
         if not MF._addBtnFocused then return end
         if key == "TAB" then
-            if IsShiftKeyDown() then
+            -- Defer BOTH the blur and the focus transfer by one frame.
+            -- Two reasons:
+            -- 1) If we BlurAddButton() synchronously, it flips
+            --    SetPropagateKeyboardInput back to true and the same
+            --    Tab keystroke can propagate to the newly-focused
+            --    control, re-triggering a Tab there and double-hopping.
+            -- 2) The current Tab is consumed cleanly (propagate stays
+            --    false through the end of this OnKeyDown), so it does
+            --    NOT leak into game chat or the default handler.
+            -- Next frame: blur the button (drops the ring), then move
+            -- focus. Snapshot shift-state now since IsShiftKeyDown may
+            -- have changed by the deferred call.
+            local shift = IsShiftKeyDown()
+            C_Timer.After(0, function()
                 MF:BlurAddButton()
-                if priceBox then priceBox:SetFocus() end
-            else
-                MF:BlurAddButton()
-                -- Forward from Add button goes into the list; wrap back
-                -- to addBox (the first tab stop) if the list is empty.
-                if not MF:TabToFirstRowCell() then
-                    if addBox then addBox:SetFocus() end
+                if shift then
+                    if priceBox then priceBox:SetFocus() end
+                else
+                    -- Forward from Add button goes into the list; wrap
+                    -- back to addBox if the list is empty.
+                    if not MF:TabToFirstRowCell() then
+                        if addBox then addBox:SetFocus() end
+                    end
                 end
-            end
+            end)
         elseif key == "ENTER" or key == "SPACE" then
             DoAdd()
             -- DoAdd clears the editbox focuses on success. Keep keyboard
