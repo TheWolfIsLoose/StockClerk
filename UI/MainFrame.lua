@@ -1169,6 +1169,49 @@ function MF:Build()
         self:SetPropagateKeyboardInput(true)
     end)
 
+    -- Keyboard hygiene on close. Two capture leaks exist if the window
+    -- hides while something holds keyboard focus:
+    --   1) A focused-but-hidden EditBox keeps capturing game-wide
+    --      keystrokes -- typed text routes into an invisible field, so
+    --      chat/hotbars/movement all go dead.
+    --   2) A focused Add button leaves EnableKeyboard(true) +
+    --      SetPropagateKeyboardInput(false) sticky on a hidden frame -
+    --      same silent swallow class.
+    -- This handler is the single choke point: Escape via UISpecialFrames,
+    -- the X button, and /clerk toggle all end in frame:Hide(), so
+    -- OnHide fires for every close path. Catches anything the normal
+    -- blur paths missed (e.g. user clicks the X mid-edit).
+    -- NOTE: MF:BlurAddButton is defined later in Build(); the closure
+    -- resolves at call time, after Build has completed.
+    f:SetScript("OnHide", function()
+        local focused = GetCurrentKeyBoardFocus and GetCurrentKeyBoardFocus()
+        if focused and focused.ClearFocus then focused:ClearFocus() end
+        if MF._addBtnFocused and MF.BlurAddButton then MF:BlurAddButton() end
+        -- Reset any in-progress row inline editor. ScrollView rows are
+        -- pooled and InitializeRow does NOT reset editor visibility, so
+        -- without this a row closed mid-edit would reappear on next open
+        -- with a stale empty editor floating over whichever item the
+        -- pooled row now serves. The edit itself is discarded (focus was
+        -- already cleared, so no blur-commit fires) -- consistent with
+        -- closing a dialog mid-edit.
+        if MF.scrollBox and MF.scrollBox.EnumerateFrames then
+            for _, row in MF.scrollBox:EnumerateFrames() do
+                if row.needEdit then
+                    row.needEdit:Hide()
+                    if row.needEditBg then row.needEditBg:Hide() end
+                    if row.need then row.need:Show() end
+                    if row.needCell then row.needCell._needEditActive = false end
+                end
+                if row.priceEdit then
+                    row.priceEdit:Hide()
+                    if row.priceEditBg then row.priceEditBg:Hide() end
+                    if row.cap then row.cap:Show() end
+                    if row.capCell then row.capCell._priceEditActive = false end
+                end
+            end
+        end
+    end)
+
     -- Position + size (both persisted per-character). Size lives on the
     -- same uiPos table so one save/restore cycle handles both.
     local pos = ADDON.DB.char.uiPos
