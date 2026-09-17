@@ -1083,15 +1083,20 @@ function MF:Build()
     -- Sits under the hint; no fill (matches atrocity's headerless section
     -- headers — the labels themselves + the 1px bottom border are enough).
     -- Labels in brand mint (accent = section-header rule).
-    -- The header frame's RIGHT edge is deliberately left unset here. It's
-    -- bound below (after scrollBox exists) to the scrollBox's TOPRIGHT so
-    -- both frames share the exact same right coordinate — without that,
-    -- rows (children of scrollBox, which is inset 4px + 18px for the
-    -- scroll bar) sit ~22px to the right of every header label, which is
-    -- exactly the misalignment that appeared in v0.2.0.
+    -- Header frame right edge is anchored directly to the window frame
+    -- (`f`) with a hardcoded -22px inset, NOT to listHolder or scrollBox.
+    -- Reason: listHolder anchors TOPLEFT to headers (BOTTOMLEFT), so
+    -- anchoring headers back to any descendant of listHolder produces a
+    -- circular dependency ("Cannot anchor to a region dependent on it").
+    -- The -22 matches the row-right-edge exactly: listHolder is inset 4px
+    -- from f, scrollBox is inset 18px from listHolder for the scroll bar,
+    -- rows live inside scrollBox. So row.RIGHT = f.RIGHT - 22. Every
+    -- RIGHT-anchored offset in MakeHeader now shares the exact same origin
+    -- as the same-numbered offset in BuildRow.
     local headers = CreateFrame("Frame", nil, f)
     headers:SetHeight(20)
     headers:SetPoint("TOPLEFT", hint, "BOTTOMLEFT", -12, -4)
+    headers:SetPoint("TOPRIGHT", f, "TOPRIGHT", -22, 0)
     -- Same whisper-band as the toolbar. Reads as "column-header strip" so
     -- the labels have visual weight even without a colored fill of their own.
     ApplyBand(headers, Palette.bandTint)
@@ -1203,13 +1208,9 @@ function MF:Build()
     scrollBox:SetPoint("TOPLEFT")
     scrollBox:SetPoint("BOTTOMRIGHT", -18, 0)
 
-    -- Lock the header frame's right edge to the row region's right edge.
-    -- Rows live inside scrollBox (listHolder inset 4px left / 18px right
-    -- for the scroll bar), so their RIGHT is at listHolder.RIGHT - 18.
-    -- Matching that here means every RIGHT-anchored offset in MakeHeader
-    -- shares the exact same origin as the same-numbered offset in BuildRow.
-    -- Uses BOTTOMRIGHT-to-TOPRIGHT so we don't have to guess vertical.
-    headers:SetPoint("BOTTOMRIGHT", scrollBox, "TOPRIGHT", 0, 2)
+    -- (headers' right edge is anchored above, right after headers is
+    -- created — anchoring here would create a circular dependency because
+    -- listHolder itself anchors to headers.)
 
     local scrollBar = CreateFrame("EventFrame", nil, listHolder, "MinimalScrollBar")
     scrollBar:SetPoint("TOPLEFT",     scrollBox, "TOPRIGHT",    2, 0)
