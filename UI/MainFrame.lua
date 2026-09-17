@@ -998,15 +998,15 @@ function MF:Build()
         f:SetMaxResize(1200, 1200)
     end
     f:EnableMouse(true)
-    -- IMPORTANT: do NOT EnableKeyboard(true) on the root window frame.
-    -- Doing so makes this frame intercept EVERY keystroke while it's
-    -- shown -- including bag hotkeys, chat opens, macro binds, etc. --
-    -- and even with SetPropagateKeyboardInput(true) it can leave the
-    -- game feeling like inputs are 'stuck' after an editbox loses focus
-    -- via Escape. ESC-close is already handled by UISpecialFrames below
-    -- without needing frame-level keyboard grab. Individual keyboard
-    -- consumers (addBtn Tab handling, editbox OnEscapePressed) enable
-    -- keyboard on themselves only while they need it.
+    -- Re-enable keyboard on the root frame. Removing this broke
+    -- typing into the toolbar EditBoxes entirely -- turns out the
+    -- previous 'keyboard stuck after Escape' issue wasn't from
+    -- EnableKeyboard(true) itself but from the OnKeyDown handler
+    -- below leaving SetPropagateKeyboardInput(false) sticky after an
+    -- Escape. We keep EnableKeyboard(true) so child EditBoxes can
+    -- receive keystrokes, and we harden the OnKeyDown to explicitly
+    -- restore propagate=true after handling Escape.
+    f:EnableKeyboard(true)
 
     -- Window fill + border. Border sits on a dedicated child frame at
     -- TOOLTIP strata so nothing draws over it (atrocity's own recipe: they
@@ -1018,11 +1018,24 @@ function MF:Build()
     borderFrame:SetFrameLevel(f:GetFrameLevel() + 100)
     AddBlackBorder(borderFrame)
 
-    -- ESC closes it (Blizzard convention). UISpecialFrames handles this
-    -- automatically: when ESC is pressed and no editbox has focus, the
-    -- topmost UISpecialFrames entry gets Hide()d. No custom OnKeyDown
-    -- needed on the root frame -- and importantly, no keyboard grab.
+    -- ESC closes the window. UISpecialFrames handles this natively so
+    -- long as no editbox has focus -- when ESC is pressed the topmost
+    -- UISpecialFrames entry gets Hide()d automatically. We STILL need
+    -- the OnKeyDown below (a) to keep SetPropagateKeyboardInput(true)
+    -- so other frame-level keys pass through to game bindings while
+    -- our window is shown, and (b) to leave propagate=true as the
+    -- steady-state after any Escape-close so the next keystroke
+    -- doesn't feel 'stuck'.
     tinsert(UISpecialFrames, "StockClerkFrame")
+    f:SetScript("OnKeyDown", function(self, key)
+        -- Always let keys propagate to game bindings by default. Editboxes
+        -- swallow keys BEFORE this handler when they have focus, so this
+        -- only runs for keystrokes that hit the raw window (no editbox
+        -- focused, no addBtn focused). Letting everything propagate is
+        -- the right default -- users expect B to open bags, Enter to open
+        -- chat, macro keys to fire, etc.
+        self:SetPropagateKeyboardInput(true)
+    end)
 
     -- Position + size (both persisted per-character). Size lives on the
     -- same uiPos table so one save/restore cycle handles both.
