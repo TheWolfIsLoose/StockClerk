@@ -27,7 +27,7 @@
 
     Row shape:
 
-        [icon] [name (item link)]                   have / need   [ ok / -N ]   [🗑]
+        [icon] [name (item link)]        have    [ need ]   [ max g ]   [ status ]   [🗑]
                                                                                 (trash only on hover)
 
     Interactions:
@@ -320,32 +320,63 @@ local function BuildRow(row)
     row.icon:SetPoint("LEFT", 8, 0)
     row.icon:SetTexCoord(0.08, 0.92, 0.08, 0.92)   -- trim default 5% border
 
-    -- Name (fills leftmost region up to the Have column)
+    -- Name (fills leftmost region up to the Have column). The right edge
+    -- stops at -330 to leave room for four right-aligned columns (Have,
+    -- Need, Price Cap, Status) plus trash, with each column properly
+    -- centered under its header.
     row.name = row:CreateFontString(nil, "OVERLAY", "GameFontNormal")
     row.name:SetPoint("LEFT", row.icon, "RIGHT", 8, 0)
-    row.name:SetPoint("RIGHT", row, "RIGHT", -260, 0)
+    row.name:SetPoint("RIGHT", row, "RIGHT", -330, 0)
     row.name:SetJustifyH("LEFT")
     row.name:SetWordWrap(false)
 
-    -- Have column: "27 / 20" (right-justified; source-suffix appended)
-    row.count = row:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
-    row.count:SetPoint("RIGHT", row, "RIGHT", -170, 0)
-    row.count:SetJustifyH("RIGHT")
+    -- Have column: pure display of the bags-only count, with a dim
+    -- (+N bank/warband/reagent) suffix if the stash is non-empty. No
+    -- cell chrome and no click affordance — this value only comes from
+    -- inventory, the user never edits it here. Right-edge-aligned at -270
+    -- so the number tucks flush against the Need cell's left edge.
+    row.have = row:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+    row.have:SetPoint("RIGHT", row, "RIGHT", -270, 0)
+    row.have:SetJustifyH("RIGHT")
 
-    -- Cap column: dedicated cell for the max price. Right-click to edit.
-    -- Always visible so the user can see (and click to change) the cap
-    -- without hunting for it inside the count string.
+    -- Need column: dedicated editable cell for the target count. Styled
+    -- exactly like the Price Cap cell — transparent at rest, dark fill +
+    -- brand border fade in on hover, click opens an inline editor in place.
+    row.needCell = CreateFrame("Button", nil, row)
+    row.needCell:SetSize(56, 20)
+    row.needCell:SetPoint("RIGHT", row, "RIGHT", -200, 0)
+    row.needCell:RegisterForClicks("LeftButtonUp", "RightButtonUp")
+    row.needCell:SetFrameLevel(row:GetFrameLevel() + 2)
+
+    local NEED_FILL_IDLE   = { Palette.bgMedium[1], Palette.bgMedium[2], Palette.bgMedium[3], 0 }
+    local NEED_FILL_HOVER  = { Palette.bgMedium[1], Palette.bgMedium[2], Palette.bgMedium[3], 1 }
+    local NEED_BORDER_IDLE = { Palette.brand[1], Palette.brand[2], Palette.brand[3], 0 }
+    ApplyFill(row.needCell, NEED_FILL_IDLE)
+    AddBlackBorder(row.needCell, NEED_BORDER_IDLE)
+    AttachBorderAnimator(row.needCell)
+    row.needCell._fillIdle   = NEED_FILL_IDLE
+    row.needCell._fillHover  = NEED_FILL_HOVER
+    row.needCell._borderIdle = NEED_BORDER_IDLE
+
+    row.need = row:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+    row.need:SetPoint("CENTER", row.needCell, "CENTER")
+    row.need:SetJustifyH("CENTER")
+
+    -- Price Cap column: dedicated cell for the max price / unit. Click to
+    -- edit. Always visible so the user can see (and change) the cap without
+    -- hunting for it inside the count string. Wider than the Need cell (72
+    -- vs 56) to comfortably hold 4-digit gold values like "9999g".
     row.capCell = CreateFrame("Button", nil, row)
-    row.capCell:SetSize(56, 20)
-    row.capCell:SetPoint("RIGHT", row, "RIGHT", -108, 0)
+    row.capCell:SetSize(72, 20)
+    row.capCell:SetPoint("RIGHT", row, "RIGHT", -110, 0)
     row.capCell:RegisterForClicks("LeftButtonUp", "RightButtonUp")
     row.capCell:SetFrameLevel(row:GetFrameLevel() + 2)
 
     -- Cap cell: no idle fill or border — the value sits directly on the
-    -- window background (same visual weight as the Have/Need column). On
-    -- hover the border grows in as brand mint and a subtle dark fill
-    -- appears, so the affordance ("this opens something") stays
-    -- discoverable. All colours start at alpha 0 and animate up.
+    -- window background (same visual weight as the Have column). On hover
+    -- the border grows in as brand mint and a subtle dark fill appears,
+    -- so the affordance ("this opens something") stays discoverable. All
+    -- colours start at alpha 0 and animate up.
     local CAP_FILL_IDLE = { Palette.bgMedium[1], Palette.bgMedium[2], Palette.bgMedium[3], 0 }
     local CAP_FILL_HOVER = { Palette.bgMedium[1], Palette.bgMedium[2], Palette.bgMedium[3], 1 }
     local CAP_BORDER_IDLE = { Palette.brand[1], Palette.brand[2], Palette.brand[3], 0 }
@@ -360,23 +391,27 @@ local function BuildRow(row)
     row.cap:SetPoint("CENTER", row.capCell, "CENTER")
     row.cap:SetJustifyH("CENTER")
 
-    -- Inline EditBox (hidden until target number clicked)
-    row.editBg = row:CreateTexture(nil, "BACKGROUND")
-    row.editBg:SetTexture(WHITE_TEX)
-    row.editBg:SetVertexColor(Palette.bgDark[1], Palette.bgDark[2], Palette.bgDark[3], 1)
-    row.editBg:Hide()
+    -- Inline Need editor (hidden until needCell is clicked). Anchored to
+    -- the needCell so it lands exactly where the value was. The needCell
+    -- carries the border animation; the editor just needs a slightly
+    -- darker fill so the caret has enough contrast.
+    row.needEditBg = row:CreateTexture(nil, "BACKGROUND")
+    row.needEditBg:SetTexture(WHITE_TEX)
+    row.needEditBg:SetVertexColor(Palette.bgDark[1], Palette.bgDark[2], Palette.bgDark[3], 1)
+    row.needEditBg:Hide()
 
-    row.edit = CreateFrame("EditBox", nil, row)
-    row.edit:SetFontObject("GameFontHighlight")
-    row.edit:SetAutoFocus(false)
-    row.edit:SetNumeric(true)
-    row.edit:SetMaxLetters(5)
-    row.edit:SetJustifyH("CENTER")
-    row.edit:SetSize(48, 20)
-    row.edit:SetPoint("RIGHT", row, "RIGHT", -140, 0)
-    row.editBg:SetPoint("TOPLEFT", row.edit, "TOPLEFT", -4, 2)
-    row.editBg:SetPoint("BOTTOMRIGHT", row.edit, "BOTTOMRIGHT", 4, -2)
-    row.edit:Hide()
+    row.needEdit = CreateFrame("EditBox", nil, row)
+    row.needEdit:SetFontObject("GameFontHighlight")
+    row.needEdit:SetAutoFocus(false)
+    row.needEdit:SetNumeric(true)
+    row.needEdit:SetMaxLetters(5)
+    row.needEdit:SetJustifyH("CENTER")
+    row.needEdit:SetSize(56, 20)
+    row.needEdit:SetPoint("CENTER", row.needCell, "CENTER")
+    row.needEditBg:SetPoint("TOPLEFT",     row.needEdit, "TOPLEFT",     -4, 2)
+    row.needEditBg:SetPoint("BOTTOMRIGHT", row.needEdit, "BOTTOMRIGHT",  4, -2)
+    row.needEdit:SetFrameLevel(row.needCell:GetFrameLevel() + 1)
+    row.needEdit:Hide()
 
     -- Price cap inline editor (hidden until the cap cell is clicked).
     -- Anchored TO the cap cell so it lands exactly where the value was.
@@ -394,7 +429,7 @@ local function BuildRow(row)
     row.priceEdit:SetNumeric(true)
     row.priceEdit:SetMaxLetters(7)
     row.priceEdit:SetJustifyH("CENTER")
-    row.priceEdit:SetSize(56, 20)
+    row.priceEdit:SetSize(72, 20)
     row.priceEdit:SetPoint("CENTER", row.capCell, "CENTER")
     row.priceEditBg:SetPoint("TOPLEFT",     row.priceEdit, "TOPLEFT",     -4, 2)
     row.priceEditBg:SetPoint("BOTTOMRIGHT", row.priceEdit, "BOTTOMRIGHT",  4, -2)
@@ -535,51 +570,63 @@ local function BuildRow(row)
         self:GetParent():GetScript("OnLeave")(self:GetParent())
     end)
 
-    -- Click the count -> inline edit target.
-    -- FontStrings don't reliably take clicks; use an overlay Button instead.
-    row.editHit = CreateFrame("Button", nil, row)
-    row.editHit:SetPoint("TOPLEFT", row.count, "TOPLEFT", -20, 4)
-    row.editHit:SetPoint("BOTTOMRIGHT", row.count, "BOTTOMRIGHT", 4, -4)
-    row.editHit:SetScript("OnEnter", function(self)
-        self:GetParent():GetScript("OnEnter")(self:GetParent())
+    -- Need cell hover + click: opens the inline target editor. Mirrors the
+    -- capCell wiring exactly so both editable cells behave identically.
+    local function OpenNeedEdit(r)
+        r.needEdit:SetText(tostring(r._need or 20))
+        r.need:Hide()
+        r.needEdit:Show()
+        r.needEditBg:Show()
+        r.needEdit:SetFocus()
+        r.needEdit:HighlightText()
+        r.needCell._needEditActive = true
+        r.needCell._borderAnim.AnimateTo(Palette.brand)
+        if r.needCell._bg then r.needCell._bg:SetVertexColor(unpack(r.needCell._fillHover)) end
+    end
+    row.needCell:SetScript("OnClick", function(self)
+        OpenNeedEdit(self:GetParent())
+    end)
+    row.needCell:SetScript("OnEnter", function(self)
+        local r = self:GetParent()
+        r:GetScript("OnEnter")(r)
+        self._borderAnim.AnimateTo(Palette.brand)
+        if self._bg then self._bg:SetVertexColor(unpack(self._fillHover)) end
         GameTooltip:Hide()
         GameTooltip:SetOwner(self, "ANCHOR_TOP")
-        GameTooltip:SetText("Click to edit target", 1, 1, 1)
+        GameTooltip:SetText(("Target: %d"):format(r._need or 20), 1, 1, 1)
+        GameTooltip:AddLine("Click to change", 0.7, 0.7, 0.7)
         GameTooltip:Show()
     end)
-    row.editHit:SetScript("OnLeave", function(self)
+    row.needCell:SetScript("OnLeave", function(self)
+        if not self._needEditActive then
+            self._borderAnim.AnimateTo(self._borderIdle)
+            if self._bg then self._bg:SetVertexColor(unpack(self._fillIdle)) end
+        end
         self:GetParent():GetScript("OnLeave")(self:GetParent())
     end)
-    row.editHit:SetScript("OnClick", function(self)
-        local r = self:GetParent()
-        r.edit:SetText(tostring(r._need or 20))
-        r.edit:Show()
-        r.editBg:Show()
-        r.count:Hide()
-        r.pill:Hide()
-        r.edit:SetFocus()
-        r.edit:HighlightText()
-    end)
 
-    row.edit:SetScript("OnEscapePressed", function(self)
-        self:ClearFocus()
-        self:Hide()
-        self:GetParent().editBg:Hide()
-        self:GetParent().count:Show()
-        self:GetParent().pill:Show()
+    local function CloseNeedEdit(r)
+        r.needEdit:ClearFocus()
+        r.needEdit:Hide()
+        r.needEditBg:Hide()
+        r.need:Show()
+        r.needCell._needEditActive = false
+        if not r.needCell:IsMouseOver() then
+            r.needCell._borderAnim.AnimateTo(r.needCell._borderIdle)
+            if r.needCell._bg then r.needCell._bg:SetVertexColor(unpack(r.needCell._fillIdle)) end
+        end
+    end
+    row.needEdit:SetScript("OnEscapePressed", function(self)
+        CloseNeedEdit(self:GetParent())
     end)
-    row.edit:SetScript("OnEnterPressed", function(self)
+    row.needEdit:SetScript("OnEnterPressed", function(self)
         local r = self:GetParent()
         local newNeed = tonumber(self:GetText())
         if newNeed and newNeed > 0 and r._itemID then
             ADDON.DB:SetItem(r._itemID, newNeed)
             r._need = newNeed
         end
-        self:ClearFocus()
-        self:Hide()
-        r.editBg:Hide()
-        r.count:Show()
-        r.pill:Show()
+        CloseNeedEdit(r)
         MF:Refresh()
     end)
 
@@ -660,18 +707,22 @@ local function InitializeRow(row, data)
     row._have      = have
     row._breakdown = bd
 
-    local countText = ("%d / %d"):format(have, data.need)
+    -- Have column: bags-only count (white) with optional dim suffix that
+    -- names where any stashed copies live. Bags stays the primary metric;
+    -- the suffix is context, not a total.
+    local haveText = tostring(have)
     if stashed > 0 then
-        -- Show source labels for whatever's outside the bags. Keeps the
-        -- annotation short by joining with '+' (bags-only stays the primary
-        -- metric; this is context for where the rest lives).
         local parts = {}
         if bd.bank    > 0 then parts[#parts+1] = bd.bank    .. " bank"    end
         if bd.reagent > 0 then parts[#parts+1] = bd.reagent .. " reagent" end
         if bd.warband > 0 then parts[#parts+1] = bd.warband .. " warband" end
-        countText = countText .. ("  |cff888888(+%d: %s)|r"):format(stashed, table.concat(parts, ", "))
+        haveText = haveText .. ("  |cff888888(+%d: %s)|r"):format(stashed, table.concat(parts, ", "))
     end
-    row.count:SetText(countText)
+    row.have:SetText(haveText)
+
+    -- Need column: the plain target number (secondary text tint so it
+    -- doesn't compete with the mint cap value or the semantic status pill).
+    row.need:SetText(("|cffCCCCCC%d|r"):format(data.need))
 
     -- Cap column value. Dim '--' when no cap; brand-mint when set. The
     -- number is the emphasized element in the row (per atrocity's rule:
@@ -718,10 +769,13 @@ local function InitializeRow(row, data)
         end
     end)
 
-    -- Hide inline edit if it was left showing during a refresh
-    row.edit:Hide()
-    row.editBg:Hide()
-    row.count:Show()
+    -- Hide inline editors if they were left showing during a refresh
+    row.needEdit:Hide()
+    row.needEditBg:Hide()
+    row.need:Show()
+    row.priceEdit:Hide()
+    row.priceEditBg:Hide()
+    row.cap:Show()
     row.pill:Show()
 end
 
@@ -884,7 +938,7 @@ function MF:Build()
     -- Wider containers (100 / 110) give the labels comfortable slack too.
     local addEB   = MakeEditBox(toolbar, L.PROMPT_ADD_ITEM or "Item name or ID", 240, false, nil,   nil)
     local countEB = MakeEditBox(toolbar, "Target",                                100, true,  5,     "20")
-    local priceEB = MakeEditBox(toolbar, "Max g / unit",                          110, true,  7,     nil)
+    local priceEB = MakeEditBox(toolbar, "Price Cap / Unit",                      120, true,  7,     nil)
     local addBox   = addEB.editBox
     local countBox = countEB.editBox
     local priceBox = priceEB.editBox
@@ -954,22 +1008,38 @@ function MF:Build()
     headersSep:SetPoint("BOTTOMRIGHT", 0, 0)
     PixelSnap(headersSep)
 
-    local function MakeHeader(text, anchorPoint, xOffset, isLeft)
+    -- Header helper. `mode` picks the anchoring rule so labels sit exactly
+    -- over their cell regardless of column width:
+    --   "left"   — LEFT edge at xOffset from headers' LEFT  (Item column)
+    --   "right"  — RIGHT edge at xOffset from headers' RIGHT (right-aligned
+    --              value like Have, where the cell has no chrome)
+    --   "center" — label CENTER at xOffset from headers' RIGHT (matches the
+    --              cell's center anchor — use for every cell-based column)
+    local function MakeHeader(text, mode, xOffset)
         local fs = headers:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
         fs:SetTextColor(Palette.brand[1], Palette.brand[2], Palette.brand[3], 1)
         fs:SetText(text)
-        if isLeft then
+        if mode == "left" then
             fs:SetPoint("LEFT", headers, "LEFT", xOffset, 0)
-        else
+        elseif mode == "right" then
             fs:SetPoint("RIGHT", headers, "RIGHT", xOffset, 0)
+        else -- center
+            fs:SetPoint("CENTER", headers, "RIGHT", xOffset, 0)
         end
         return fs
     end
     -- Column pixel positions match BuildRow's SetPoint offsets exactly.
-    MakeHeader("Item",         nil, 52,   true)   -- left edge + 40 (icon + 12 pad)
-    MakeHeader("Have / Need",  nil, -170, false)  -- right-anchored
-    MakeHeader("Max g / unit", nil, -108, false)  -- cap column center
-    MakeHeader("Status",       nil, -46,  false)  -- pill center
+    --   name:     LEFT+40..RIGHT-330
+    --   have:     RIGHT edge at -270 (right-aligned FontString)
+    --   needCell: 56w centered at RIGHT -200 (spans -172 .. -228)
+    --   capCell:  72w centered at RIGHT -110 (spans  -74 .. -146)
+    --   pill:     52w centered at RIGHT  -36 (spans  -10 ..  -62)
+    --   trash:    18w centered at RIGHT   -6
+    MakeHeader("Item",      "left",    52)      -- left edge + 40 (icon + 12 pad)
+    MakeHeader("Have",      "right",   -270)    -- right-edge-aligned bags value
+    MakeHeader("Need",      "center",  -200)    -- centered over needCell
+    MakeHeader("Price Cap", "center",  -110)    -- centered over capCell
+    MakeHeader("Status",    "center",  -36)     -- centered over pill
 
     -- ---- Footer / bottom bar ------------------------------------------
     -- Fixed 36px bar; status text on the left, action buttons on the right.
