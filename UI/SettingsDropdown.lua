@@ -148,11 +148,11 @@ local function BuildDropdown(anchor)
 
     -- Default cap field (PT-1 v0.5 Batch 2). When set, auto-mode uses
     -- this cap for items with no per-item maxPrice; leave blank to
-    -- preserve the v0.4 "uncapped => auto skip" contract. Accepts the
-    -- same g/s/c syntax as the row inline editor.
+    -- preserve the v0.4 "uncapped => auto skip" contract. Whole-gold
+    -- integer input.
     local defCapLabel = f:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
     defCapLabel:SetPoint("TOPLEFT", 12, -80)
-    defCapLabel:SetText("Default cap per unit (auto only):")
+    defCapLabel:SetText("Default cap per unit, gold (auto only):")
 
     local defCapBg = f:CreateTexture(nil, "BACKGROUND")
     defCapBg:SetColorTexture(P().bgDark[1], P().bgDark[2], P().bgDark[3], 1)
@@ -162,8 +162,8 @@ local function BuildDropdown(anchor)
     local defCapEdit = CreateFrame("EditBox", nil, f)
     defCapEdit:SetFontObject("GameFontHighlight")
     defCapEdit:SetAutoFocus(false)
-    defCapEdit:SetNumeric(false) -- accepts g/s/c tokens
-    defCapEdit:SetMaxLetters(14)
+    defCapEdit:SetNumeric(true) -- whole gold integers only
+    defCapEdit:SetMaxLetters(7)
     defCapEdit:SetJustifyH("LEFT")
     defCapEdit:SetPoint("TOPLEFT", 16, -102)
     defCapEdit:SetSize(112, 18)
@@ -240,28 +240,13 @@ local function BuildDropdown(anchor)
     budgetEdit:SetScript("OnEditFocusLost",  CommitBudget)
     budgetEdit:SetScript("OnEscapePressed",  function(self) self:ClearFocus() end)
 
-    -- Default cap commit: same g/s/c parser as the row editor. Blank
-    -- clears the default (auto reverts to skipping uncapped items).
-    -- Bad input surfaces via MainFrame status and leaves the setting
-    -- unchanged so a typo can't silently drop the default.
+    -- Default cap commit: whole-gold integer. Blank/0 clears the
+    -- default and auto reverts to skipping uncapped items. SetNumeric
+    -- on the EditBox already prevents non-digit keystrokes.
     local function CommitDefCap()
         local s = ADDON.DB:Settings()
-        local raw = defCapEdit:GetText() or ""
-        local copper, ok = nil, true
-        if ADDON.DB and ADDON.DB.ParsePriceString then
-            copper, ok = ADDON.DB.ParsePriceString(raw)
-        else
-            local n = tonumber(raw)
-            copper = (n and n > 0) and (n * 10000) or nil
-        end
-        if not ok then
-            if ADDON.MainFrame and ADDON.MainFrame.SetStatus then
-                ADDON.MainFrame:SetStatus(("|cffff8888Default cap unchanged: couldn't parse '%s' (try 12g, 12g50s, 500c).|r"):format(raw))
-            end
-            Settings:Refresh() -- restore prior text
-            return
-        end
-        s.defaultMaxCopper = copper
+        local n = tonumber(defCapEdit:GetText() or "")
+        s.defaultMaxCopper = (n and n > 0) and (n * 10000) or nil
         Settings:Refresh()
         if ADDON.MainFrame and ADDON.MainFrame.Refresh then ADDON.MainFrame:Refresh() end
     end
@@ -311,8 +296,7 @@ function Settings:RequestAutoEnable()
         -- skipped" bullet reads accurately, and fold the default-cap
         -- notice into budgetText (the template only substitutes two
         -- values, so we have to reuse an existing slot).
-        local shortText = (ADDON.DB.FormatCopperShort and ADDON.DB.FormatCopperShort(defC))
-            or (("%dg"):format(math.floor(defC / 10000)))
+        local shortText = ("%dg"):format(math.floor(defC / 10000))
         uncapped = 0
         local budgetPart = s.autoBudgetGold and (s.autoBudgetGold .. "g") or "not set"
         budgetText = ("%s  \194\183  default cap %s per unit"):format(budgetPart, shortText)
@@ -351,8 +335,7 @@ function Settings:Refresh()
     -- PT-1 v0.5 Batch 2: default cap readout.
     if f._defCapEdit then
         if s.defaultMaxCopper and s.defaultMaxCopper > 0 then
-            local fmtFn = ADDON.DB and ADDON.DB.FormatCopperShort
-            f._defCapEdit:SetText(fmtFn and fmtFn(s.defaultMaxCopper) or tostring(math.floor(s.defaultMaxCopper / 10000)) .. "g")
+            f._defCapEdit:SetText(tostring(math.floor(s.defaultMaxCopper / 10000)))
         else
             f._defCapEdit:SetText("")
         end
