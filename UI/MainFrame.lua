@@ -355,10 +355,80 @@ local function BuildRow(row)
 
     -- Row hover wash is created lazily by ApplyRowHover on first RowEnter.
 
-    -- Icon
+    -- Grip handle (v0.4). Three dim horizontal lines, EnableMouse'd for
+    -- the drag-to-reorder path. Sits at the far left; icon & name shift
+    -- right by GRIP_W to make room. Rendered with three FontString
+    -- em-dashes rather than a texture asset so it needs no atlas file
+    -- and stays crisp at any UI scale.
+    local GRIP_W = 14
+    row.grip = CreateFrame("Button", nil, row)
+    row.grip:SetSize(GRIP_W, ROW_HEIGHT - 6)
+    row.grip:SetPoint("LEFT", 2, 0)
+    row.grip:RegisterForDrag("LeftButton")
+    row.grip:RegisterForClicks("LeftButtonUp")
+    -- Three little bars, drawn as color-textures so we don't ship an
+    -- atlas asset. 8px wide, 1px tall, spaced 3px vertically.
+    row.grip._bars = {}
+    for i = 1, 3 do
+        local t = row.grip:CreateTexture(nil, "OVERLAY")
+        t:SetColorTexture(0.55, 0.55, 0.55, 0.85)
+        t:SetSize(8, 1)
+        t:SetPoint("CENTER", row.grip, "CENTER", 0, (i - 2) * 3)
+        row.grip._bars[i] = t
+    end
+    row.grip:SetScript("OnEnter", function(self)
+        for _, b in ipairs(self._bars) do
+            b:SetColorTexture(Palette.brand[1], Palette.brand[2], Palette.brand[3], 1)
+        end
+        GameTooltip:SetOwner(self, "ANCHOR_LEFT")
+        GameTooltip:SetText("Drag to reorder", 1, 1, 1)
+        GameTooltip:AddLine("List order sets restock priority.", 0.7, 0.7, 0.7, true)
+        GameTooltip:Show()
+    end)
+    row.grip:SetScript("OnLeave", function(self)
+        for _, b in ipairs(self._bars) do
+            b:SetColorTexture(0.55, 0.55, 0.55, 0.85)
+        end
+        GameTooltip:Hide()
+    end)
+    row.grip:SetScript("OnDragStart", function(self)
+        local r = self:GetParent()
+        if not r or not r._itemID or not MF.BeginRowDrag then return end
+        MF:BeginRowDrag(r)
+    end)
+    row.grip:SetScript("OnDragStop", function()
+        if MF.EndRowDrag then MF:EndRowDrag() end
+    end)
+
+    -- Selection ring (v0.4). Four 1px mint edges drawn on top of the
+    -- row, hidden at rest. Same technique as AddBlackBorder but kept as
+    -- its own set of textures so hover/border animations elsewhere on
+    -- the row don't touch it. SharedMedia-style 1px selection outline.
+    row.selRing = {}
+    for _, side in ipairs({"top", "bottom", "left", "right"}) do
+        local t = row:CreateTexture(nil, "OVERLAY", nil, 7)
+        t:SetColorTexture(Palette.brand[1], Palette.brand[2], Palette.brand[3], 1)
+        PixelSnap(t)
+        t:Hide()
+        row.selRing[side] = t
+    end
+    row.selRing.top:SetHeight(BORDER_SIZE)
+    row.selRing.top:SetPoint("TOPLEFT", row, "TOPLEFT", 0, 0)
+    row.selRing.top:SetPoint("TOPRIGHT", row, "TOPRIGHT", 0, 0)
+    row.selRing.bottom:SetHeight(BORDER_SIZE)
+    row.selRing.bottom:SetPoint("BOTTOMLEFT", row, "BOTTOMLEFT", 0, 0)
+    row.selRing.bottom:SetPoint("BOTTOMRIGHT", row, "BOTTOMRIGHT", 0, 0)
+    row.selRing.left:SetWidth(BORDER_SIZE)
+    row.selRing.left:SetPoint("TOPLEFT", row, "TOPLEFT", 0, 0)
+    row.selRing.left:SetPoint("BOTTOMLEFT", row, "BOTTOMLEFT", 0, 0)
+    row.selRing.right:SetWidth(BORDER_SIZE)
+    row.selRing.right:SetPoint("TOPRIGHT", row, "TOPRIGHT", 0, 0)
+    row.selRing.right:SetPoint("BOTTOMRIGHT", row, "BOTTOMRIGHT", 0, 0)
+
+    -- Icon (shifted right by GRIP_W to clear the grip handle).
     row.icon = row:CreateTexture(nil, "OVERLAY")
     row.icon:SetSize(22, 22)
-    row.icon:SetPoint("LEFT", 8, 0)
+    row.icon:SetPoint("LEFT", GRIP_W + 8, 0)
     row.icon:SetTexCoord(0.08, 0.92, 0.08, 0.92)   -- trim default 5% border
 
     -- Name (fills leftmost region up to the Have column). The right edge
@@ -877,6 +947,17 @@ local function InitializeRow(row, data)
     row._need     = data.need
     row._maxPrice = data.maxPrice
 
+    -- Selection ring: rows are pooled, so we must (re)paint the ring
+    -- from the authoritative MF._selectedItemID every time we bind
+    -- fresh data. Without this, scrolling would leave the ring lit on
+    -- whatever pooled row happens to inherit a previously-selected id.
+    local sel = (MF._selectedItemID == data.itemID)
+    if row.selRing then
+        for _, t in pairs(row.selRing) do
+            if sel then t:Show() else t:Hide() end
+        end
+    end
+
     local name, link, quality, _, _, _, _, _, _, tex = C_Item.GetItemInfo(data.itemID)
     local icon = tex or select(5, C_Item.GetItemInfoInstant(data.itemID)) or QUESTION_ICON
     row.icon:SetTexture(icon)
@@ -1160,6 +1241,67 @@ function MF:Build()
             ADDON.RestockLoop:Stop("user_esc")
             return
         end
+
+        -- v0.4 soft-select navigation. Only reachable when no editbox
+        -- has focus (editboxes eat keys before this handler), so an
+        -- inline Need/Price edit is never disrupted -- the editor's
+        -- own OnEnterPressed/OnEscape/OnTab handle those cases first.
+        if MF._selectedItemID then
+            if key == "UP" then
+                self:SetPropagateKeyboardInput(false)
+                MF:MoveSelectedItem(-1)
+                return
+            elseif key == "DOWN" then
+                self:SetPropagateKeyboardInput(false)
+                MF:MoveSelectedItem(1)
+                return
+            elseif key == "ESCAPE" then
+                -- First Escape drops the selection; UISpecialFrames'
+                -- close-window happens only on a SECOND Escape after
+                -- the ring is gone.
+                self:SetPropagateKeyboardInput(false)
+                MF:ClearRowSelection()
+                return
+            elseif key == "ENTER" then
+                -- Drop into Need cell of the selected row.
+                self:SetPropagateKeyboardInput(false)
+                local id = MF._selectedItemID
+                MF:ClearRowSelection()
+                if MF.dataProvider then
+                    for i = 1, MF.dataProvider:GetSize() do
+                        local d = MF.dataProvider:Find(i)
+                        if d and d.itemID == id then
+                            MF:FocusRowCell(i, "need")
+                            break
+                        end
+                    end
+                end
+                return
+            elseif key == "TAB" then
+                -- Forward Tab from soft-select drops into that row's
+                -- Need cell (same as Enter). Shift+Tab climbs back to
+                -- the Add button.
+                self:SetPropagateKeyboardInput(false)
+                local id = MF._selectedItemID
+                local shift = IsShiftKeyDown and IsShiftKeyDown()
+                MF:ClearRowSelection()
+                if shift then
+                    if MF.FocusAddButton then MF:FocusAddButton() end
+                else
+                    if MF.dataProvider then
+                        for i = 1, MF.dataProvider:GetSize() do
+                            local d = MF.dataProvider:Find(i)
+                            if d and d.itemID == id then
+                                MF:FocusRowCell(i, "need")
+                                break
+                            end
+                        end
+                    end
+                end
+                return
+            end
+        end
+
         -- Always let keys propagate to game bindings by default. Editboxes
         -- swallow keys BEFORE this handler when they have focus, so this
         -- only runs for keystrokes that hit the raw window (no editbox
@@ -1187,6 +1329,18 @@ function MF:Build()
         local focused = GetCurrentKeyBoardFocus and GetCurrentKeyBoardFocus()
         if focused and focused.ClearFocus then focused:ClearFocus() end
         if MF._addBtnFocused and MF.BlurAddButton then MF:BlurAddButton() end
+
+        -- v0.4: soft-select and drag must not survive across window
+        -- close. Selection would repaint the wrong pooled row when
+        -- reshown; a live drag ticker would keep polling the cursor
+        -- forever with no visible marker.
+        if MF._selectedItemID then MF:ClearRowSelection() end
+        if MF._dragTicker then
+            MF._dragTicker:Cancel(); MF._dragTicker = nil
+        end
+        MF._dragItemID = nil
+        MF._dropIndex  = nil
+        if MF._dragMarker then MF._dragMarker:Hide() end
         -- Reset any in-progress row inline editor. ScrollView rows are
         -- pooled and InitializeRow does NOT reset editor visibility, so
         -- without this a row closed mid-edit would reappear on next open
@@ -2003,6 +2157,241 @@ end
 -- Deferring lets the blur commit + Refresh + rebind complete, then we
 -- re-lookup the current elementData (fresh from the new provider) and
 -- open its Button.
+-- ---------------------------------------------------------------------------
+-- Selection & reorder (v0.4)
+--
+-- The shopping list IS the priority: whatever order the user arranges the
+-- items in is the order the restock loop walks (see DB.lua GetSortedItems
+-- and RestockLoop.lua BuildQueue). Two ways in:
+--
+--   * Mouse: drag the grip handle on the row's far left. On drop, we
+--     compute the target index from the cursor Y against visible rows
+--     and call DB:ReorderItems.
+--   * Keyboard: Tab from the price cap of the last row (or Shift+Tab from
+--     the Add button) into "soft-select" mode -- a 1px mint ring around
+--     the row, no cell focus. Up/Down move the selected row, Enter drops
+--     into that row's Need cell, Escape clears the selection.
+--
+-- Selection state is a single itemID on MF; rows are pooled so we cannot
+-- store it on a specific frame -- InitializeRow reads MF._selectedItemID
+-- and paints the ring accordingly every time a row is re-bound.
+-- ---------------------------------------------------------------------------
+
+-- Find the currently-materialized row Button for an itemID, or nil if
+-- the row isn't in view. Used by ring hide/show without a full Refresh.
+function MF:_FindRowFrame(itemID)
+    if not self.scrollBox or not self.scrollBox.EnumerateFrames then return nil end
+    for _, r in self.scrollBox:EnumerateFrames() do
+        if r._itemID == itemID then return r end
+    end
+    return nil
+end
+
+local function PaintRing(row, on)
+    if not row or not row.selRing then return end
+    for _, t in pairs(row.selRing) do
+        if on then t:Show() else t:Hide() end
+    end
+end
+
+function MF:SetRowSelection(itemID)
+    if self._selectedItemID == itemID then return end
+    -- Clear previous.
+    if self._selectedItemID then
+        local prev = self:_FindRowFrame(self._selectedItemID)
+        if prev then PaintRing(prev, false) end
+    end
+    self._selectedItemID = itemID
+    if itemID then
+        local r = self:_FindRowFrame(itemID)
+        if r then PaintRing(r, true) end
+    end
+end
+
+function MF:ClearRowSelection()
+    self:SetRowSelection(nil)
+end
+
+-- Move the currently-selected row up (-1) or down (+1) in the shopping
+-- list. No-op when nothing is selected or the item is already at the
+-- edge. After the DB mutation we Refresh (rebuilds provider) and then
+-- scroll the moved row back into view -- selection persists via
+-- MF._selectedItemID; InitializeRow repaints the ring after Refresh.
+function MF:MoveSelectedItem(delta)
+    local id = self._selectedItemID
+    if not id or not ADDON.DB or not ADDON.DB.MoveItem then return end
+    ADDON.DB:MoveItem(id, delta)
+    self:Refresh()
+    -- Find the new data index for scroll-into-view.
+    if self.dataProvider then
+        local size = self.dataProvider:GetSize()
+        for i = 1, size do
+            local d = self.dataProvider:Find(i)
+            if d and d.itemID == id then
+                self.scrollBox:ScrollToElementDataIndex(i,
+                    ScrollBoxConstants.AlignCenter, nil,
+                    ScrollBoxConstants.NoScrollInterpolation)
+                break
+            end
+        end
+    end
+end
+
+-- ---------------------------------------------------------------------------
+-- Drag-to-reorder (mouse)
+--
+-- OnDragStart on the grip captures the itemID and shows a thin mint
+-- insertion-line texture. OnUpdate polls cursor Y each frame, compares
+-- against each visible row's midpoint, and repositions the line at the
+-- nearest gap. OnDragStop resolves the gap to a target index, calls
+-- DB:ReorderItems with the full permutation, Refreshes, and hides the
+-- line. Dragging over empty space above/below the visible rows resolves
+-- to top / bottom respectively.
+-- ---------------------------------------------------------------------------
+
+local function EnsureInsertionMarker(self)
+    if self._dragMarker then return self._dragMarker end
+    local m = self.scrollBox:CreateTexture(nil, "OVERLAY", nil, 7)
+    m:SetColorTexture(Palette.brand[1], Palette.brand[2], Palette.brand[3], 1)
+    m:SetHeight(2)
+    m:Hide()
+    self._dragMarker = m
+    return m
+end
+
+-- Walk the visible rows and find the gap closest to cursorY. Returns
+-- targetDataIndex in [1, size+1]: 1 = before first row, size+1 = after
+-- last row. Uses row midpoints so drops slightly above a row's midline
+-- insert before it, slightly below insert after.
+function MF:_ResolveDropIndex(cursorY)
+    if not self.scrollBox or not self.dataProvider then return 1 end
+    local size = self.dataProvider:GetSize()
+    if size == 0 then return 1 end
+
+    -- Collect visible rows sorted by data index.
+    local visible = {}
+    for _, r in self.scrollBox:EnumerateFrames() do
+        if r._itemID then
+            -- Look up data index by itemID.
+            for i = 1, size do
+                local d = self.dataProvider:Find(i)
+                if d and d.itemID == r._itemID then
+                    visible[#visible + 1] = { idx = i, frame = r, top = r:GetTop(), bottom = r:GetBottom() }
+                    break
+                end
+            end
+        end
+    end
+    if #visible == 0 then return 1 end
+    table.sort(visible, function(a, b) return a.idx < b.idx end)
+
+    -- Above the topmost visible row's top edge -> insert before first
+    -- visible row.
+    if cursorY >= visible[1].top then return visible[1].idx end
+    -- Below the bottom row's bottom edge -> insert after last visible.
+    if cursorY <= visible[#visible].bottom then return visible[#visible].idx + 1 end
+
+    for _, v in ipairs(visible) do
+        local mid = (v.top + v.bottom) / 2
+        if cursorY >= mid then
+            return v.idx           -- upper half: insert BEFORE this row
+        end
+    end
+    return visible[#visible].idx + 1
+end
+
+-- Move the insertion marker to the gap at targetIndex. Marker sits at
+-- the top edge of the row currently at targetIndex, or the bottom edge
+-- of the last row if targetIndex == size+1.
+function MF:_PlaceInsertionMarker(targetIndex)
+    if not self._dragMarker or not self.scrollBox or not self.dataProvider then return end
+    local size = self.dataProvider:GetSize()
+    local m = self._dragMarker
+    m:ClearAllPoints()
+    if targetIndex > size then
+        -- After the last visible row.
+        local last
+        for _, r in self.scrollBox:EnumerateFrames() do
+            if r._itemID and (not last or r:GetBottom() < last:GetBottom()) then
+                last = r
+            end
+        end
+        if last then
+            m:SetPoint("TOPLEFT",  last, "BOTTOMLEFT",  0, 1)
+            m:SetPoint("TOPRIGHT", last, "BOTTOMRIGHT", 0, 1)
+            m:Show()
+        end
+        return
+    end
+    -- Insert before row at targetIndex.
+    for _, r in self.scrollBox:EnumerateFrames() do
+        if r._itemID then
+            local d = self.dataProvider:Find(targetIndex)
+            if d and r._itemID == d.itemID then
+                m:SetPoint("BOTTOMLEFT",  r, "TOPLEFT",  0, -1)
+                m:SetPoint("BOTTOMRIGHT", r, "TOPRIGHT", 0, -1)
+                m:Show()
+                return
+            end
+        end
+    end
+end
+
+function MF:BeginRowDrag(row)
+    if not row or not row._itemID or self._dragItemID then return end
+    self._dragItemID = row._itemID
+    EnsureInsertionMarker(self)
+    -- Poll cursor each frame while dragging. UIParent's effective scale
+    -- converts raw cursor coords (which come back in native pixels) to
+    -- the UI's coordinate space.
+    self._dragTicker = C_Timer.NewTicker(0, function()
+        if not self._dragItemID then return end
+        local scale = UIParent:GetEffectiveScale()
+        local _, cursorY = GetCursorPosition()
+        cursorY = cursorY / scale
+        local idx = self:_ResolveDropIndex(cursorY)
+        self._dropIndex = idx
+        self:_PlaceInsertionMarker(idx)
+    end)
+end
+
+function MF:EndRowDrag()
+    if not self._dragItemID then return end
+    local movedID = self._dragItemID
+    local target  = self._dropIndex
+    if self._dragTicker then self._dragTicker:Cancel(); self._dragTicker = nil end
+    self._dragItemID = nil
+    self._dropIndex  = nil
+    if self._dragMarker then self._dragMarker:Hide() end
+
+    if not target or not self.dataProvider or not ADDON.DB or not ADDON.DB.ReorderItems then
+        return
+    end
+
+    -- Build the new order: current provider order with movedID removed,
+    -- reinserted at target. target was resolved against the pre-move
+    -- provider, so if the row moves DOWN we adjust the insert point by
+    -- one (the removal shifted everything after it up).
+    local size = self.dataProvider:GetSize()
+    local order = {}
+    local fromIdx
+    for i = 1, size do
+        local d = self.dataProvider:Find(i)
+        if d then
+            if d.itemID == movedID then
+                fromIdx = i
+            else
+                order[#order + 1] = d.itemID
+            end
+        end
+    end
+    if not fromIdx or fromIdx == target then return end
+    local insertAt = (target > fromIdx) and (target - 1) or target
+    table.insert(order, math.min(#order + 1, math.max(1, insertAt)), movedID)
+    ADDON.DB:ReorderItems(order)
+    self:Refresh()
+end
+
 function MF:FocusRowCell(dataIndex, cell)
     if not self.scrollBox or not self.dataProvider then return end
     local size = self.dataProvider:GetSize()
@@ -2053,11 +2442,27 @@ end
 -- Toolbar boundary jumps: Tab out of Price Cap -> first row's Need;
 -- Shift+Tab out of Item -> last row's Price Cap. Return true if the
 -- list has any rows and focus was moved, false to let the caller wrap.
+-- v0.4 tab semantics: forward Tab into the list from the toolbar lands
+-- on soft-select of the first row (NOT its Need cell). From there:
+--   Tab again -> Need cell of row 1 (existing per-row Need/Price chain)
+--   Up/Down   -> reorder
+--   Enter     -> Need cell
+--   Escape    -> clear selection
+-- Reverse Tab (Shift+Tab) from the toolbar lands on the last row's
+-- price cap as before, so keyboard users who already know the flow
+-- aren't slowed down.
 function MF:TabToFirstRowCell()
     if not self.dataProvider or self.dataProvider:GetSize() == 0 then
         return false
     end
-    self:FocusRowCell(1, "need")
+    local first = self.dataProvider:Find(1)
+    if not first then return false end
+    -- Scroll into view so the ring is actually visible.
+    self.scrollBox:ScrollToElementDataIndex(1,
+        ScrollBoxConstants.AlignCenter, nil,
+        ScrollBoxConstants.NoScrollInterpolation)
+    -- Defer selection painting a frame so the row Button exists.
+    C_Timer.After(0, function() self:SetRowSelection(first.itemID) end)
     return true
 end
 
