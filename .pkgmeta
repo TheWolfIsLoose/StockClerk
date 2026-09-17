@@ -1,9 +1,22 @@
 # Stock Clerk - BigWigsMods packager config
 # https://github.com/BigWigsMods/packager
 #
-# When we wire up release.sh / GitHub Actions, this file drives what
-# ships to CurseForge / Wago / WoWInterface. Files listed under
-# `ignore` are stripped from the packaged zip.
+# RELEASE POLICY (user decision 2026-09-17):
+#   StockClerk lives on GitHub only during the pre-1.0 phase. Tags on
+#   this repo are ordinary version markers -- they DO NOT publish to
+#   CurseForge, Wago, or WoWInterface, and they SHOULD NOT until we go
+#   wide at 1.0. Tag freely (v0.5, v0.6, ...) as testing milestones.
+#
+#   Corollary: no CurseForge/Wago project IDs live in StockClerk.toc,
+#   and no publishing workflow exists at .github/workflows/. If a
+#   future turn tries to add either, that IS the go-wide moment and
+#   requires an explicit user decision -- don't copy the pipeline over
+#   from SharedMedia_Tones (the parent project) on autopilot.
+#
+# What this file DOES do today: drives local release.sh -d -l builds
+# so we can verify the packaged zip contents against ignore rules
+# before publishing anything to anyone. `ignore:` entries are
+# stripped from the packaged zip.
 
 package-as: StockClerk
 
