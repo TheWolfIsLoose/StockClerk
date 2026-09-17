@@ -400,7 +400,12 @@ local function BuildRow(row)
     row.needCell._fillHover  = NEED_FILL_HOVER
     row.needCell._borderIdle = NEED_BORDER_IDLE
 
-    row.need = row:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+    -- FontString is parented to the CELL (not the row) so it inherits the
+    -- cell's higher FrameLevel and draws ABOVE the cell's fill texture,
+    -- rather than underneath it. Fixes QA-6: at idle the cell fill is
+    -- alpha 0.35 (value shows through by luck), but on hover the fill
+    -- goes to full opacity and previously eclipsed the value entirely.
+    row.need = row.needCell:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
     row.need:SetPoint("CENTER", row.needCell, "CENTER")
     row.need:SetJustifyH("CENTER")
 
@@ -430,7 +435,8 @@ local function BuildRow(row)
     row.capCell._fillHover  = CAP_FILL_HOVER
     row.capCell._borderIdle = CAP_BORDER_IDLE
 
-    row.cap = row:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+    -- See row.need above: parented to the cell so it draws over the fill.
+    row.cap = row.capCell:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
     row.cap:SetPoint("CENTER", row.capCell, "CENTER")
     row.cap:SetJustifyH("CENTER")
 
@@ -659,21 +665,52 @@ local function BuildRow(row)
             if r.needCell._bg then r.needCell._bg:SetVertexColor(unpack(r.needCell._fillIdle)) end
         end
     end
-    row.needEdit:SetScript("OnEscapePressed", function(self)
-        CloseNeedEdit(self:GetParent())
-    end)
-    row.needEdit:SetScript("OnEnterPressed", function(self)
-        local r = self:GetParent()
-        local newNeed = tonumber(self:GetText())
+    -- Commit Need edit: reads the current text, writes to DB if valid,
+    -- and refreshes the list. Called from Enter, Tab, and blur handlers.
+    local function CommitNeedEdit(r)
+        local newNeed = tonumber(r.needEdit:GetText())
         if newNeed and newNeed > 0 and r._itemID then
             ADDON.DB:SetItem(r._itemID, newNeed)
             r._need = newNeed
         end
         CloseNeedEdit(r)
         MF:Refresh()
+    end
+    row.needEdit:SetScript("OnEscapePressed", function(self)
+        -- Escape = cancel: set the abort flag BEFORE clearing focus so the
+        -- OnEditFocusLost handler (which fires on ClearFocus) knows to
+        -- close-without-committing instead of doing a blur-commit.
+        self._escaping = true
+        CloseNeedEdit(self:GetParent())
+        self._escaping = false
+    end)
+    row.needEdit:SetScript("OnEnterPressed", function(self)
+        CommitNeedEdit(self:GetParent())
+    end)
+    -- QA-8: commit on blur. If the user tabs away or clicks elsewhere
+    -- (anywhere that steals focus), treat that as a commit rather than
+    -- silently discarding the typed value. Escape still cancels via the
+    -- _escaping flag set above.
+    row.needEdit:SetScript("OnEditFocusLost", function(self)
+        if self._escaping then return end
+        local r = self:GetParent()
+        if r.needEdit:IsShown() then CommitNeedEdit(r) end
+    end)
+    -- QA-7: Tab advances to this row's Price Cap; Shift+Tab moves back
+    -- to the toolbar's Price Cap field (previous cell in row-major order).
+    -- OnEditFocusLost above will commit the pending value before the
+    -- next target's SetFocus fires.
+    row.needEdit:SetScript("OnTabPressed", function(self)
+        local r = self:GetParent()
+        if IsShiftKeyDown() then
+            MF:TabFromCell(r, "need", -1)
+        else
+            MF:TabFromCell(r, "need", 1)
+        end
     end)
 
-    -- Price editor: Escape aborts, Enter commits (blank = clear cap).
+    -- Price editor: Escape aborts; Enter, Tab, or blur commit
+    -- (blank = clear cap).
     local function ClosePriceEdit(r)
         r.priceEdit:ClearFocus()
         r.priceEdit:Hide()
@@ -685,13 +722,9 @@ local function BuildRow(row)
             if r.capCell._bg then r.capCell._bg:SetVertexColor(unpack(r.capCell._fillIdle)) end
         end
     end
-    row.priceEdit:SetScript("OnEscapePressed", function(self)
-        ClosePriceEdit(self:GetParent())
-    end)
-    row.priceEdit:SetScript("OnEnterPressed", function(self)
-        local r = self:GetParent()
+    local function CommitPriceEdit(r)
         if r._itemID then
-            local raw = self:GetText()
+            local raw = r.priceEdit:GetText()
             local priceGold = tonumber(raw)
             local maxPriceCopper = (priceGold and priceGold > 0) and (priceGold * 10000) or nil
             ADDON.DB:SetItemMaxPrice(r._itemID, maxPriceCopper)
@@ -705,6 +738,28 @@ local function BuildRow(row)
         end
         ClosePriceEdit(r)
         MF:Refresh()
+    end
+    row.priceEdit:SetScript("OnEscapePressed", function(self)
+        self._escaping = true
+        ClosePriceEdit(self:GetParent())
+        self._escaping = false
+    end)
+    row.priceEdit:SetScript("OnEnterPressed", function(self)
+        CommitPriceEdit(self:GetParent())
+    end)
+    -- QA-8: commit on blur (see row.needEdit's OnEditFocusLost).
+    row.priceEdit:SetScript("OnEditFocusLost", function(self)
+        if self._escaping then return end
+        local r = self:GetParent()
+        if r.priceEdit:IsShown() then CommitPriceEdit(r) end
+    end)
+    row.priceEdit:SetScript("OnTabPressed", function(self)
+        local r = self:GetParent()
+        if IsShiftKeyDown() then
+            MF:TabFromCell(r, "price", -1)
+        else
+            MF:TabFromCell(r, "price", 1)
+        end
     end)
 end
 
@@ -1085,19 +1140,39 @@ function MF:Build()
     priceBox:SetScript("OnEnterPressed", function() DoAdd() addBox:ClearFocus() end)
     priceBox:SetScript("OnEscapePressed", function(self) self:ClearFocus() end)
 
+    -- Save toolbar boxes on self so BuildRow's inline editors can reach
+    -- them for unified Tab navigation across toolbar + row-body cells.
+    self.addBox   = addBox
+    self.countBox = countBox
+    self.priceBox = priceBox
+
     -- Tab navigation across the add-item form. Matches standard desktop
     -- form behavior: Tab moves forward through Item -> Target -> Price Cap
-    -- and wraps back to Item; Shift+Tab moves the same order in reverse.
+    -- and continues into the first shopping-list row's editable cells
+    -- (QA-7: unified row-major loop). Shift+Tab reverses.
     -- WoW EditBoxes fire OnTabPressed for the Tab key (no modifier check
     -- in the event itself — IsShiftKeyDown() reads live state).
     addBox:SetScript("OnTabPressed", function(self)
-        if IsShiftKeyDown() then priceBox:SetFocus() else countBox:SetFocus() end
+        if IsShiftKeyDown() then
+            -- Shift+Tab from toolbar's first field wraps to the LAST
+            -- editable cell in the list (last row's Price Cap). If the
+            -- list is empty, wrap to the toolbar's last field instead.
+            if not MF:TabToLastRowCell() then priceBox:SetFocus() end
+        else
+            countBox:SetFocus()
+        end
     end)
     countBox:SetScript("OnTabPressed", function(self)
         if IsShiftKeyDown() then addBox:SetFocus() else priceBox:SetFocus() end
     end)
     priceBox:SetScript("OnTabPressed", function(self)
-        if IsShiftKeyDown() then countBox:SetFocus() else addBox:SetFocus() end
+        if IsShiftKeyDown() then
+            countBox:SetFocus()
+        else
+            -- Forward Tab from the toolbar's LAST field enters the list.
+            -- Falls back to wrapping to addBox if the list is empty.
+            if not MF:TabToFirstRowCell() then addBox:SetFocus() end
+        end
     end)
 
     -- ---- Hint (below toolbar) ------------------------------------------
@@ -1417,6 +1492,120 @@ end
 
 function MF:SetStatus(text)
     if self.statusBar then self.statusBar:SetText(text or "") end
+end
+
+-- ---------------------------------------------------------------------------
+-- Tab navigation across toolbar + list-body cells (QA-7)
+-- ---------------------------------------------------------------------------
+-- Row-major, unified loop: toolbar Item -> Target -> Price Cap -> row 1's
+-- Need -> row 1's Price Cap -> row 2's Need -> ... -> wraps back to Item.
+-- Shift+Tab reverses.
+--
+-- Row ordering comes from the DataProvider so scrolling doesn't reshuffle
+-- the Tab sequence. Because rows are RECYCLED by the ScrollView, the
+-- current row-Button for a given data index has to be resolved at Tab
+-- time via scrollBox:FindFrame(elementData). If the target row is not
+-- currently rendered (off-screen), we scroll to it first, then defer the
+-- focus + open to the next frame so the ScrollView has time to spawn or
+-- re-target the Button.
+
+-- Open the given row's inline editor for the given cell ("need"|"price").
+-- The Open* helpers live inside BuildRow's closure, so we call them by
+-- simulating an OnClick on the cell Button -- same code path the user
+-- takes with the mouse. This keeps the focus / border / value hide logic
+-- in exactly one place per cell.
+local function OpenRowCellEditor(row, cell)
+    if not row then return end
+    local target = (cell == "need") and row.needCell or row.capCell
+    if target and target:GetScript("OnClick") then
+        target:GetScript("OnClick")(target)
+    end
+end
+
+-- Given a data index in the current provider, focus its Nth cell.
+-- Scrolls the list first if the row isn't currently rendered.
+function MF:FocusRowCell(dataIndex, cell)
+    if not self.scrollBox or not self.dataProvider then return end
+    local size = self.dataProvider:GetSize()
+    if size == 0 or dataIndex < 1 or dataIndex > size then return end
+    local elementData = self.dataProvider:Find(dataIndex)
+    if not elementData then return end
+
+    local frame = self.scrollBox:FindFrame(elementData)
+    if frame then
+        OpenRowCellEditor(frame, cell)
+        return
+    end
+    -- Off-screen: scroll into view, then open on the next frame so the
+    -- ScrollView has spawned or rebound the Button.
+    self.scrollBox:ScrollToElementDataIndex(dataIndex,
+        ScrollBoxConstants.AlignCenter,
+        ScrollBoxConstants.NoScrollInterpolation)
+    C_Timer.After(0, function()
+        local f2 = self.scrollBox and self.scrollBox:FindFrame(elementData)
+        if f2 then OpenRowCellEditor(f2, cell) end
+    end)
+end
+
+-- Toolbar boundary jumps: Tab out of Price Cap -> first row's Need;
+-- Shift+Tab out of Item -> last row's Price Cap. Return true if the
+-- list has any rows and focus was moved, false to let the caller wrap.
+function MF:TabToFirstRowCell()
+    if not self.dataProvider or self.dataProvider:GetSize() == 0 then
+        return false
+    end
+    self:FocusRowCell(1, "need")
+    return true
+end
+
+function MF:TabToLastRowCell()
+    if not self.dataProvider or self.dataProvider:GetSize() == 0 then
+        return false
+    end
+    self:FocusRowCell(self.dataProvider:GetSize(), "price")
+    return true
+end
+
+-- Tab handler called from a row's inline editor. `cell` is "need" or
+-- "price" (which cell the user is currently in); `dir` is +1 for forward
+-- Tab or -1 for Shift+Tab. Walks the row-major sequence: within a row,
+-- need <-> price; at row boundaries, jump to the next/prev row (or wrap
+-- through the toolbar).
+function MF:TabFromCell(row, cell, dir)
+    if not row or not row._itemID or not self.dataProvider then return end
+    -- Find this row's data index. Rows carry ._index thanks to Refresh's
+    -- provider inserts; fall back to a linear search if it's missing.
+    local size = self.dataProvider:GetSize()
+    local idx
+    for i = 1, size do
+        local d = self.dataProvider:Find(i)
+        if d and d.itemID == row._itemID then idx = i; break end
+    end
+    if not idx then return end
+
+    if dir > 0 then
+        -- Forward Tab.
+        if cell == "need" then
+            self:FocusRowCell(idx, "price")
+        else -- cell == "price": move to next row's need, or wrap to toolbar
+            if idx < size then
+                self:FocusRowCell(idx + 1, "need")
+            else
+                if self.addBox then self.addBox:SetFocus() end
+            end
+        end
+    else
+        -- Backward Tab.
+        if cell == "price" then
+            self:FocusRowCell(idx, "need")
+        else -- cell == "need": move to prev row's price, or wrap to toolbar
+            if idx > 1 then
+                self:FocusRowCell(idx - 1, "price")
+            else
+                if self.priceBox then self.priceBox:SetFocus() end
+            end
+        end
+    end
 end
 
 -- ---------------------------------------------------------------------------
