@@ -1,5 +1,59 @@
 # Stock Clerk changelog
 
+## v0.4.0
+
+Priority ordering + daily budget.
+
+### List order is the priority
+
+- **Drag rows to reorder.** Each row has a grip handle on its far
+  left (three horizontal bars, mint on hover). Drag it up or down
+  and drop to insert; a mint insertion line shows where the row
+  will land.
+- **Keyboard reorder.** Tab from the toolbar's Price Cap into the
+  list now soft-selects the first row (1px mint ring, no cell
+  focus). While selected: Up / Down move the row, Enter or Tab
+  drop into the Need cell, Shift+Tab climbs back to Add, first
+  Escape clears the selection, second Escape closes the window.
+- **The restock loop walks the list top-down.** Whatever order you
+  arrange is the order Restock at AH tries. Replaces the old
+  biggest-shortfall-first sort.
+
+### Daily auto budget
+
+- **Budget is now a daily allowance**, aligned to the realm's daily
+  reset (server-local: currently 7 AM PT for NA realms, morning
+  reset for EU, etc.).
+  Pressing Restock at AH multiple times in a day draws from the same
+  allowance. When exhausted, auto stops and waits for reset.
+- **Manual buys are never counted and never blocked.** Budgets are
+  guardrails against the autopilot spending on you; a human-confirmed
+  click needs no such guardrail.
+- **Settings dropdown shows a live readout**: "auto spent today:
+  Xg / Yg (resets in Zh)".
+- **Loop status appends the remaining allowance** on auto runs
+  ("Loop done. Bought N, spent Xg. Yg left today.").
+
+### Repeat-press safety (backported to v0.3.x behavior)
+
+- **Session purchase ledger** tracks commodities bought this session
+  that haven't yet been looted from the mail. Hammering Restock at
+  AH no longer re-buys the same items; the ledger decays as you
+  loot mail.
+
+### Keyboard hygiene
+
+- **Fixed keyboard-eating** after focusing the Add button. Unhandled
+  keys now propagate correctly, so B / hotbars / Escape work while
+  the addon window is open.
+
+### Slash commands
+
+- **/clerk budget** — prints the current daily auto-spend, budget,
+  and time until reset.
+- **/clerk budget reset** — zeros today's counter and rearms the
+  reset clock. For testing without waiting for realm reset.
+
 ## v0.2.0
 
 First public release. Consolidates all Wave 1 / Wave 1.5 work plus a
