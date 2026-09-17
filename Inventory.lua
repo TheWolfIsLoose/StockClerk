@@ -53,11 +53,17 @@ function INV:GetCount(itemID)
     ) or 0
 
     self.cache[itemID] = count
+    if ADDON.debug then
+        print(("|cff98FF98[SC:debug]|r GetCount(%d) = %d (fresh from C_Item.GetItemCount)"):format(itemID, count))
+    end
     return count
 end
 
 -- Called by Core.lua on inventory-change events.
 function INV:OnInventoryChanged()
+    if ADDON.debug then
+        print("|cff98FF98[SC:debug]|r OnInventoryChanged fired, invalidating cache")
+    end
     self:Invalidate()
     -- Notify UI (fire a lightweight callback the MainFrame listens for).
     if ADDON.MainFrame and ADDON.MainFrame.Refresh then

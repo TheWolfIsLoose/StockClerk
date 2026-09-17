@@ -293,6 +293,9 @@ local function InitializeRow(row, data)
     local have = ADDON.Inventory:GetCount(data.itemID) or 0
     row._have = have
     row.count:SetText(("%d / %d"):format(have, data.need))
+    if ADDON.debug then
+        print(("|cff98FF98[SC:debug]|r InitializeRow: id=%d have=%d need=%d"):format(data.itemID, have, data.need))
+    end
 
     local short = data.need - have
     if short > 0 then
@@ -519,6 +522,10 @@ end
 -- ---------------------------------------------------------------------------
 function MF:Refresh()
     if not self.frame or not self.scrollBox then return end
+
+    if ADDON.debug then
+        print("|cff98FF98[SC:debug]|r MainFrame:Refresh() called (frame shown: " .. tostring(self.frame:IsShown()) .. ")")
+    end
 
     local items = ADDON.DB:GetSortedItems()
 

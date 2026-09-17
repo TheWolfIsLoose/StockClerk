@@ -75,6 +75,9 @@ end
 -- Event handlers (thin — delegate to modules)
 -- ---------------------------------------------------------------------------
 function StockClerk:OnInventoryChanged()
+    if ADDON.debug then
+        print("|cff98FF98[SC:debug]|r bucket fired → Inventory:OnInventoryChanged")
+    end
     ADDON.Inventory:OnInventoryChanged()
 end
 
@@ -170,6 +173,12 @@ function StockClerk:OnSlashCommand(msg)
             self:Print(("  [%d] %s — %d / %d"):format(
                 it.itemID, it.name, have, it.need))
         end
+        return
+    end
+
+    if cmd == "debug" then
+        ADDON.debug = not ADDON.debug
+        self:Print("Debug: " .. (ADDON.debug and "ON" or "OFF"))
         return
     end
 
