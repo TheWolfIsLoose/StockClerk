@@ -341,11 +341,20 @@ local function BuildRow(row)
     row.capCell:RegisterForClicks("LeftButtonUp", "RightButtonUp")
     row.capCell:SetFrameLevel(row:GetFrameLevel() + 2)
 
-    -- Cap cell has its own flat fill + 1px black border. On hover the border
-    -- animates to brand blue ("this opens something", per atrocity's rule).
-    ApplyFill(row.capCell, Palette.bgMedium)
-    AddBlackBorder(row.capCell)
+    -- Cap cell: no idle fill or border — the value sits directly on the
+    -- window background (same visual weight as the Have/Need column). On
+    -- hover the border grows in as brand blue and a subtle dark fill
+    -- appears, so the affordance ("this opens something") stays
+    -- discoverable. All colours start at alpha 0 and animate up.
+    local CAP_FILL_IDLE = { Palette.bgMedium[1], Palette.bgMedium[2], Palette.bgMedium[3], 0 }
+    local CAP_FILL_HOVER = { Palette.bgMedium[1], Palette.bgMedium[2], Palette.bgMedium[3], 1 }
+    local CAP_BORDER_IDLE = { Palette.brand[1], Palette.brand[2], Palette.brand[3], 0 }
+    ApplyFill(row.capCell, CAP_FILL_IDLE)
+    AddBlackBorder(row.capCell, CAP_BORDER_IDLE)
     AttachBorderAnimator(row.capCell)
+    row.capCell._fillIdle   = CAP_FILL_IDLE
+    row.capCell._fillHover  = CAP_FILL_HOVER
+    row.capCell._borderIdle = CAP_BORDER_IDLE
 
     row.cap = row:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
     row.cap:SetPoint("CENTER", row.capCell, "CENTER")
@@ -495,6 +504,7 @@ local function BuildRow(row)
         r.priceEdit:HighlightText()
         r.capCell._priceEditActive = true
         r.capCell._borderAnim.AnimateTo(Palette.brand)
+        if r.capCell._bg then r.capCell._bg:SetVertexColor(unpack(r.capCell._fillHover)) end
     end
     row.capCell:SetScript("OnClick", function(self)
         OpenPriceEdit(self:GetParent())
@@ -505,6 +515,7 @@ local function BuildRow(row)
         r:GetScript("OnEnter")(r)
         -- Border animates to brand blue — the "this opens something" signal.
         self._borderAnim.AnimateTo(Palette.brand)
+        if self._bg then self._bg:SetVertexColor(unpack(self._fillHover)) end
         GameTooltip:Hide()
         GameTooltip:SetOwner(self, "ANCHOR_TOP")
         if r._maxPrice then
@@ -518,7 +529,8 @@ local function BuildRow(row)
     end)
     row.capCell:SetScript("OnLeave", function(self)
         if not self._priceEditActive then
-            self._borderAnim.AnimateTo(Palette.border)
+            self._borderAnim.AnimateTo(self._borderIdle)
+            if self._bg then self._bg:SetVertexColor(unpack(self._fillIdle)) end
         end
         self:GetParent():GetScript("OnLeave")(self:GetParent())
     end)
@@ -579,7 +591,8 @@ local function BuildRow(row)
         r.cap:Show()
         r.capCell._priceEditActive = false
         if not r.capCell:IsMouseOver() then
-            r.capCell._borderAnim.AnimateTo(Palette.border)
+            r.capCell._borderAnim.AnimateTo(r.capCell._borderIdle)
+            if r.capCell._bg then r.capCell._bg:SetVertexColor(unpack(r.capCell._fillIdle)) end
         end
     end
     row.priceEdit:SetScript("OnEscapePressed", function(self)
@@ -664,7 +677,11 @@ local function InitializeRow(row, data)
     -- number is the emphasized element in the row (per atrocity's rule:
     -- accent color goes on the value, not on the chrome).
     if data.maxPrice then
-        row.cap:SetText(("|cff7381FF%dg|r"):format(math.floor(data.maxPrice / 10000)))
+        -- Use a lighter tint of the brand hue for the value itself — pure
+        -- #7381FF sits too close to the near-black window fill to be
+        -- comfortably readable at small sizes. #B8C0FF is atrocity's own
+        -- brand-text-on-dark tone.
+        row.cap:SetText(("|cffB8C0FF%dg|r"):format(math.floor(data.maxPrice / 10000)))
     else
         row.cap:SetText("|cff555555\226\128\148|r") -- em-dash for a real "unset" glyph
     end
@@ -863,16 +880,19 @@ function MF:Build()
     toolbarSep:SetPoint("BOTTOMRIGHT", 0, 0)
     PixelSnap(toolbarSep)
 
-    local addEB   = MakeEditBox(toolbar, L.PROMPT_ADD_ITEM or "Item name or ID", 260, false, nil,   nil)
-    local countEB = MakeEditBox(toolbar, L.PROMPT_ADD_COUNT or "Target",         60,  true,  5,     "20")
-    local priceEB = MakeEditBox(toolbar, "Max g/unit",                            80,  true,  7,     nil)
+    -- Compact single-word labels for the numeric fields so labels don't
+    -- run into the neighbouring column when the editbox itself is narrow.
+    -- Wider containers (100 / 110) give the labels comfortable slack too.
+    local addEB   = MakeEditBox(toolbar, L.PROMPT_ADD_ITEM or "Item name or ID", 240, false, nil,   nil)
+    local countEB = MakeEditBox(toolbar, "Target",                                100, true,  5,     "20")
+    local priceEB = MakeEditBox(toolbar, "Max g / unit",                          110, true,  7,     nil)
     local addBox   = addEB.editBox
     local countBox = countEB.editBox
     local priceBox = priceEB.editBox
 
     addEB:SetPoint("TOPLEFT", toolbar, "TOPLEFT", 12, -4)
-    countEB:SetPoint("LEFT", addEB, "RIGHT", 10, 0)
-    priceEB:SetPoint("LEFT", countEB, "RIGHT", 10, 0)
+    countEB:SetPoint("LEFT", addEB, "RIGHT", 12, 0)
+    priceEB:SetPoint("LEFT", countEB, "RIGHT", 12, 0)
 
     local addBtn = CreateFrame("Button", nil, toolbar)
     addBtn:SetSize(96, 22)
@@ -949,7 +969,7 @@ function MF:Build()
     -- Column pixel positions match BuildRow's SetPoint offsets exactly.
     MakeHeader("Item",         nil, 52,   true)   -- left edge + 40 (icon + 12 pad)
     MakeHeader("Have / Need",  nil, -170, false)  -- right-anchored
-    MakeHeader("Max g",        nil, -108, false)  -- cap column center
+    MakeHeader("Max g / unit", nil, -108, false)  -- cap column center
     MakeHeader("Status",       nil, -46,  false)  -- pill center
 
     -- ---- Footer / bottom bar ------------------------------------------
