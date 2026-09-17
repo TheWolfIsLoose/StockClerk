@@ -2,20 +2,23 @@
     Stock Clerk - Inventory.lua
     Answers "how many of item X does this character have?" cheaply.
 
-    Backing API: C_Item.GetItemCount(itemInfo, includeBank, includeUses, includeReagentBank)
-    That single call rolls up bags + (optionally) bank + reagent bank.
+    Backing API (retail 11.0+):
+      C_Item.GetItemCount(itemInfo,
+                          includeBank,
+                          includeUses,
+                          includeReagentBank,
+                          includeAccountBank)
 
-    Warband bank note:
-      As of TWW, warband bank items count toward GetItemCount when the
-      includeBank flag is true (Blizzard folded warband into the "bank"
-      bucket for count queries). We keep the flag on by default so the
-      user's "have" number reflects everything reachable to that character.
+    That single call rolls up bags + (optionally) bank + reagent bank +
+    warband/account bank. As of retail 11.2 the reagent bank was removed
+    (items were folded into the main bank tabs), so includeReagentBank is
+    a harmless no-op on live but we leave it on for pre-11.2 servers.
 
     Caching:
-      We memoize counts per itemID and invalidate on BAG_UPDATE_DELAYED
-      (fires once after a burst of BAG_UPDATE), PLAYERBANKSLOTS_CHANGED,
-      PLAYERREAGENTBANKSLOTS_CHANGED, and the warband bank change event.
-      This keeps the UI cheap when the list is long.
+      We memoize counts per itemID and invalidate on BAG_UPDATE_DELAYED,
+      PLAYERBANKSLOTS_CHANGED, PLAYER_ACCOUNT_BANK_TAB_SLOTS_CHANGED,
+      BANK_TABS_CHANGED and BANKFRAME_OPENED. The last one guarantees a
+      fresh scan the first time the user opens the bank in a session.
 --]]
 
 local addonName = ...
@@ -28,7 +31,8 @@ ADDON.Inventory = INV
 -- immediately equipped in bags — expose a toggle later.
 INV.opts = {
     includeBank        = true,
-    includeReagentBank = true,
+    includeReagentBank = true, -- vestigial post-11.2; kept for older clients
+    includeAccountBank = true, -- warband bank
 }
 
 function INV:Invalidate()
@@ -44,7 +48,8 @@ function INV:GetCount(itemID)
         itemID,
         self.opts.includeBank,
         false, -- includeUses (charges) — not what a stack count means for us
-        self.opts.includeReagentBank
+        self.opts.includeReagentBank,
+        self.opts.includeAccountBank
     ) or 0
 
     self.cache[itemID] = count

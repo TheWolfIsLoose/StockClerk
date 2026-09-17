@@ -40,15 +40,34 @@ function StockClerk:OnEnable()
     self:RegisterEvent("GET_ITEM_INFO_RECEIVED", "OnItemInfoReceived")
 
     -- Inventory invalidation. AceBucket collapses bursts into one call.
+    -- Retail 11.2 (Ghosts of K'aresh) removed the reagent bank; personal
+    -- banks are now tabs like the warband bank. Modern events:
+    --   BAG_UPDATE_DELAYED                    - normal bag changes
+    --   PLAYERBANKSLOTS_CHANGED               - character bank slot change
+    --   PLAYER_ACCOUNT_BANK_TAB_SLOTS_CHANGED - warband bank slot change
+    --   BANK_TABS_CHANGED                     - tab settings / purchase
+    --   BANKFRAME_OPENED                      - force refresh on open
     self:RegisterBucketEvent(
-        { "BAG_UPDATE_DELAYED", "PLAYERBANKSLOTS_CHANGED",
-          "PLAYERREAGENTBANKSLOTS_CHANGED" },
+        { "BAG_UPDATE_DELAYED",
+          "PLAYERBANKSLOTS_CHANGED",
+          "PLAYER_ACCOUNT_BANK_TAB_SLOTS_CHANGED",
+          "BANK_TABS_CHANGED",
+          "BANKFRAME_OPENED" },
         0.25,
         "OnInventoryChanged"
     )
 
-    -- Auction House auto-open. AUCTION_HOUSE_SHOW fires when the AH UI opens.
-    self:RegisterEvent("AUCTION_HOUSE_SHOW",  "OnAuctionHouseShow")
+    -- Auction House auto-open.
+    --
+    -- Retail 10.0+ consolidated frame show/hide events into the Player
+    -- Interaction Manager. Auctionator's Source_Mainline path uses this
+    -- rather than AUCTION_HOUSE_SHOW, and it fires more reliably. We
+    -- listen for BOTH events for maximum coverage across client builds:
+    --   PLAYER_INTERACTION_MANAGER_FRAME_SHOW (arg1 == Auctioneer)
+    --   AUCTION_HOUSE_SHOW (fallback / legacy)
+    self:RegisterEvent("PLAYER_INTERACTION_MANAGER_FRAME_SHOW", "OnInteractionShow")
+    self:RegisterEvent("PLAYER_INTERACTION_MANAGER_FRAME_HIDE", "OnInteractionHide")
+    self:RegisterEvent("AUCTION_HOUSE_SHOW",   "OnAuctionHouseShow")
     self:RegisterEvent("AUCTION_HOUSE_CLOSED", "OnAuctionHouseClosed")
 end
 
@@ -68,15 +87,37 @@ function StockClerk:OnItemInfoReceived(_, itemID, success)
     end
 end
 
+function StockClerk:OnInteractionShow(_, interactionType)
+    if interactionType == Enum.PlayerInteractionType.Auctioneer then
+        self:OnAuctionHouseShow()
+    end
+end
+
+function StockClerk:OnInteractionHide(_, interactionType)
+    if interactionType == Enum.PlayerInteractionType.Auctioneer then
+        self:OnAuctionHouseClosed()
+    end
+end
+
 function StockClerk:OnAuctionHouseShow()
     if not ADDON.DB:Settings().autoOpenAtAH then return end
-    if ADDON.MainFrame then ADDON.MainFrame:Show() end
+
+    -- The AH UI is load-on-demand; force it in so AuctionHouseFrame exists.
+    if not C_AddOns.IsAddOnLoaded("Blizzard_AuctionHouseUI") then
+        C_AddOns.LoadAddOn("Blizzard_AuctionHouseUI")
+    end
+
+    if ADDON.MainFrame then
+        ADDON.MainFrame.openedByAH = true
+        ADDON.MainFrame:Show()
+    end
 end
 
 function StockClerk:OnAuctionHouseClosed()
-    -- Optional: close on AH close so we don't leave a floating window.
-    -- If the user has interacted with it since AH opened, leave it alone.
+    -- Close on AH close only when WE opened it. If the user has since
+    -- interacted with the window, leave it alone.
     if ADDON.MainFrame and ADDON.MainFrame.openedByAH then
+        ADDON.MainFrame.openedByAH = false
         ADDON.MainFrame:Hide()
     end
 end

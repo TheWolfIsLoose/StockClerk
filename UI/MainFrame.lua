@@ -154,21 +154,28 @@ local function BuildRow(row)
     row.pill.text = row.pill:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
     row.pill.text:SetPoint("CENTER")
 
-    -- Trash button (visible on hover only)
+    -- Trash button (visible on hover only).
+    -- IMPORTANT: because the trash lives inside the row's rect, moving the
+    -- mouse onto it does NOT fire row:OnLeave in WoW's frame model. We use
+    -- that fact deliberately: the row shows/hides the trash, and the trash
+    -- itself does not touch the tooltip (avoids the ping-pong flicker).
     row.trash = CreateFrame("Button", nil, row)
     row.trash:SetSize(18, 18)
     row.trash:SetPoint("RIGHT", row, "RIGHT", -8, 0)
+    row.trash:SetFrameLevel(row:GetFrameLevel() + 5)
     row.trash:SetNormalTexture(TRASH_TEX)
     row.trash:SetHighlightTexture(TRASH_TEX)
     local ht = row.trash:GetHighlightTexture()
     if ht then ht:SetBlendMode("ADD") end
     row.trash:Hide()
+    -- Keep the row's tooltip visible while over the trash; no separate
+    -- tooltip needed — the icon is self-evident (a red X-style pass icon).
     row.trash:SetScript("OnEnter", function(self)
-        GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
-        GameTooltip:SetText("Remove", 1, 1, 1)
-        GameTooltip:Show()
+        local r = self:GetParent()
+        if r._itemID then ShowItemTooltip(r, r._itemID) end
     end)
-    row.trash:SetScript("OnLeave", GameTooltip_Hide)
+    row.trash:SetScript("OnLeave", function() end)
+    row.trash:RegisterForClicks("LeftButtonUp")
 
     -- Scripts
     row:SetScript("OnEnter", function(self)
@@ -181,16 +188,25 @@ local function BuildRow(row)
     row:SetScript("OnLeave", function(self)
         HideOverlay(self)
         GameTooltip:Hide()
-        self.trash:Hide()
+        -- Only hide the trash once the pointer has actually left both the
+        -- row and the trash button. Deferring by one frame lets us test
+        -- MouseIsOver *after* the transition settles.
+        C_Timer.After(0, function()
+            if not self:IsMouseOver() and not self.trash:IsMouseOver() then
+                self.trash:Hide()
+            end
+        end)
     end)
     row:SetScript("OnClick", function(self, mouseButton)
-        if mouseButton == "MiddleButton" and self._itemLink then
+        -- Shift + Left Click -> paste item link into the active chat edit,
+        -- matching the standard Blizzard bag/inventory behavior.
+        if mouseButton == "LeftButton" and IsShiftKeyDown() and self._itemLink then
             local edit = ChatEdit_ChooseBoxForSend()
             ChatEdit_ActivateChat(edit)
             edit:Insert(self._itemLink)
         end
     end)
-    row:RegisterForClicks("LeftButtonUp", "MiddleButtonUp", "RightButtonUp")
+    row:RegisterForClicks("LeftButtonUp", "RightButtonUp")
 
     -- Click the count -> inline edit target.
     -- FontStrings don't reliably take clicks; use an overlay Button instead.
@@ -301,11 +317,16 @@ local function InitializeRow(row, data)
     end
     ApplyOverlay(row, unpack(row._statusWash))
 
-    -- Trash click wire (fresh closure per row, cheap)
-    row.trash:SetScript("OnClick", function()
-        ADDON.DB:RemoveItem(data.itemID)
-        ADDON.Inventory:Invalidate()
-        MF:Refresh()
+    -- Trash click wire. Read from row._itemID rather than closing over
+    -- `data`, so a recycled row can't accidentally delete a stale item.
+    row.trash:SetScript("OnClick", function(self)
+        local r = self:GetParent()
+        local id = r and r._itemID
+        if id then
+            ADDON.DB:RemoveItem(id)
+            ADDON.Inventory:Invalidate()
+            MF:Refresh()
+        end
     end)
 
     -- Hide inline edit if it was left showing during a refresh
