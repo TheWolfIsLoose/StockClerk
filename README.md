@@ -1,4 +1,8 @@
-# Stock Clerk
+<p align="center">
+  <img src=".assets/logo-256.png" alt="Stock Clerk" width="180" height="180">
+</p>
+
+<h1 align="center">Stock Clerk</h1>
 
 A lightweight, per-character consumable restock tracker for World of
 Warcraft. Set a target count for every consumable you want to keep on
