@@ -186,23 +186,10 @@ local function BuildDropdown(anchor)
     autoCheck:SetScript("OnClick", function(self)
         local s = ADDON.DB:Settings()
         if self:GetChecked() then
-            -- Enable path: pop confirmation modal first. Roll back the
-            -- visual check state; the modal's OnAccept will re-set it.
+            -- Enable path: roll back the visual check state, then pop
+            -- the confirmation modal; its OnAccept performs the enable.
             self:SetChecked(false)
-            local uncapped = 0
-            for _, entry in pairs(ADDON.DB:GetItems()) do
-                if not entry.maxPrice then uncapped = uncapped + 1 end
-            end
-            local budgetText = s.autoBudgetGold and (s.autoBudgetGold .. "g") or "not set (will use unlimited)"
-            local dlg = StaticPopup_Show("STOCKCLERK_AUTO_ENABLE", uncapped, budgetText)
-            -- If the popup was suppressed for any reason (e.g. another
-            -- popup already at max) just enable without confirmation.
-            if not dlg then
-                s.autoPurchase = true
-                if ADDON.Log then ADDON.Log:Emit("auto_toggle", nil, { on = true }) end
-                Settings:Refresh()
-                if ADDON.MainFrame then ADDON.MainFrame:Refresh() end
-            end
+            Settings:RequestAutoEnable()
         else
             -- Disable is one-click, no confirmation.
             s.autoPurchase = false
@@ -241,6 +228,31 @@ local function BuildDropdown(anchor)
 
     Settings.frame = f
     return f
+end
+
+-- ---------------------------------------------------------------------------
+-- Public: request enabling auto-purchase WITH the click-to-confirm
+-- modal counting uncapped items. Single entry point used by both the
+-- settings checkbox and `/clerk auto on`, so no caller can bypass the
+-- QA-10 confirmation requirement. (The slash-command path previously
+-- enabled directly -- code-review v0.2.0..HEAD finding 5, scope creep.)
+function Settings:RequestAutoEnable()
+    local s = ADDON.DB:Settings()
+    local uncapped = 0
+    for _, entry in pairs(ADDON.DB:GetItems()) do
+        if not entry.maxPrice then uncapped = uncapped + 1 end
+    end
+    local budgetText = s.autoBudgetGold and (s.autoBudgetGold .. "g") or "not set (will use unlimited)"
+    local dlg = StaticPopup_Show("STOCKCLERK_AUTO_ENABLE", uncapped, budgetText)
+    -- If the popup was suppressed for any reason (another popup at max
+    -- stack), fall back to enabling without confirmation rather than
+    -- silently doing nothing.
+    if not dlg then
+        s.autoPurchase = true
+        if ADDON.Log then ADDON.Log:Emit("auto_toggle", nil, { on = true }) end
+        self:Refresh()
+        if ADDON.MainFrame and ADDON.MainFrame.Refresh then ADDON.MainFrame:Refresh() end
+    end
 end
 
 -- ---------------------------------------------------------------------------

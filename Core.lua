@@ -207,17 +207,20 @@ function StockClerk:OnSlashCommand(msg)
     end
 
     -- QA-10: `/clerk auto` prints current auto-purchase state.
-    -- `/clerk auto on|off` toggles it explicitly (no confirmation modal --
-    -- power-user shortcut). Budget must already be set via the settings
-    -- panel.
+    -- `/clerk auto on` routes through the SAME click-to-confirm popup
+    -- the settings checkbox uses (SettingsDropdown:RequestAutoEnable) --
+    -- the confirmation is a hard requirement, not a GUI nicety, and the
+    -- slash path previously bypassed it (code-review finding 5).
+    -- `/clerk auto off` remains a one-step power-user shortcut.
     if cmd == "auto" then
         local sub = (rest or ""):match("^(%S+)") or ""
         local s = ADDON.DB:Settings()
         sub = sub:lower()
         if sub == "on" then
-            s.autoPurchase = true
-            if ADDON.Log then ADDON.Log:Emit("auto_toggle", nil, { on = true }) end
-            self:Print("Auto-purchase: |cff4ade80ON|r")
+            if ADDON.SettingsDropdown and ADDON.SettingsDropdown.RequestAutoEnable then
+                ADDON.SettingsDropdown:RequestAutoEnable()
+            end
+            return
         elseif sub == "off" then
             s.autoPurchase = false
             if ADDON.Log then ADDON.Log:Emit("auto_toggle", nil, { on = false }) end

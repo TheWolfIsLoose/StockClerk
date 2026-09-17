@@ -11,7 +11,7 @@
     siblings:
       header    - "Activity" title + × close
       aggBar    - single-line "N purchases | Spent Xg | Top: NAME"
-      filters   - four chips: All / Purchases / Session / (per-item stub)
+      filters   - three chips: All / Purchases / Session
       list      - ScrollFrame of formatted entries, newest first
       footer    - "N entries" hint + "/clerk log clear" reminder
 
@@ -50,7 +50,6 @@ local function P()
     }
 end
 
-local WHITE_TEX = "Interface\\Buildings\\White8x8"
 
 -- ---------------------------------------------------------------------------
 -- Filter state (module-level; single sidecar instance)
@@ -242,7 +241,6 @@ local function BuildFrame()
     -- seam between them.
     local function edge(anchorA, anchorB, isHoriz)
         local t = f:CreateTexture(nil, "OVERLAY", nil, 6)
-        t:SetTexture(WHITE_TEX)
         t:SetColorTexture(0, 0, 0, 1)
         if isHoriz then
             t:SetHeight(BORDER_SIZE)
@@ -340,7 +338,6 @@ local function BuildFrame()
     footer:SetPoint("BOTTOMRIGHT", 0, 0)
     ApplyBand(footer, P().bandTint)
     local footerTop = footer:CreateTexture(nil, "OVERLAY", nil, 6)
-    footerTop:SetTexture(WHITE_TEX)
     footerTop:SetColorTexture(0, 0, 0, 1)
     footerTop:SetHeight(BORDER_SIZE)
     footerTop:SetPoint("TOPLEFT",  0, 0)

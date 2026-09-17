@@ -104,7 +104,10 @@ local Palette = {
 local BORDER_SIZE = 1
 local ANIM_DUR    = 0.15
 
-local WHITE_TEX = "Interface\\Buttons\\WHITE8x8"
+-- No WHITE_TEX path in this file: all solid fills and borders use
+-- SetColorTexture. The White8x8+SetVertexColor atlas idiom renders
+-- transparent on retail Midnight (v0.3 changelog) and mixed-path
+-- remnants were stripped in the code-review cleanup.
 local TRASH_TEX = "Interface\\Buttons\\UI-GroupLoot-Pass-Up"   -- red X, native asset
 local QUESTION_ICON = 134400
 
@@ -129,10 +132,13 @@ local function ApplyFill(frame, color)
     if not frame._bg then
         frame._bg = frame:CreateTexture(nil, "BACKGROUND", nil, -8)
         frame._bg:SetAllPoints(true)
-        frame._bg:SetTexture(WHITE_TEX)
         PixelSnap(frame._bg)
     end
-    frame._bg:SetVertexColor(color[1], color[2], color[3], color[4] or 1)
+    -- SetColorTexture, not SetTexture(WHITE_TEX)+SetVertexColor: the
+    -- White8x8 atlas path is the documented transparency trap on retail
+    -- Midnight (see v0.3 changelog), and the mixed path contradicts the
+    -- convention this codebase adopted.
+    frame._bg:SetColorTexture(color[1], color[2], color[3], color[4] or 1)
     frame._bg:Show()
 end
 
@@ -144,10 +150,9 @@ local function ApplyBand(frame, color)
     if not frame._band then
         frame._band = frame:CreateTexture(nil, "BACKGROUND", nil, -6)
         frame._band:SetAllPoints(true)
-        frame._band:SetTexture(WHITE_TEX)
         PixelSnap(frame._band)
     end
-    frame._band:SetVertexColor(color[1], color[2], color[3], color[4] or 1)
+    frame._band:SetColorTexture(color[1], color[2], color[3], color[4] or 1)
     frame._band:Show()
 end
 
@@ -161,7 +166,6 @@ local function AddBlackBorder(frame, color)
     local textures = {}
     for _, side in ipairs({"top", "bottom", "left", "right"}) do
         local t = frame:CreateTexture(nil, "OVERLAY", nil, 7)
-        t:SetTexture(WHITE_TEX)
         t:SetColorTexture(color[1], color[2], color[3], color[4] or 1)
         PixelSnap(t)
         textures[side] = t
@@ -233,7 +237,6 @@ local function AddHoverWash(btn, insetX, insetY)
     insetX = insetX or 1
     insetY = insetY or 1
     local wash = btn:CreateTexture(nil, "ARTWORK", nil, 7)
-    wash:SetTexture(WHITE_TEX)
     wash:SetColorTexture(Palette.hoverWash[1], Palette.hoverWash[2], Palette.hoverWash[3], Palette.hoverWash[4])
     wash:SetPoint("TOPLEFT", insetX, -insetY)
     wash:SetPoint("BOTTOMRIGHT", -insetX, insetY)
@@ -307,7 +310,6 @@ end
 local function ApplyRowHover(frame, on)
     if not frame._rowHover then
         local wash = frame:CreateTexture(nil, "ARTWORK", nil, 7)
-        wash:SetTexture(WHITE_TEX)
         wash:SetColorTexture(Palette.hoverWash[1], Palette.hoverWash[2], Palette.hoverWash[3], Palette.hoverWash[4])
         wash:SetPoint("TOPLEFT", 1, -1)
         wash:SetPoint("BOTTOMRIGHT", -1, 1)
@@ -534,6 +536,12 @@ local function BuildRow(row)
         GameTooltip:SetText("Last seen at AH")
         GameTooltip:AddLine(GetCoinTextureString(lp.copper) .. " per unit", 1, 1, 1)
         GameTooltip:AddLine(agoText .. " · via " .. (lp.source or "?"), 0.7, 0.7, 0.7)
+        -- Stale flag mirrors the cell dimming (QA-11 TTL) so the dim
+        -- color has an explained meaning on hover.
+        local staleCutoff = (ADDON.DB:Settings() and ADDON.DB:Settings().lastPriceTTL) or 86400
+        if ago > staleCutoff then
+            GameTooltip:AddLine("Price is stale -- re-search to refresh", 0.9, 0.6, 0.2)
+        end
         GameTooltip:Show()
     end)
     row.lastSeenHit:SetScript("OnLeave", function() GameTooltip:Hide() end)
@@ -920,8 +928,11 @@ local function InitializeRow(row, data)
     -- accent color goes on the value, not on the chrome).
     --
     -- When auto-purchase is ON but this item has no cap set, we swap the
-    -- em-dash for a dim moon glyph so the user can at-a-glance see which
-    -- rows will be skipped by an auto run (QA-10 visual affordance).
+    -- em-dash for a dim "skip" so the user can at-a-glance see which
+    -- rows an auto run will pass over (QA-10 visual affordance).
+    -- Plain text, not a glyph: WoW's stock fonts lack U+263D (moon),
+    -- which was used here first and rendered as a placeholder box --
+    -- the same bug class the v0.3 glyph fixes addressed for cog/log.
     local autoOn = ADDON.DB:Settings().autoPurchase == true
     if data.maxPrice then
         -- Use a lighter tint of the brand hue for the value itself — pure
@@ -929,26 +940,33 @@ local function InitializeRow(row, data)
         -- (same tone the addon uses in tooltip headers and status text).
         row.cap:SetText(("|cff98FF98%dg|r"):format(math.floor(data.maxPrice / 10000)))
     elseif autoOn then
-        -- Moon = "asleep" / "skipped by auto". Dim gray so it doesn't
-        -- compete with the mint capped values in the same column.
-        row.cap:SetText("|cff555555\226\152\189|r")
+        -- Dim gray so it doesn't compete with the mint capped values
+        -- in the same column.
+        row.cap:SetText("|cff555555skip|r")
     else
         row.cap:SetText("|cff555555\226\128\148|r") -- em-dash for a real "unset" glyph
     end
 
     -- Last Seen column (QA-11): read char.items[id].lastPrice off the
-    -- flattened row entry (DB:GetSortedItems now includes it). Display
-    -- a dim em-dash when there's no observation yet.
+    -- flattened row entry (DB:GetSortedItems includes it; the provider
+    -- Insert in Refresh must carry it through or this column can never
+    -- paint -- code-review v0.2.0..HEAD finding 1).
+    -- TTL dimming: entries older than settings.lastPriceTTL (default 24h)
+    -- paint in a mid-gray between fresh (CCCCCC) and unset (555555) so
+    -- a stale number doesn't read as current market at a glance.
     row._lastPrice = data.lastPrice
     if data.lastPrice and data.lastPrice.copper then
+        local age = time() - (data.lastPrice.seenAt or 0)
+        local staleCutoff = (ADDON.DB:Settings() and ADDON.DB:Settings().lastPriceTTL) or 86400
+        local color = (age > staleCutoff) and "777777" or "CCCCCC"
         local goldValue = math.floor(data.lastPrice.copper / 10000)
         if goldValue >= 1 then
-            row.lastSeen:SetText(("|cffCCCCCC%dg|r"):format(goldValue))
+            row.lastSeen:SetText(("|cff%s%dg|r"):format(color, goldValue))
         else
             -- Sub-gold prices: show silver so mid-market commodities
             -- (dust, essences) don't collapse to "0g".
             local silver = math.floor(data.lastPrice.copper / 100)
-            row.lastSeen:SetText(("|cffCCCCCC%ds|r"):format(silver))
+            row.lastSeen:SetText(("|cff%s%ds|r"):format(color, silver))
         end
     else
         row.lastSeen:SetText("|cff555555\226\128\148|r")
@@ -1189,7 +1207,6 @@ function MF:Build()
     end)
 
     local headerSep = header:CreateTexture(nil, "OVERLAY", nil, 6)
-    headerSep:SetTexture(WHITE_TEX)
     headerSep:SetColorTexture(Palette.border[1], Palette.border[2], Palette.border[3], 1)
     headerSep:SetHeight(BORDER_SIZE)
     headerSep:SetPoint("BOTTOMLEFT", 0, 0)
@@ -1305,7 +1322,6 @@ function MF:Build()
     ApplyBand(toolbar, Palette.bandTint)
 
     local toolbarSep = toolbar:CreateTexture(nil, "OVERLAY", nil, 6)
-    toolbarSep:SetTexture(WHITE_TEX)
     toolbarSep:SetColorTexture(Palette.border[1], Palette.border[2], Palette.border[3], 1)
     toolbarSep:SetHeight(BORDER_SIZE)
     toolbarSep:SetPoint("BOTTOMLEFT", 0, 0)
@@ -1581,7 +1597,6 @@ function MF:Build()
     ApplyBand(headers, Palette.bandTint)
 
     local headersSep = headers:CreateTexture(nil, "OVERLAY", nil, 6)
-    headersSep:SetTexture(WHITE_TEX)
     headersSep:SetColorTexture(Palette.border[1], Palette.border[2], Palette.border[3], 1)
     headersSep:SetHeight(BORDER_SIZE)
     headersSep:SetPoint("BOTTOMLEFT", 0, 0)
@@ -1645,7 +1660,6 @@ function MF:Build()
     ApplyBand(footer, Palette.bandTint)
 
     local footerSep = footer:CreateTexture(nil, "OVERLAY", nil, 6)
-    footerSep:SetTexture(WHITE_TEX)
     footerSep:SetColorTexture(Palette.border[1], Palette.border[2], Palette.border[3], 1)
     footerSep:SetHeight(BORDER_SIZE)
     footerSep:SetPoint("TOPLEFT", 0, 0)
@@ -1796,7 +1810,12 @@ function MF:Refresh()
         self.scrollBox:SetDataProvider(emptyProvider, ScrollBoxConstants.RetainScrollPosition)
         self.dataProvider = emptyProvider
         self.emptyText:Show()
-        self:SetStatus("0 items tracked")
+        -- skipLog = true: Refresh-generated state summaries (this and
+        -- the two below) are not events. Without the guard, every list
+        -- repaint would flood the activity log's status history with
+        -- "N items tracked" lines and bury the buy/expense entries the
+        -- log exists to preserve (code-review v0.2.0..HEAD finding 3).
+        self:SetStatus("0 items tracked", true)
         return
     end
     self.emptyText:Hide()
@@ -1811,11 +1830,12 @@ function MF:Refresh()
         local have = ADDON.Inventory:GetCount(it.itemID) or 0
         if have < it.need then shortCount = shortCount + 1 end
         newProvider:Insert({
-            itemID   = it.itemID,
-            name     = it.name,
-            need     = it.need,
-            maxPrice = it.maxPrice,
-            _index   = i,
+            itemID    = it.itemID,
+            name      = it.name,
+            need      = it.need,
+            maxPrice  = it.maxPrice,
+            lastPrice = it.lastPrice,   -- { copper, seenAt, source }; feeds the Last Seen column
+            _index    = i,
         })
     end
 
@@ -1826,9 +1846,9 @@ function MF:Refresh()
     self.dataProvider = newProvider
 
     if shortCount > 0 then
-        self:SetStatus(("|cff98FF98%d items tracked|r  |cff888888|||r  |cfff87171%d short|r"):format(#items, shortCount))
+        self:SetStatus(("|cff98FF98%d items tracked|r  |cff888888|||r  |cfff87171%d short|r"):format(#items, shortCount), true)
     else
-        self:SetStatus(("|cff98FF98%d items tracked|r  |cff888888|||r  |cff4ade80all stocked|r"):format(#items))
+        self:SetStatus(("|cff98FF98%d items tracked|r  |cff888888|||r  |cff4ade80all stocked|r"):format(#items), true)
     end
 
     self:RefreshRestockBtn(shortCount)
@@ -1878,9 +1898,9 @@ end
 -- feedback that used to only exist for a fraction of a second in the
 -- footer before the next status overwrote it. Empty strings are still
 -- passed to the footer (to clear it) but skipped in the log.
-function MF:SetStatus(text)
+function MF:SetStatus(text, skipLog)
     if self.statusBar then self.statusBar:SetText(text or "") end
-    if text and text ~= "" and ADDON.Log and ADDON.Log.Emit then
+    if not skipLog and text and text ~= "" and ADDON.Log and ADDON.Log.Emit then
         ADDON.Log:Emit("status", nil, { text = text })
     end
 end
@@ -2057,6 +2077,14 @@ end
 
 function MF:Hide()
     if self.frame then self.frame:Hide() end
+    -- Take the settings dropdown down with us: the panel and its
+    -- full-screen click-catcher are UIParent-parented, so closing the
+    -- window (e.g. Escape) would otherwise leave them orphaned on
+    -- screen, and the invisible catcher would eat the next click the
+    -- user makes in the game world (code-review finding 4).
+    if ADDON.SettingsDropdown and ADDON.SettingsDropdown.Hide then
+        ADDON.SettingsDropdown:Hide()
+    end
 end
 
 function MF:Toggle()
