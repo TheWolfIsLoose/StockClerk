@@ -248,9 +248,17 @@ function AH:OnCommoditySearchUpdated(itemID)
     -- as this item's lastPrice. Source "click" vs "loop" is tracked by the
     -- caller through AH.state.priceSource (see SearchItem). Free data --
     -- no extra query, no rate-limit budget consumed.
+    --
+    -- We also nudge MainFrame to Refresh() after stamping so the new
+    -- Last Seen column value paints immediately. Without this the row
+    -- keeps its old em-dash until the next full refresh (add/remove/
+    -- price-edit), which makes it look like the stamp silently failed.
     local cheapest = results[1] and results[1].unitPrice or nil
     if cheapest and ADDON.DB and ADDON.DB.StampLastPrice then
         ADDON.DB:StampLastPrice(itemID, cheapest, self.state.priceSource or "unknown")
+        if ADDON.MainFrame and ADDON.MainFrame.Refresh then
+            ADDON.MainFrame:Refresh()
+        end
     end
 
     -- QA-13: audit trail. Zero listings still logged (0 listings is

@@ -1211,24 +1211,28 @@ function MF:Build()
     closeX:SetScript("OnClick", function() MF:Hide() end)
 
     -- Settings cog button (QA-10). Sits immediately left of the close X.
-    -- Uses the standard octagonal cog glyph. Click toggles the small
-    -- SettingsDropdown panel; the panel handles its own anchoring.
+    -- Uses the game's built-in Options-icon texture rather than a Unicode
+    -- cog glyph. Reason: WoW's default game fonts don't include U+2699
+    -- (GEAR), so the earlier text-based glyph rendered as a tiny "0"
+    -- fallback. UI-OptionsButton is a stock retail texture and always
+    -- resolves; we tint it by SetVertexColor so it can share the mint
+    -- hover treatment used elsewhere in the header.
     local cogBtn = CreateFrame("Button", nil, header)
-    cogBtn:SetSize(28, 22)
-    cogBtn:SetPoint("RIGHT", closeX, "LEFT", 0, 0)
-    local cogText = cogBtn:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
-    cogText:SetPoint("CENTER")
-    -- U+2699 GEAR: works in the standard game font on retail.
-    cogText:SetText("\226\154\153")
-    cogText:SetTextColor(0.85, 0.85, 0.85, 1)
+    cogBtn:SetSize(22, 22)
+    cogBtn:SetPoint("RIGHT", closeX, "LEFT", -2, 0)
+    local cogTex = cogBtn:CreateTexture(nil, "ARTWORK")
+    cogTex:SetTexture("Interface\\Buttons\\UI-OptionsButton")
+    cogTex:SetSize(16, 16)
+    cogTex:SetPoint("CENTER")
+    cogTex:SetVertexColor(0.85, 0.85, 0.85, 1)
     cogBtn:SetScript("OnEnter", function(self)
-        cogText:SetTextColor(Palette.brand[1], Palette.brand[2], Palette.brand[3], 1)
+        cogTex:SetVertexColor(Palette.brand[1], Palette.brand[2], Palette.brand[3], 1)
         GameTooltip:SetOwner(self, "ANCHOR_BOTTOM")
         GameTooltip:SetText("Settings")
         GameTooltip:Show()
     end)
     cogBtn:SetScript("OnLeave", function()
-        cogText:SetTextColor(0.85, 0.85, 0.85, 1)
+        cogTex:SetVertexColor(0.85, 0.85, 0.85, 1)
         GameTooltip:Hide()
     end)
     cogBtn:SetScript("OnClick", function(self)
@@ -1607,24 +1611,35 @@ function MF:Build()
 
     -- Log toggle button (QA-13). Sits between the status text and the
     -- Close button. Small (28px) so it doesn't crowd the primary actions.
-    -- Icon is a stylized "log lines" glyph (three horizontal bars).
+    -- Uses a plain drawn three-bar "hamburger" glyph (three 12x2 mint
+    -- rectangles stacked with 2px gaps) rather than a Unicode text glyph,
+    -- because WoW's stock fonts render U+2261 as a placeholder. Drawn
+    -- rectangles are always available and tint cleanly on hover.
     local logBtn = CreateFrame("Button", nil, footer)
     logBtn:SetSize(28, 22)
     logBtn:SetPoint("RIGHT", -100, 0)   -- close (80w+12) + gap = 100
     StyleButton(logBtn)
-    local logBtnText = logBtn:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-    logBtnText:SetPoint("CENTER")
-    -- U+2261 IDENTICAL TO (three-line "hamburger" glyph)
-    logBtnText:SetText("\226\137\161")
-    logBtnText:SetTextColor(0.85, 0.85, 0.85, 1)
+    local logGlyph = {}
+    for i = 1, 3 do
+        local bar = logBtn:CreateTexture(nil, "OVERLAY")
+        bar:SetColorTexture(0.85, 0.85, 0.85, 1)
+        bar:SetSize(12, 2)
+        -- Center the middle bar, stack the others 4px above/below.
+        bar:SetPoint("CENTER", 0, 4 - (i - 1) * 4)
+        logGlyph[i] = bar
+    end
     logBtn:SetScript("OnEnter", function(self)
-        logBtnText:SetTextColor(Palette.brand[1], Palette.brand[2], Palette.brand[3], 1)
+        for _, b in ipairs(logGlyph) do
+            b:SetColorTexture(Palette.brand[1], Palette.brand[2], Palette.brand[3], 1)
+        end
         GameTooltip:SetOwner(self, "ANCHOR_TOP")
         GameTooltip:SetText("Activity log")
         GameTooltip:Show()
     end)
     logBtn:SetScript("OnLeave", function()
-        logBtnText:SetTextColor(0.85, 0.85, 0.85, 1)
+        for _, b in ipairs(logGlyph) do
+            b:SetColorTexture(0.85, 0.85, 0.85, 1)
+        end
         GameTooltip:Hide()
     end)
     logBtn:SetScript("OnClick", function()

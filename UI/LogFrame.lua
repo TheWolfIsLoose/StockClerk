@@ -85,114 +85,127 @@ local function ItemName(itemID)
     return C_Item.GetItemInfo(itemID) or ("item:" .. itemID)
 end
 
--- Per-kind formatter. Returns two strings:
---   line1: pill text + short summary (e.g. "BUY  20x Healing Potion")
---   line2: dim detail line          (e.g. "spent 12g50s -- 2h ago on Alt")
+-- Per-kind formatter. Returns ONE contextual English line describing what
+-- happened, e.g.:
+--   "|cff4ade80Bought|r 20x Healing Potion for 12g50s"
+--   "|cff6b7280Priced|r Flask of the Magisters -- cheapest 100g/u (12 listings)"
+--   "|cff888888Skipped|r Silvermoon Health Potion (no cap set)"
+--
+-- Rationale: the old two-line pill+summary+detail layout truncated
+-- badly at 340px sidecar width and used cryptic 4-char codes (SRCH,
+-- BUY, DEL) that read like a debug dump instead of an activity feed.
+-- One coloured verb + full sentence reads as English at a glance and
+-- always fits on one row.
 local function FormatEntry(e)
-    local pill, summary, detail
     local p = e.payload or {}
+    local name = ItemName(e.itemID)
+    local line
 
     if e.kind == "buy_success" then
-        pill    = "|cff4ade80BUY|r"
-        summary = ("%dx %s"):format(p.qty or 0, ItemName(e.itemID))
-        detail  = ("spent %s"):format(CoinText(p.spentCopper))
+        line = ("|cff4ade80Bought|r %dx %s for %s"):format(
+            p.qty or 0, name, CoinText(p.spentCopper))
+
     elseif e.kind == "buy_fail" then
-        pill    = "|cffe5624aFAIL|r"
-        summary = ItemName(e.itemID)
-        detail  = tostring(p.reason or "?")
+        line = ("|cffe5624aBuy failed|r on %s (%s)"):format(
+            name, tostring(p.reason or "unknown"))
+
     elseif e.kind == "buy_attempt" then
-        pill    = "|cffffd200TRY|r"
-        summary = ("%dx %s"):format(p.qty or 0, ItemName(e.itemID))
-        detail  = ("plan %s @ worst %s/u"):format(
+        line = ("|cffffd200Attempting|r %dx %s (plan %s, worst %s/u)"):format(
+            p.qty or 0, name,
             CoinText(p.plannedSpendCopper), CoinText(p.worstUnitCopper))
+
     elseif e.kind == "buy_skip" then
-        pill    = "|cff888888SKIP|r"
-        summary = ItemName(e.itemID)
-        detail  = tostring(p.reason or "?")
+        line = ("|cff888888Skipped|r %s (%s)"):format(
+            name, tostring(p.reason or "skipped"))
+
     elseif e.kind == "auto_refuse" then
-        pill    = "|cffffaa00STOP|r"
-        summary = ItemName(e.itemID) .. " -- auto refused"
-        detail  = tostring(p.reason or "?")
+        line = ("|cffffaa00Auto refused|r %s (%s)"):format(
+            name, tostring(p.reason or "refused"))
+
     elseif e.kind == "auto_toggle" then
-        pill    = p.on and "|cff98FF98AUTO|r" or "|cff888888AUTO|r"
-        summary = p.on and "auto-purchase enabled" or "auto-purchase disabled"
-        detail  = ""
+        line = p.on
+            and "|cff98FF98Auto-purchase|r enabled"
+            or  "|cff888888Auto-purchase|r disabled"
+
     elseif e.kind == "loop_start" then
-        pill    = "|cff98FF98LOOP|r"
-        summary = ("started (%s)"):format(p.mode or "?")
-        detail  = ("%d items, budget %s"):format(
+        line = ("|cff98FF98Loop started|r · %s mode · %d items · budget %s"):format(
+            p.mode or "manual",
             p.queueSize or 0,
             p.budgetCopper and CoinText(p.budgetCopper) or "unlimited")
+
     elseif e.kind == "loop_stop" then
-        pill    = "|cff888888LOOP|r"
-        summary = ("stopped: %s"):format(p.reason or "?")
-        detail  = ("spent %s, %d bought, %d still short"):format(
-            CoinText(p.spentCopper), p.touched or 0, p.stillShort or 0)
+        line = ("|cff888888Loop stopped|r (%s) · bought %d · spent %s"):format(
+            tostring(p.reason or "unspecified"),
+            p.touched or 0,
+            CoinText(p.spentCopper))
+
     elseif e.kind == "ah_search" then
-        pill    = "|cff6b7280SRCH|r"
-        summary = ItemName(e.itemID)
-        detail  = p.unitPriceCopper
-            and ("cheapest %s/u (%d listings)"):format(
-                CoinText(p.unitPriceCopper), p.listings or 0)
-            or "no listings"
+        -- "Priced" reads more naturally than "SRCH" -- we're not just
+        -- searching, we're recording the market price we saw.
+        if p.unitPriceCopper then
+            line = ("|cff6b7280Priced|r %s at %s/u (%d listings)"):format(
+                name, CoinText(p.unitPriceCopper), p.listings or 0)
+        else
+            line = ("|cff6b7280Priced|r %s · no listings found"):format(name)
+        end
+
     elseif e.kind == "add" then
-        pill    = "|cff98FF98ADD|r"
-        summary = ItemName(e.itemID)
-        detail  = ("need %d, cap %s"):format(
-            p.need or 0,
-            p.cap and CoinText(p.cap) or "none")
+        line = ("|cff98FF98Added|r %s (need %d, cap %s)"):format(
+            name, p.need or 0,
+            p.capCopper and CoinText(p.capCopper) or "none")
+
     elseif e.kind == "remove" then
-        pill    = "|cffe5624aDEL|r"
-        summary = ItemName(e.itemID)
-        detail  = ""
+        line = ("|cffe5624aRemoved|r %s"):format(name)
+
     elseif e.kind == "target_change" then
-        pill    = "|cffffd200EDIT|r"
-        summary = ItemName(e.itemID)
-        detail  = ("need %s -> %s"):format(tostring(p.from), tostring(p.to))
+        line = ("|cffffd200Target|r %s: %s → %s"):format(
+            name, tostring(p.from), tostring(p.to))
+
     elseif e.kind == "cap_change" then
-        pill    = "|cffffd200EDIT|r"
-        summary = ItemName(e.itemID)
-        detail  = ("cap %s -> %s"):format(
+        line = ("|cffffd200Cap|r %s: %s → %s"):format(
+            name,
             p.fromCopper and CoinText(p.fromCopper) or "none",
             p.toCopper   and CoinText(p.toCopper)   or "none")
+
     else
-        pill    = "|cff888888?|r"
-        summary = tostring(e.kind)
-        detail  = ""
+        line = ("|cff888888%s|r"):format(tostring(e.kind))
     end
 
-    -- Character/realm suffix on detail line, only when it's not the
-    -- current character (keeps single-char use quiet).
+    -- Alt-character suffix, only when not the current character.
     if e.char and e.char ~= UnitName("player") then
-        detail = detail .. (" |cff555555· on %s|r"):format(e.char)
+        line = line .. (" |cff555555· on %s|r"):format(e.char)
     end
 
-    return pill, summary, detail
+    return line
 end
 
 -- ---------------------------------------------------------------------------
 -- Build the frame (lazy; first Show creates it)
 -- ---------------------------------------------------------------------------
+-- Bg / band / separator painters.
+-- IMPORTANT: uses SetColorTexture directly rather than SetTexture(path)+
+-- SetVertexColor. The latter path -- with "Interface\\Buildings\\White8x8"
+-- specifically -- renders as fully transparent on retail Midnight because
+-- that atlas returns a texture whose own alpha gates the vertex-color
+-- alpha to zero. SetColorTexture bypasses the texture pipeline entirely
+-- and paints a solid rect, which is what we actually want here.
 local function ApplyFill(frame, rgba)
     local t = frame:CreateTexture(nil, "BACKGROUND", nil, -8)
-    t:SetTexture(WHITE_TEX)
     t:SetAllPoints(frame)
-    t:SetVertexColor(unpack(rgba))
+    t:SetColorTexture(rgba[1], rgba[2], rgba[3], rgba[4] or 1)
     frame._bg = t
     return t
 end
 
 local function ApplyBand(frame, rgba)
     local t = frame:CreateTexture(nil, "BACKGROUND", nil, -7)
-    t:SetTexture(WHITE_TEX)
     t:SetAllPoints(frame)
-    t:SetVertexColor(unpack(rgba))
+    t:SetColorTexture(rgba[1], rgba[2], rgba[3], rgba[4] or 1)
     return t
 end
 
 local function AddBottomSep(frame)
     local sep = frame:CreateTexture(nil, "OVERLAY", nil, 6)
-    sep:SetTexture(WHITE_TEX)
     sep:SetColorTexture(0, 0, 0, 1)
     sep:SetHeight(BORDER_SIZE)
     sep:SetPoint("BOTTOMLEFT",  0, 0)
@@ -293,9 +306,8 @@ local function BuildFrame()
         c:SetSize(72, 18)
         c:SetPoint("LEFT", filters, "LEFT", xOffset, 0)
         local bg = c:CreateTexture(nil, "BACKGROUND")
-        bg:SetTexture(WHITE_TEX)
         bg:SetAllPoints()
-        bg:SetVertexColor(P().bgMedium[1], P().bgMedium[2], P().bgMedium[3], 0.6)
+        bg:SetColorTexture(P().bgMedium[1], P().bgMedium[2], P().bgMedium[3], 0.6)
         c._bg = bg
         local txt = c:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
         txt:SetPoint("CENTER")
@@ -360,37 +372,31 @@ end
 -- ---------------------------------------------------------------------------
 -- Rendering
 -- ---------------------------------------------------------------------------
+-- One entry row = one wrappable text line.
+-- Layout: dim relative-time on the left, coloured message spanning the
+-- rest of the row. Wraps to two lines if the message is long; the row
+-- auto-sizes vertically so nothing gets cut off.
 local function AcquireEntryRow(f, idx)
     local pool = f._entryPool
     local r = pool[idx]
     if r then return r end
 
     r = CreateFrame("Frame", nil, f._content)
-    r:SetHeight(ENTRY_HEIGHT)
     r:SetPoint("LEFT",  0, 0)
     r:SetPoint("RIGHT", 0, 0)
 
     r.timeText = r:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
-    r.timeText:SetPoint("TOPLEFT", 4, -2)
-    r.timeText:SetWidth(60)
+    r.timeText:SetPoint("TOPLEFT", 8, -4)
+    r.timeText:SetWidth(58)
     r.timeText:SetJustifyH("LEFT")
 
-    r.pill = r:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-    r.pill:SetPoint("TOPLEFT", r.timeText, "TOPRIGHT", 4, 0)
-    r.pill:SetWidth(50)
-    r.pill:SetJustifyH("LEFT")
-
-    r.summary = r:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-    r.summary:SetPoint("TOPLEFT", r.pill, "TOPRIGHT", 4, 0)
-    r.summary:SetPoint("RIGHT", -4, 0)
-    r.summary:SetJustifyH("LEFT")
-    r.summary:SetWordWrap(false)
-
-    r.detail = r:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
-    r.detail:SetPoint("TOPLEFT", r.pill, "BOTTOMLEFT", 0, -1)
-    r.detail:SetPoint("RIGHT", -4, 0)
-    r.detail:SetJustifyH("LEFT")
-    r.detail:SetWordWrap(false)
+    r.line = r:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    r.line:SetPoint("TOPLEFT",  r.timeText, "TOPRIGHT", 6, 0)
+    r.line:SetPoint("TOPRIGHT", r,          "TOPRIGHT", -8, -4)
+    r.line:SetJustifyH("LEFT")
+    r.line:SetJustifyV("TOP")
+    r.line:SetWordWrap(true)
+    r.line:SetNonSpaceWrap(true)
 
     pool[idx] = r
     return r
@@ -403,10 +409,10 @@ function LogFrame:Refresh()
     -- Update chip visuals to reflect current mode.
     for _, c in ipairs(f._chips) do
         if c._mode == self.filter.mode then
-            c._bg:SetVertexColor(P().brand[1] * 0.5, P().brand[2] * 0.5, P().brand[3] * 0.5, 0.9)
+            c._bg:SetColorTexture(P().brand[1] * 0.5, P().brand[2] * 0.5, P().brand[3] * 0.5, 0.9)
             c._text:SetTextColor(P().brand[1], P().brand[2], P().brand[3], 1)
         else
-            c._bg:SetVertexColor(P().bgMedium[1], P().bgMedium[2], P().bgMedium[3], 0.6)
+            c._bg:SetColorTexture(P().bgMedium[1], P().bgMedium[2], P().bgMedium[3], 0.6)
             c._text:SetTextColor(0.85, 0.85, 0.85, 1)
         end
     end
@@ -439,22 +445,30 @@ function LogFrame:Refresh()
     f._aggText:SetText(aggLine)
     f._footerText:SetText(("%d entries · /clerk log clear to wipe"):format(#entries))
 
-    -- Draw entries (newest first). Hide any pool rows we don't need.
+    -- Draw entries newest first. Each row auto-sizes to its wrapped text
+    -- height and we stack them by accumulating y-offset as we go, so long
+    -- multiline messages don't clip the row below.
+    local ROW_MIN   = 22
+    local ROW_PAD_Y = 8   -- 4 top + 4 bottom breathing room
+    local yCursor   = 0
     for i, e in ipairs(entries) do
         local r = AcquireEntryRow(f, i)
-        r:SetPoint("TOPLEFT",  0, -((i - 1) * ENTRY_HEIGHT))
-        r:SetPoint("TOPRIGHT", 0, -((i - 1) * ENTRY_HEIGHT))
-        local pill, summary, detail = FormatEntry(e)
+        r:ClearAllPoints()
+        r:SetPoint("TOPLEFT",  0, -yCursor)
+        r:SetPoint("TOPRIGHT", 0, -yCursor)
         r.timeText:SetText(FormatRelTime(e.ts))
-        r.pill:SetText(pill)
-        r.summary:SetText(summary)
-        r.detail:SetText(detail)
+        r.line:SetText(FormatEntry(e))
+        -- Measure the wrapped line and grow the row to match. GetStringHeight
+        -- reflects the current wrapped state, so we do this AFTER SetText.
+        local h = math.max(ROW_MIN, math.ceil(r.line:GetStringHeight()) + ROW_PAD_Y)
+        r:SetHeight(h)
         r:Show()
+        yCursor = yCursor + h
     end
     for i = #entries + 1, #f._entryPool do
         f._entryPool[i]:Hide()
     end
-    f._content:SetHeight(math.max(1, #entries * ENTRY_HEIGHT))
+    f._content:SetHeight(math.max(1, yCursor))
 end
 
 -- ---------------------------------------------------------------------------

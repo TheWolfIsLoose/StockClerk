@@ -26,7 +26,10 @@ local ADDON     = _G[addonName]
 local Settings = {}
 ADDON.SettingsDropdown = Settings
 
-local WHITE_TEX = "Interface\\Buildings\\White8x8"
+-- (No WHITE_TEX path -- we use SetColorTexture for solid fills. The
+-- WoW "White8x8" atlas returns a texture whose own alpha gates the
+-- vertex-color alpha to zero on retail Midnight, which is why the first
+-- draft of this dropdown rendered as fully transparent.)
 
 local function P()
     return (ADDON.MainFrame and ADDON.MainFrame.Palette) or {
@@ -69,21 +72,41 @@ StaticPopupDialogs["STOCKCLERK_AUTO_ENABLE"] = {
 -- Build the dropdown (lazy)
 -- ---------------------------------------------------------------------------
 local function BuildDropdown(anchor)
+    -- Full-screen click-catcher behind the panel. Parented to UIParent
+    -- at the same strata so it swallows a click anywhere off the panel
+    -- and closes it. Without this, the dropdown lingers behind other
+    -- UI whenever the user clicks away, forcing them to click the cog
+    -- again to dismiss.
+    local catcher = CreateFrame("Button", nil, UIParent)
+    catcher:SetFrameStrata("DIALOG")
+    catcher:SetAllPoints(UIParent)
+    catcher:EnableMouse(true)
+    catcher:RegisterForClicks("LeftButtonUp", "RightButtonUp")
+    catcher:Hide()
+
     local f = CreateFrame("Frame", "StockClerkSettingsDropdown", UIParent, "BackdropTemplate")
     f:SetSize(260, 180)
     f:SetFrameStrata("DIALOG")
+    f:SetFrameLevel(10)                       -- above the catcher
+    f:SetToplevel(true)
+    f:EnableMouse(true)                       -- swallow clicks on the panel
     f:SetPoint("TOPRIGHT", anchor, "BOTTOMRIGHT", 0, -4)
     f:Hide()
 
+    -- Catcher only fires when the click missed the panel (the panel is
+    -- above the catcher and swallows its own clicks via EnableMouse).
+    catcher:SetScript("OnClick", function() f:Hide() end)
+    f._catcher = catcher
+
     -- Solid fill + 1px black border, matching MainFrame's chrome vocab.
+    -- Uses SetColorTexture (not SetTexture path + SetVertexColor); see
+    -- the top-of-file note on why the atlas path renders transparent.
     local bg = f:CreateTexture(nil, "BACKGROUND", nil, -8)
-    bg:SetTexture(WHITE_TEX)
     bg:SetAllPoints()
-    bg:SetVertexColor(unpack(P().bg))
+    bg:SetColorTexture(P().bg[1], P().bg[2], P().bg[3], P().bg[4] or 1)
 
     local function edge(anchorA, anchorB, isHoriz)
         local t = f:CreateTexture(nil, "OVERLAY", nil, 6)
-        t:SetTexture(WHITE_TEX)
         t:SetColorTexture(0, 0, 0, 1)
         if isHoriz then
             t:SetHeight(1)
@@ -128,8 +151,7 @@ local function BuildDropdown(anchor)
 
     -- EditBox for the budget. Backing frame for the border.
     local budgetBg = f:CreateTexture(nil, "BACKGROUND")
-    budgetBg:SetTexture(WHITE_TEX)
-    budgetBg:SetVertexColor(P().bgDark[1], P().bgDark[2], P().bgDark[3], 1)
+    budgetBg:SetColorTexture(P().bgDark[1], P().bgDark[2], P().bgDark[3], 1)
     budgetBg:SetPoint("TOPLEFT", 12, -100)
     budgetBg:SetSize(120, 22)
 
@@ -208,9 +230,12 @@ local function BuildDropdown(anchor)
         ADDON.DB:Settings().autoOpenAtAH = self:GetChecked() and true or false
     end)
 
-    -- Click-outside-to-close. OnHide clears focus so the budget edit
-    -- doesn't hold the cursor after the panel closes.
+    -- Show/Hide handlers pair up the click-catcher with the panel so
+    -- outside-click dismiss works, and clear focus on close so the
+    -- budget edit doesn't hold the cursor after the panel goes away.
+    f:SetScript("OnShow", function() catcher:Show() end)
     f:SetScript("OnHide", function()
+        catcher:Hide()
         if budgetEdit:HasFocus() then budgetEdit:ClearFocus() end
     end)
 
