@@ -67,3 +67,156 @@ with "Set price threshold..." → same popup.
 ### Priority
 Low-medium. Not blocking the initial Wave 2 (mail/bank/vendor
 auto-collect ships without it), but must ship before any AH auto-buy.
+
+---
+
+## Wave 2 — Paste-a-recipe / bulk import (added 2026-09-16)
+
+**User goal:** many consumables (esp. food) are crafted from several
+component items — some AH-sourced, some vendor-only. User wants to
+paste a whole recipe (or shopping list) into Stock Clerk in one shot
+and have it tracked as a personal keep-stocked-for-crafting inventory,
+rather than adding items one at a time.
+
+### Sources to accept (in priority order)
+1. **Whitespace-separated item links**  — the format WoW itself uses when
+   you shift-click into chat. Trivial to parse: match every
+   `|Hitem:<itemID>:...|h[Name]|h|r` occurrence, extract itemID.
+2. **Bare itemIDs** — space/comma/newline separated, e.g.
+   `241308 271883 241305`.
+3. **`<qty>x<link>` or `<qty>x<itemID>`** — lets the user encode the
+   target quantity per line, matching how recipes list reagents
+   (e.g. `5xFlask of the Shattered Sun`, or crafting UI "5 Sacred Salt
+   + 2 Dreaming Essence"). Default quantity when omitted: use the
+   user's global default target, or 20 if none.
+4. **Recipe / "crafts N of item X" header line** — optional. First
+   line matching `^# ?(.+)$` becomes a group name (see Groups below).
+5. **Wowhead-style dumps** (stretch) — they publish recipes as HTML
+   with item links; if we can grab plaintext from clipboard we can
+   parse it. Not a v1 requirement.
+
+### UI surface
+- New button in the header row: **"Paste List"** (or a `/clerk paste`
+  slash subcommand).
+- Opens a modal with a multi-line EditBox and a preview pane that
+  parses as-you-type: "Will add 7 items: [icon] Silvermoon Flask x5,
+  [icon] Dreaming Essence x10, ...".
+- Buttons: "Add to list", "Replace list", "Cancel".
+
+### Data model considerations
+This pairs naturally with a **Groups** concept:
+
+```lua
+char.items[itemID] = {
+    need         = 20,
+    -- ... existing fields ...
+    groups       = { "Feast of the Fishmonger", "Weekly Raid Prep" },
+}
+```
+
+A group is just a tag; the UI can filter/collapse by group. Pasted
+recipes auto-tag with the header line if present. Enables future
+"cook this recipe now?" flow: check that every item in the group has
+`have >= need`, then optionally trigger the crafting action.
+
+### Open questions
+- Do we dedupe on paste (item already tracked → bump target vs.
+  overwrite vs. leave alone)? Suggest: default to `max(existing, pasted)`
+  with a checkbox to override.
+- Does pasting persist to the character or the warband/account?
+  Depends on the shared-warband feature below.
+
+### Priority
+Medium. High user value for the crafting/food workflow, and unblocks
+the cross-character quartermaster feature described next.
+
+---
+
+## Wave 3+ — Storage-vs-cap and warband quartermaster (added 2026-09-16)
+
+**User goal (part 1):** currently `Inventory:GetCount` rolls up bags +
+bank + reagent bank + warband bank as one number. The user wants to
+distinguish between:
+
+- **Immediately-usable stock** — items in bags on the current
+  character. This is what counts toward the target for "am I ready
+  to raid/cook right now?".
+- **Reserve stock** — items sitting in bank / warband bank / on other
+  characters. Visible in the UI so the user knows the item exists,
+  but does *not* count toward the target and does not suppress
+  restocking.
+
+**User goal (part 2):** dedicate one character as the "shopper" —
+that character does all AH buying and mail collection, then deposits
+into the warband bank. Other characters withdraw from the warband
+bank as they need supplies. Stock Clerk should be aware of this and
+not double-count.
+
+### Data model
+
+```lua
+-- Per-item settings (character-scoped)
+char.items[itemID] = {
+    need           = 20,
+    countMode      = "bagsOnly",   -- "bagsOnly" | "bagsAndBank" | "all"
+    reserveSources = { "warband" }, -- what to show as reserve
+    -- ... existing fields ...
+}
+
+-- Global settings (warband-scoped, shared across chars)
+warband.settings = {
+    shopperCharacter = "Jakerator-Illidan",  -- who does the buying
+    depositTo        = "warband",             -- where they drop items
+}
+```
+
+### UI surface
+- Row shows two numbers when reserve > 0:  
+  `12 / 20  (+34 in warband)`
+- The pill (short/OK indicator) is driven by the primary count only,
+  so a bags-only character correctly shows "restock" even if warband
+  has plenty.
+- Right-click row → "Count mode" submenu: Bags only / Bags + bank /
+  Everything.
+- Character selector in the header shows role: `🛒 Shopper` /
+  `📦 Consumer`.
+
+### Behavior
+- **Shopper character**: `countMode = "all"` by default. Auto-buy /
+  mail-collect targets are the SUM of all consumer needs, not just
+  the shopper's own need. When shopper deposits into warband, other
+  characters see their reserve number tick up.
+- **Consumer character**: `countMode = "bagsOnly"` by default. Their
+  restock target is what they personally consume between raids. When
+  they open the bank and pull from warband, their bag count catches
+  up naturally; nothing extra to do.
+- **Aggregation across characters**: warband bank items are the same
+  across all characters, so `C_Item.GetItemCount(id, ..., true)`
+  already returns the shared number. Bag counts are per-character; we
+  already store per-character DBs so this Just Works if we scan on
+  logout / login (`PLAYER_LOGOUT` → write bag counts to warband-scoped
+  saved var so shopper can see "consumers need X").
+
+### API notes
+- `C_Item.GetItemCount(itemID, includeBank, includeUses,
+   includeReagentBank, includeAccountBank)` — 5th arg (added 11.0) is
+  the warband/account bank. Pass `true` for reserve, `false` for the
+  bags-only mode.
+- Bags-only is `C_Item.GetItemCount(id, false, false, false, false)`.
+- Bags + bank + warband is `C_Item.GetItemCount(id, true, false, true, true)`
+  (what we do today).
+
+### Open questions
+- Do we want to model **guild bank** as another reserve source? Adds
+  a lot of scanning code; skip for v1.
+- How does the shopper know what to buy for consumers who haven't
+  logged in recently? Cache last-known bag counts per-character with a
+  timestamp; show stale data with an age indicator ("2d ago").
+- Do we auto-detect the shopper role, or is it a manual toggle? Manual
+  is simpler and less surprising; auto-detect can wait.
+
+### Priority
+Medium-low for the count-mode split (nice quality-of-life, unlocks
+accurate restocking on the consumer side). Higher for the shopper
+role once Wave 2 auto-buy lands — without shopper awareness, every
+character would try to buy the same items.
