@@ -110,6 +110,49 @@ subsystem, all else equal.
 
 ### 3.1 — Fill out already-shipped features
 
+**PT-4: Mail-delivery gate on auto-buy** (hardens v0.4 pendingBuys ledger)
+
+Current v0.4 behavior is that pendingBuys is session-only and decays
+passively as bags catch up. That already prevents re-buying the same
+item, but the loop still *runs* on subsequent presses — which can
+draw the daily budget against stale bag numbers on OTHER items and
+doesn't force a natural checkpoint before the next auto pass.
+
+Sharper contract (user-approved 2026-09-17): once auto has bought
+anything, the next auto pass is **blocked** until the ledger is
+empty, and the ledger only empties by **actual on-hand confirmation**
+of items in bags (not just mailbox visit).
+
+- **Persist ledger to `char.pendingBuys`** with `{ qty, baseHave,
+  boughtAt }` per item. Restored on load.
+- **`MAIL_INBOX_UPDATE` reconciliation** — mailbox is authoritative.
+  On update, walk `GetInboxItem` for every attachment, sum counts by
+  itemID. Any ledger entry not present in mail = looted or expired
+  (delete). Any ledger entry whose mailbox count is less than qty =
+  partially looted (clamp qty down).
+- **Passive bag-count decay in `_EffectiveHave` unchanged** — items
+  landing in bags still absorb ledger entries the same way.
+- **Gate `Loop:Start`** when `s.autoPurchase and next(pendingBuys)`:
+  refuse with a status message naming what's still pending. Manual
+  mode is NOT gated (per standing rule: manual is full user
+  discretion).
+- **30-day GC on load** — auction mail expires server-side at 30
+  days; any ledger entry with `boughtAt` older than that is garbage.
+  Prevents a ledger entry that was never reconciled from staying
+  immortal.
+- **`/clerk pending`** prints current ledger; **`/clerk pending
+  clear`** wipes it (test helper, parallel to `/clerk budget reset`).
+- **Loop-end status enhancement**: append "Check mail before next
+  auto pass" when the pass ended with the ledger non-empty.
+
+Storage scope: **per-character** (auction mail is delivered to the
+buying character, not the warband). Lives on `char.pendingBuys`.
+
+Cross-session behavior: on a fresh login with a non-empty persisted
+ledger, gate stays CLOSED until the user visits a mailbox and
+reconciliation runs. Handles the "buy, log out, log back in" case
+the passive-decay-only ledger couldn't.
+
 **PT-1: Price threshold polish** (extends v0.2.0 maxPrice foundation)
 
 Extends the shipped per-item cap without touching the loop path.
@@ -213,23 +256,37 @@ License check before shipping any borrowed asset.
 
 ---
 
-## Section 4: Suggested v0.5 branch — PT-1 (price threshold polish)
+## Section 4: v0.5 branch scope (locked 2026-09-17)
 
-Concrete branch scope, in order of user-visible impact:
+Bundles PT-4 (mail-delivery gate) and PT-1 (price threshold polish) —
+both are hardening of already-shipped code, they don't touch each
+other, and testers get both fixes in one round.
 
-1. Global default cap in Settings (biggest usability jump — makes auto
-   safe to turn on without per-row config).
+**Order inside the branch:** PT-4 first, then PT-1. Gate is the
+safety feature and is independent of the price-cap surface; polish
+lands on top of the hardened ledger.
+
+### PT-4 tasks (v0.5, first half)
+1. Persist `pendingBuys` to `char.pendingBuys` with `{ qty, baseHave, boughtAt }`; restore on load.
+2. 30-day GC on load (`boughtAt` older than 30 * 86400 = drop entry).
+3. `MAIL_INBOX_UPDATE` reconciliation hook (delete or clamp against actual mail contents).
+4. Gate `Loop:Start` on auto mode when ledger non-empty; message names what's pending.
+5. Loop-end status appends "Check mail before next auto pass" when ledger non-empty at exit.
+6. `/clerk pending` and `/clerk pending clear` slash commands.
+7. Locale strings for the new gate message + status suffix.
+
+### PT-1 tasks (v0.5, second half)
+1. Global default cap in Settings (biggest usability jump — makes auto safe to turn on without per-row config).
 2. Gold / silver / copper editor (fixes precision for cheap items).
 3. "Buy at any price" explicit toggle (fixes "empty = ?" confusion).
-4. `priceSource` field with nil-safe migration (invisible until vendor
-   auto-buy needs it).
+4. `priceSource` field with nil-safe migration (invisible until vendor auto-buy needs it).
 5. lastPrice vs. cap indicator (cheap, uses existing data).
 
-Branch name: `wip/v0.5-price-threshold-polish`.
+Branch name: `wip/v0.5-mail-gate-and-price-polish`.
 
 Explicitly deferred out of this branch: PT-2 (shift-click) and PT-3
-(waiting-on-price filter). Ship those in v0.5.1 / v0.5.2 if v0.5
-tester feedback is quiet.
+(waiting-on-price filter). Ship those in v0.5.1 / v0.5.2 if tester
+feedback is quiet.
 
 ---
 
