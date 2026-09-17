@@ -1,5 +1,64 @@
 # Stock Clerk changelog
 
+## v0.5.0
+
+Safer auto mode: mail-delivery gate, price polish, default cap.
+
+### Mail-delivery gate on auto-purchase
+
+- **Auto no longer double-buys while your last order is still in
+  the mail.** Purchases via the auto loop go onto a per-character
+  "pending on-hand" ledger and count toward your effective bag
+  total until you actually pick up the mail. Repeat-pressing
+  Restock at AH before the mailbox arrives no longer piles orders.
+- **`/clerk pending`** lists what auto has bought this session
+  that hasn't landed in your bags yet. Old entries older than 30
+  days are garbage-collected on load so a forgotten mail from a
+  character you don't play doesn't skew the count forever.
+- **Manual buys are unchanged.** The gate is auto-mode only —
+  manual purchase is full user discretion.
+
+### Price cap polish
+
+- **Row cap turns pink when the last seen price is over your cap.**
+  Within the 24h staleness window, if the AH last-seen exceeds your
+  cap, the row's cap value paints pink so you can eyeball at a
+  glance which items your caps are currently blocking. Mint if the
+  last-seen is at or below your cap.
+- **Cap entry is whole gold.** Row cap editor, the toolbar Add
+  field, and the new Settings default cap all accept gold
+  integers only. Sub-gold caps aren't a real workflow for
+  consumables and the extra parsing surface wasn't earning its
+  keep.
+
+### Global default cap for auto mode
+
+- **New Settings field: "Default cap per unit, gold (auto only)."**
+  Set it once and auto mode uses it as a fallback for any item
+  that doesn't have its own cap. Leave it blank to keep the v0.4
+  behavior of skipping uncapped items outright.
+- **Row display shows `(Ng)` in dim gray** on uncapped rows when
+  auto is on and a default is set, so you can tell at a glance
+  which rows will be bought at what price.
+- **The auto-enable confirmation now tells the truth.** When a
+  default cap is set, the popup no longer warns that "N uncapped
+  items will be skipped" — it shows the default cap alongside the
+  daily budget instead.
+- **`/clerk auto`** readout adds the current default cap alongside
+  the auto state and budget.
+
+### Under the hood
+
+- New per-item `priceSource` metadata ("user" / "vendor" /
+  "template") on caps. Not surfaced in the UI yet; groundwork for a
+  future "where did this cap come from" affordance.
+- Restock plan now carries `capSource` ("item" / "default") so the
+  activity log and future BuyDialog copy can distinguish per-item
+  caps from default-cap purchases.
+- Dev workflow: solo-dev, single-branch. All work lands on `main`
+  and every push is tag-eligible. `Dev/update.bat` (moved from
+  root) always tracks main.
+
 ## v0.4.0
 
 Priority ordering + daily budget.
