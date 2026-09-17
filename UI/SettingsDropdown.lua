@@ -4,8 +4,8 @@
 
     Toggles + fields:
       - Auto-purchase on/off (QA-10)
-      - Budget (gold, required when auto is on) (QA-10a)
-      - Session spent readout (informational)
+      - Daily auto budget (gold, required when auto is on; realm-reset aligned)
+      - Daily auto-spend readout (informational; manual buys excluded by design)
       - Auto-open at AH (existing setting, moved from elsewhere)
 
     Design notes:
@@ -46,7 +46,7 @@ end
 -- Enable-confirmation StaticPopup (QA-10)
 -- ---------------------------------------------------------------------------
 StaticPopupDialogs["STOCKCLERK_AUTO_ENABLE"] = {
-    text         = "Enable auto-purchase?\n\n%d tracked items have no price cap set. Those items will be SKIPPED by auto-purchase.\n\nBudget: %s per loop.",
+    text         = "Enable auto-purchase?\n\n%d tracked items have no price cap set. Those items will be SKIPPED by auto-purchase.\n\nAuto budget: %s per day (resets at daily realm reset). Manual buys are never limited.",
     button1      = "Enable",
     button2      = "Cancel",
     OnAccept     = function()
@@ -147,7 +147,7 @@ local function BuildDropdown(anchor)
     -- Budget field (QA-10a)
     local budgetLabel = f:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
     budgetLabel:SetPoint("TOPLEFT", 12, -80)
-    budgetLabel:SetText("Budget per loop (gold):")
+    budgetLabel:SetText("Auto budget per day (gold):")
 
     -- EditBox for the budget. Backing frame for the border.
     local budgetBg = f:CreateTexture(nil, "BACKGROUND")
@@ -165,9 +165,11 @@ local function BuildDropdown(anchor)
     budgetEdit:SetSize(112, 18)
     f._budgetEdit = budgetEdit
 
-    -- Session-so-far spent readout (from Log:Aggregate since session start).
+    -- Daily auto-spend readout. Full-width line at the panel bottom so
+    -- the budget fraction + reset countdown never clips (v0.4: moved
+    -- from the 112px slot beside the budget box).
     local spentLabel = f:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
-    spentLabel:SetPoint("TOPLEFT", 140, -103)
+    spentLabel:SetPoint("TOPLEFT", 12, -158)
     spentLabel:SetPoint("RIGHT", -8, 0)
     spentLabel:SetJustifyH("LEFT")
     spentLabel:SetWordWrap(false)
@@ -272,12 +274,23 @@ function Settings:Refresh()
         f._budgetEdit:SetText("")
     end
 
-    -- Session spent readout uses LogFrame.filter.since if set, else "today".
-    local since = (ADDON.LogFrame and ADDON.LogFrame.filter and ADDON.LogFrame.filter.since)
-        or (time() - 86400)
-    local agg = ADDON.Log and ADDON.Log:Aggregate(since) or { spentCopper = 0 }
-    local spentG = math.floor((agg.spentCopper or 0) / 10000)
-    f._spentLabel:SetText(("spent %dg"):format(spentG))
+    -- Daily auto-spend readout: spent toward the daily auto budget
+    -- since the last realm daily reset (manual buys don't count here
+    -- by design -- see DB.lua budget semantics). Seconds-until-reset
+    -- labeled in hours so the day boundary is legible at a glance.
+    local autoSpendG = math.floor((ADDON.DB:GetDailyAutoSpend() or 0) / 10000)
+    local budgetG    = s.autoBudgetGold
+    local resetAt    = ADDON.DB.GetDailyResetAt and ADDON.DB:GetDailyResetAt() or nil
+    local resetH     = ""
+    if resetAt then
+        local secs = math.max(0, resetAt - GetServerTime())
+        resetH = (" (resets in %.1fh)"):format(secs / 3600)
+    end
+    if budgetG then
+        f._spentLabel:SetText(("auto spent today: %dg / %dg%s"):format(autoSpendG, budgetG, resetH))
+    else
+        f._spentLabel:SetText(("auto spent today: %dg%s (no budget set)"):format(autoSpendG, resetH))
+    end
 end
 
 -- ---------------------------------------------------------------------------

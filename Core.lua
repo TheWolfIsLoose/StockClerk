@@ -246,6 +246,7 @@ function StockClerk:OnSlashCommand(msg)
         self:Print(L.HELP_SEED)
         self:Print(L.HELP_RESET)
         self:Print(L.HELP_DUMP)
+        self:Print(L.HELP_BUDGET)
         return
     end
 
@@ -281,6 +282,47 @@ function StockClerk:OnSlashCommand(msg)
     if cmd == "debug" then
         ADDON.debug = not ADDON.debug
         self:Print("Debug: " .. (ADDON.debug and "ON" or "OFF"))
+        return
+    end
+
+    -- v0.4: budget inspection + a test-only reset. The reset zeroes
+    -- the current auto-spend bucket and slams resetAt to right now so
+    -- the next successful auto buy starts a fresh day. Intended for
+    -- verifying the reset-aware ledger without waiting for realm
+    -- reset; harmless in normal use.
+    if cmd == "budget" then
+        local sub = (rest or ""):match("^(%S+)") or ""
+        sub = sub:lower()
+        local s = ADDON.DB:Settings()
+        if sub == "reset" then
+            if ADDON.DB.char and ADDON.DB.char.autoSpend then
+                ADDON.DB.char.autoSpend.copper  = 0
+                ADDON.DB.char.autoSpend.resetAt = nil
+            end
+            self:Print("|cff98FF98Budget reset.|r Daily auto-spend zeroed and reset clock rearmed.")
+            if ADDON.SettingsDropdown and ADDON.SettingsDropdown.Refresh then
+                ADDON.SettingsDropdown:Refresh()
+            end
+            return
+        end
+        -- No arg: print current status.
+        local spentG  = math.floor((ADDON.DB:GetDailyAutoSpend() or 0) / 10000)
+        local budgetG = s.autoBudgetGold
+        local leftG   = ADDON.DB:GetDailyAutoBudgetLeft()
+        leftG = leftG and math.floor(leftG / 10000) or nil
+        local resetAt = ADDON.DB.GetDailyResetAt and ADDON.DB:GetDailyResetAt() or nil
+        local resetTxt = "never (no auto spend yet)"
+        if resetAt then
+            local secs = math.max(0, resetAt - GetServerTime())
+            resetTxt = ("%.1fh"):format(secs / 3600)
+        end
+        if budgetG then
+            self:Print(("Daily auto budget: |cff98FF98%dg|r spent %dg (%dg left) · resets in %s"):format(
+                budgetG, spentG, leftG or 0, resetTxt))
+        else
+            self:Print(("Daily auto budget: |cffff8888not set|r · %dg spent today · resets in %s"):format(
+                spentG, resetTxt))
+        end
         return
     end
 

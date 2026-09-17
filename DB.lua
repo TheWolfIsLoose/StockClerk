@@ -10,14 +10,22 @@
           maxPrice  = copper,          -- optional; nil = no cap set
           addedAt   = timestamp,
           lastPrice = { copper, seenAt, source },   -- optional; QA-11
+          sortOrder = number,          -- user-arranged list position;
+                                       -- doubles as restock priority
         }
       }
       char.uiPos = { point, x, y }           -- last MainFrame position
+      char.autoSpend = {
+          copper  = 0,        -- auto-purchase spend since last daily reset
+          resetAt = unixtime, -- when the current budget day ends (realm
+                              -- daily reset via C_DateAndTime), not midnight
+      }
       global.templates = { [name] = { [itemID] = need, ... } }
       global.settings  = {
         autoOpenAtAH   = bool,
         autoPurchase   = bool,      -- QA-10 opt-in auto-purchase master switch
-        autoBudgetGold = number|nil, -- QA-10a per-loop budget cap (gold)
+        autoBudgetGold = number|nil, -- daily auto-buy budget (gold); manual
+                                     -- buys are never budget-gated
         lastPriceTTL   = number,     -- QA-11 seconds before "Last Seen" dims
       }
       global.log      = array of entries (see Log.lua)
@@ -40,6 +48,10 @@ DB.defaults = {
     char = {
         items = {},
         uiPos = { point = "CENTER", x = 0, y = 0 },
+        -- Daily (realm-reset-aligned) auto-buy spend tracker. resetAt is
+        -- established lazily because C_DateAndTime isn't guaranteed at
+        -- PLAYER_LOGIN for every client build.
+        autoSpend = { copper = 0, resetAt = nil },
     },
     global = {
         templates = {},
@@ -75,6 +87,27 @@ function DB:Initialize()
         end
     end
     self.char = _G.StockClerkCharDB
+
+    -- sortOrder migration (v0.4): pre-priority users have no sortOrder on
+    -- any item. Stamp everyone in the current alphabetical readout so the
+    -- upgrade never visibly reshuffles an existing list.
+    local needsOrder = false
+    for _, entry in pairs(self.char.items) do
+        if entry.sortOrder == nil then needsOrder = true; break end
+    end
+    if needsOrder then
+        local alpha = {}
+        for itemID in pairs(self.char.items) do alpha[#alpha + 1] = itemID end
+        table.sort(alpha, function(a, b)
+            local na = C_Item.GetItemInfo(a) or ("item:" .. a)
+            local nb = C_Item.GetItemInfo(b) or ("item:" .. b)
+            if na == nb then return a < b end
+            return na < nb
+        end)
+        for i, itemID in ipairs(alpha) do
+            self.char.items[itemID].sortOrder = i * 10
+        end
+    end
 end
 
 -- ---------------------------------------------------------------------------
@@ -86,8 +119,12 @@ function DB:GetItems()
     return self.char.items
 end
 
--- Returns a numerically sorted array copy suitable for iterating in UI order.
--- Sort: alphabetical by (cached) item name if available, else by itemID.
+-- Returns an array copy in USER-ARRANGED order (sortOrder ascending).
+-- This is the ordering contract of the whole addon: the shopping list,
+-- the restock loop's queue order, and implicit buy priority all read
+-- the same sequence ("tacit priority" -- the list IS the priority).
+-- Items lacking sortOrder (shouldn't happen post-migration, but SetItem
+-- races during seed) sort to the end by name.
 function DB:GetSortedItems()
     local list = {}
     for itemID, entry in pairs(self.char.items) do
@@ -98,13 +135,55 @@ function DB:GetSortedItems()
             name      = name,
             maxPrice  = entry.maxPrice,  -- copper, may be nil ("no cap set")
             lastPrice = entry.lastPrice, -- { copper, seenAt, source } or nil
+            sortOrder = entry.sortOrder,
         }
     end
     table.sort(list, function(a, b)
+        local sa, sb = a.sortOrder, b.sortOrder
+        if sa and sb then
+            if sa ~= sb then return sa < sb end
+        elseif sa or sb then
+            return sa ~= nil -- ordered items before unordered
+        end
         if a.name == b.name then return a.itemID < b.itemID end
         return a.name < b.name
     end)
     return list
+end
+
+-- Rewrite list order wholesale: orderedIDs is the full new sequence.
+-- Restamps sortOrder as 10,20,30,... so future inserts have gaps.
+function DB:ReorderItems(orderedIDs)
+    -- Never trust a partial/garbage sequence from the UI: only apply if
+    -- the set of IDs matches the set of tracked itemIDs exactly.
+    local seen = {}
+    for _, id in ipairs(orderedIDs) do seen[id] = true end
+    for id in pairs(self.char.items) do
+        if not seen[id] then return false end
+    end
+    for i, id in ipairs(orderedIDs) do
+        local entry = self.char.items[id]
+        if entry then entry.sortOrder = i * 10 end
+    end
+    return true
+end
+
+-- Nudge one item up (delta=-1) or down (delta=+1) a single position.
+-- Returns true when the item actually moved.
+function DB:MoveItem(itemID, delta)
+    local list = self:GetSortedItems()
+    local idx
+    for i, it in ipairs(list) do
+        if it.itemID == itemID then idx = i; break end
+    end
+    if not idx then return false end
+    local target = idx + delta
+    if target < 1 or target > #list then return false end
+    local ids = {}
+    for i, it in ipairs(list) do ids[i] = it.itemID end
+    ids[idx], ids[target] = ids[target], ids[idx]
+    self:ReorderItems(ids)
+    return true
 end
 
 function DB:SetItem(itemID, need, maxPrice)
@@ -120,10 +199,20 @@ function DB:SetItem(itemID, need, maxPrice)
             existing.need = need
             if maxPrice ~= nil then existing.maxPrice = maxPrice end
         else
+            -- New items go to the END of the user's arranged list: the
+            -- list is priority order, so silently inserting a newcomer
+            -- anywhere else would imply a priority the user never chose.
+            local maxOrder = 0
+            for _, entry in pairs(self.char.items) do
+                if entry.sortOrder and entry.sortOrder > maxOrder then
+                    maxOrder = entry.sortOrder
+                end
+            end
             self.char.items[itemID] = {
-                need     = need,
-                maxPrice = maxPrice, -- copper; nil means "unlimited" / not set
-                addedAt  = time(),
+                need      = need,
+                maxPrice  = maxPrice, -- copper; nil means "unlimited" / not set
+                addedAt   = time(),
+                sortOrder = maxOrder + 10,
             }
         end
     end
@@ -200,4 +289,83 @@ end
 -- ---------------------------------------------------------------------------
 function DB:Settings()
     return self.db.global.settings
+end
+
+-- ---------------------------------------------------------------------------
+-- Daily auto-buy budget (realm-reset aligned)
+--
+-- The budget day ends at the REALM daily reset, not local midnight:
+-- C_DateAndTime.GetSecondsUntilDailyReset() returns seconds until the
+-- player's own realm reset (retail API since Shadowlands), so NA gets
+-- 7am Pacific, EU gets their morning reset, etc., with zero hardcoding.
+-- If the API is ever unavailable we degrade to "24h from first spend"
+-- rather than losing the budget feature outright.
+--
+-- Semantics (user decision, 2026-09-17): the budget tracks and gates
+-- AUTO-BUYS ONLY. Manual buys are full user discretion -- they neither
+-- count toward the daily total nor are blocked by it. Budgets exist
+-- as guardrails against the autopilot inadvertently spending a pile
+-- of gold; a human-confirmed click needs no such guardrail.
+--
+-- Corollary: the daily readout reads "auto spend today", NOT "total
+-- gold out the door". Deliberate split, not an accounting bug.
+-- ---------------------------------------------------------------------------
+
+-- Internal: unix timestamp of the next daily reset.
+local function NextResetTime()
+    local now = GetServerTime()
+    if C_DateAndTime and C_DateAndTime.GetSecondsUntilDailyReset then
+        local secs = C_DateAndTime.GetSecondsUntilDailyReset()
+        if secs and secs > 0 then
+            return now + secs
+        end
+    end
+    -- Degraded path: 24h rolling window from now. Used only when the
+    -- realm-reset API is missing (unexpected client/API change).
+    return now + 86400
+end
+
+-- Normalize the persisted bucket: zero it out when the reset has passed.
+local function EnsureFreshBucket(spend)
+    if spend.resetAt == nil then
+        spend.resetAt = NextResetTime()
+    end
+    if GetServerTime() >= spend.resetAt then
+        spend.copper  = 0
+        spend.resetAt = NextResetTime()
+    end
+    return spend
+end
+
+-- Auto-buy spend so far today, in copper, reset-aware. Manual buys
+-- are excluded by design (see semantics above).
+function DB:GetDailyAutoSpend()
+    if not self.char then return 0 end
+    return EnsureFreshBucket(self.char.autoSpend).copper
+end
+
+-- Remaining daily AUTO-BUY budget in copper (settings.autoBudgetGold
+-- is gold). Returns nil when no budget is configured (unlimited).
+function DB:GetDailyAutoBudgetLeft()
+    local s = self:Settings()
+    if not s.autoBudgetGold or s.autoBudgetGold <= 0 then return nil end
+    local left = math.floor(s.autoBudgetGold * 10000) - self:GetDailyAutoSpend()
+    return math.max(0, left)
+end
+
+-- Record a successful AUTO purchase against today's budget. Callers:
+-- the loop's auto confirm path ONLY -- manual buys must never touch
+-- this (user decision: manual spend is outside the budget ledger).
+function DB:AddDailyAutoSpend(copper)
+    if not self.char then return end
+    copper = tonumber(copper) or 0
+    if copper <= 0 then return end
+    local spend = EnsureFreshBucket(self.char.autoSpend)
+    spend.copper = spend.copper + copper
+end
+
+-- Seconds until the current budget day ends; for UI readout.
+function DB:GetDailyResetAt()
+    if not self.char then return nil end
+    return EnsureFreshBucket(self.char.autoSpend).resetAt
 end
