@@ -169,9 +169,15 @@ function StockClerk:OnSlashCommand(msg)
         end
         self:Print(("Tracking %d items:"):format(#sorted))
         for _, it in ipairs(sorted) do
-            local have = ADDON.Inventory:GetCount(it.itemID)
-            self:Print(("  [%d] %s — %d / %d"):format(
-                it.itemID, it.name, have, it.need))
+            local bd = ADDON.Inventory:GetBreakdown(it.itemID)
+            local stashed = bd.bank + bd.reagent + bd.warband
+            if stashed > 0 then
+                self:Print(("  [%d] %s — %d / %d  (+%d elsewhere)"):format(
+                    it.itemID, it.name, bd.bags, it.need, stashed))
+            else
+                self:Print(("  [%d] %s — %d / %d"):format(
+                    it.itemID, it.name, bd.bags, it.need))
+            end
         end
         return
     end

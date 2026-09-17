@@ -93,6 +93,24 @@ end
 local function ShowItemTooltip(anchor, itemID)
     GameTooltip:SetOwner(anchor, "ANCHOR_RIGHT")
     GameTooltip:SetItemByID(itemID)
+
+    -- Append our own storage breakdown so the user sees where the item
+    -- lives across bags / bank / reagent / warband. Only lines with a
+    -- non-zero count are shown, so a common-case tooltip only picks up
+    -- one extra line at most.
+    if ADDON.Inventory and ADDON.Inventory.GetBreakdown then
+        local bd = ADDON.Inventory:GetBreakdown(itemID)
+        if bd.total > 0 then
+            GameTooltip:AddLine(" ")
+            GameTooltip:AddLine("|cffffd200Stock Clerk|r", 1, 1, 1)
+            if bd.bags    > 0 then GameTooltip:AddDoubleLine("  Bags",         tostring(bd.bags),    0.8, 0.8, 0.8, 1, 1, 1) end
+            if bd.bank    > 0 then GameTooltip:AddDoubleLine("  Personal bank",tostring(bd.bank),    0.8, 0.8, 0.8, 1, 1, 1) end
+            if bd.reagent > 0 then GameTooltip:AddDoubleLine("  Reagent bank", tostring(bd.reagent), 0.8, 0.8, 0.8, 1, 1, 1) end
+            if bd.warband > 0 then GameTooltip:AddDoubleLine("  Warband bank", tostring(bd.warband), 0.8, 0.8, 0.8, 1, 1, 1) end
+            GameTooltip:AddDoubleLine("  Total", tostring(bd.total), 1, 0.82, 0, 1, 0.82, 0)
+        end
+    end
+
     GameTooltip:Show()
 end
 
@@ -290,11 +308,29 @@ local function InitializeRow(row, data)
         end)
     end
 
-    local have = ADDON.Inventory:GetCount(data.itemID) or 0
-    row._have = have
-    row.count:SetText(("%d / %d"):format(have, data.need))
+    -- The row's main count is BAGS ONLY — what the character can actually
+    -- use right now. Non-bag storage (bank/reagent/warband) is folded into
+    -- a dim `(+N elsewhere)` annotation appended to the count line so the
+    -- user always sees where the rest of their stockpile lives without
+    -- the primary metric being invariant to bag<->bank moves.
+    local bd     = ADDON.Inventory:GetBreakdown(data.itemID)
+    local have   = bd.bags
+    local stashed = bd.bank + bd.reagent + bd.warband
+
+    row._have      = have
+    row._breakdown = bd
+
+    local countText
+    if stashed > 0 then
+        countText = ("%d / %d  |cff888888(+%d)|r"):format(have, data.need, stashed)
+    else
+        countText = ("%d / %d"):format(have, data.need)
+    end
+    row.count:SetText(countText)
+
     if ADDON.debug then
-        print(("|cff98FF98[SC:debug]|r InitializeRow: id=%d have=%d need=%d"):format(data.itemID, have, data.need))
+        print(("|cff98FF98[SC:debug]|r InitializeRow: id=%d bags=%d stashed=%d need=%d"):format(
+            data.itemID, have, stashed, data.need))
     end
 
     local short = data.need - have
@@ -544,6 +580,10 @@ function MF:Refresh()
     local newProvider = CreateDataProvider()
     local shortCount = 0
     for i, it in ipairs(items) do
+        -- GetCount returns bags-only, matching what the row displays.
+        -- Shortfall is thus "my bags are below target", not "my total
+        -- across everything is below target" — aligned with the metric
+        -- shown to the user.
         local have = ADDON.Inventory:GetCount(it.itemID) or 0
         if have < it.need then shortCount = shortCount + 1 end
         newProvider:Insert({

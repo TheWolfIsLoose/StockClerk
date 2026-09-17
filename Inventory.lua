@@ -14,8 +14,19 @@
     (items were folded into the main bank tabs), so includeReagentBank is
     a harmless no-op on live but we leave it on for pre-11.2 servers.
 
+    Metric choice:
+      The visible row count is BAG COUNT ONLY. Rationale: bag<->bank and
+      bank<->warband self-moves don't change the all-storage total, so a
+      "total" row looks broken to a user who just moved things around.
+      Bags-only reacts to every transaction the user makes on the fly,
+      matching how they think about "do I have enough to raid tonight?"
+
+      GetBreakdown() exposes bags / bank / reagent / warband separately
+      for the row's `(+N in bank)` annotation and for the tooltip. It's
+      four C_Item.GetItemCount calls, still O(1) per item, cached.
+
     Caching:
-      We memoize counts per itemID and invalidate on BAG_UPDATE_DELAYED,
+      We memoize breakdowns per itemID and invalidate on BAG_UPDATE_DELAYED,
       PLAYERBANKSLOTS_CHANGED, PLAYER_ACCOUNT_BANK_TAB_SLOTS_CHANGED,
       BANK_TABS_CHANGED and BANKFRAME_OPENED. The last one guarantees a
       fresh scan the first time the user opens the bank in a session.
@@ -26,48 +37,51 @@ local ADDON     = _G[addonName]
 local INV = { cache = {} }
 ADDON.Inventory = INV
 
--- Options that describe what counts as "have". Users may eventually
--- want to exclude bank items from the "have" number to only see what's
--- immediately equipped in bags — expose a toggle later.
-INV.opts = {
-    includeBank        = true,
-    includeReagentBank = true, -- vestigial post-11.2; kept for older clients
-    includeAccountBank = true, -- warband bank
-}
-
 function INV:Invalidate()
     wipe(self.cache)
 end
 
-function INV:GetCount(itemID)
-    if not itemID then return 0 end
+-- Returns a fully-populated breakdown for the item:
+--   { bags = N, bank = N, reagent = N, warband = N, total = N }
+-- All fields are "just this container," not cumulative, so the caller
+-- can decide how to display them.
+function INV:GetBreakdown(itemID)
+    if not itemID then
+        return { bags = 0, bank = 0, reagent = 0, warband = 0, total = 0 }
+    end
+
     local cached = self.cache[itemID]
     if cached ~= nil then return cached end
 
-    local count = C_Item.GetItemCount(
-        itemID,
-        self.opts.includeBank,
-        false, -- includeUses (charges) — not what a stack count means for us
-        self.opts.includeReagentBank,
-        self.opts.includeAccountBank
-    ) or 0
+    -- C_Item.GetItemCount(id, includeBank, includeUses, includeReagent, includeAccount)
+    -- returns cumulative totals; subtract to derive per-container values.
+    local bagsOnly    = C_Item.GetItemCount(itemID) or 0
+    local plusBank    = C_Item.GetItemCount(itemID, true) or 0
+    local plusReagent = C_Item.GetItemCount(itemID, true, false, true) or 0
+    local plusWarband = C_Item.GetItemCount(itemID, true, false, true, true) or 0
 
-    self.cache[itemID] = count
+    local breakdown = {
+        bags    = bagsOnly,
+        bank    = plusBank    - bagsOnly,
+        reagent = plusReagent - plusBank,
+        warband = plusWarband - plusReagent,
+        total   = plusWarband,
+    }
+    self.cache[itemID] = breakdown
+
     if ADDON.debug then
-        -- Break the total down by container to see whether bag<->bank
-        -- moves actually change any component. If they don't, the metric
-        -- itself is invariant (bags+bank+warband stays constant on a
-        -- self-move) and "stale count" isn't a bug — it's math.
-        local bagsOnly = C_Item.GetItemCount(itemID) or 0
-        local plusBank = C_Item.GetItemCount(itemID, true) or 0
-        local plusReagent = C_Item.GetItemCount(itemID, true, false, true) or 0
-        local plusWarband = C_Item.GetItemCount(itemID, true, false, true, true) or 0
-        print(("|cff98FF98[SC:debug]|r GetCount(%d): bags=%d +bank=%d(+%d) +reagent=%d(+%d) +warband=%d(+%d)  ⇒ total=%d"):format(
-            itemID, bagsOnly, plusBank, plusBank - bagsOnly,
-            plusReagent, plusReagent - plusBank,
-            plusWarband, plusWarband - plusReagent, count))
+        print(("|cff98FF98[SC:debug]|r GetBreakdown(%d): bags=%d bank=%d reagent=%d warband=%d ⇒ total=%d"):format(
+            itemID, breakdown.bags, breakdown.bank,
+            breakdown.reagent, breakdown.warband, breakdown.total))
     end
-    return count
+
+    return breakdown
+end
+
+-- Back-compat: returns the primary "have" number (bags only).
+-- Callers that want the breakdown should use GetBreakdown(itemID).
+function INV:GetCount(itemID)
+    return self:GetBreakdown(itemID).bags
 end
 
 -- Called by Core.lua on inventory-change events.
