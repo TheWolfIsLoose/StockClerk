@@ -666,15 +666,27 @@ local function BuildRow(row)
         end
     end
     -- Commit Need edit: reads the current text, writes to DB if valid,
-    -- and refreshes the list. Called from Enter, Tab, and blur handlers.
+    -- and refreshes the list ONLY if the value actually changed. Skipping
+    -- the refresh in the no-op case is important: a Tab from need -> cap
+    -- (or need -> next row) triggers this commit via OnEditFocusLost, and
+    -- an unnecessary MF:Refresh() rebuilds the DataProvider between the
+    -- Tab keystroke and the deferred FocusRowCell open, which leaves the
+    -- ScrollView without spawned rows for FindFrame() to return -- so the
+    -- next cell silently no-ops. Guarding on 'value changed' keeps the
+    -- happy Tab path clean.
     local function CommitNeedEdit(r)
         local newNeed = tonumber(r.needEdit:GetText())
-        if newNeed and newNeed > 0 and r._itemID then
+        local changed = false
+        if newNeed and newNeed > 0 and r._itemID and newNeed ~= r._need then
             ADDON.DB:SetItem(r._itemID, newNeed)
             r._need = newNeed
+            -- Update the inline fontstring immediately so the user sees
+            -- the new value even though we skip the full Refresh.
+            if r.need then r.need:SetText(tostring(newNeed)) end
+            changed = true
         end
         CloseNeedEdit(r)
-        MF:Refresh()
+        if changed then MF:Refresh() end
     end
     row.needEdit:SetScript("OnEscapePressed", function(self)
         -- Escape = cancel: set the abort flag BEFORE clearing focus so the
@@ -722,22 +734,33 @@ local function BuildRow(row)
             if r.capCell._bg then r.capCell._bg:SetVertexColor(unpack(r.capCell._fillIdle)) end
         end
     end
+    -- Same 'skip refresh in no-op case' guard as CommitNeedEdit -- see
+    -- comment there for why this matters for Tab traversal.
     local function CommitPriceEdit(r)
+        local changed = false
         if r._itemID then
             local raw = r.priceEdit:GetText()
             local priceGold = tonumber(raw)
             local maxPriceCopper = (priceGold and priceGold > 0) and (priceGold * 10000) or nil
-            ADDON.DB:SetItemMaxPrice(r._itemID, maxPriceCopper)
-            r._maxPrice = maxPriceCopper
-            local name = r.name:GetText() or ("item:" .. r._itemID)
-            if maxPriceCopper then
-                MF:SetStatus(("Cap for %s set to %dg"):format(name, priceGold))
-            else
-                MF:SetStatus(("Cap cleared for %s"):format(name))
+            if maxPriceCopper ~= r._maxPrice then
+                ADDON.DB:SetItemMaxPrice(r._itemID, maxPriceCopper)
+                r._maxPrice = maxPriceCopper
+                local name = r.name:GetText() or ("item:" .. r._itemID)
+                if maxPriceCopper then
+                    MF:SetStatus(("Cap for %s set to %dg"):format(name, priceGold))
+                else
+                    MF:SetStatus(("Cap cleared for %s"):format(name))
+                end
+                -- Update the inline fontstring so the change is visible
+                -- without a full Refresh.
+                if r.cap then
+                    r.cap:SetText(maxPriceCopper and ("%dg"):format(priceGold) or "")
+                end
+                changed = true
             end
         end
         ClosePriceEdit(r)
-        MF:Refresh()
+        if changed then MF:Refresh() end
     end
     row.priceEdit:SetScript("OnEscapePressed", function(self)
         self._escaping = true
@@ -975,7 +998,15 @@ function MF:Build()
         f:SetMaxResize(1200, 1200)
     end
     f:EnableMouse(true)
-    f:EnableKeyboard(true)
+    -- IMPORTANT: do NOT EnableKeyboard(true) on the root window frame.
+    -- Doing so makes this frame intercept EVERY keystroke while it's
+    -- shown -- including bag hotkeys, chat opens, macro binds, etc. --
+    -- and even with SetPropagateKeyboardInput(true) it can leave the
+    -- game feeling like inputs are 'stuck' after an editbox loses focus
+    -- via Escape. ESC-close is already handled by UISpecialFrames below
+    -- without needing frame-level keyboard grab. Individual keyboard
+    -- consumers (addBtn Tab handling, editbox OnEscapePressed) enable
+    -- keyboard on themselves only while they need it.
 
     -- Window fill + border. Border sits on a dedicated child frame at
     -- TOOLTIP strata so nothing draws over it (atrocity's own recipe: they
@@ -987,16 +1018,11 @@ function MF:Build()
     borderFrame:SetFrameLevel(f:GetFrameLevel() + 100)
     AddBlackBorder(borderFrame)
 
-    -- ESC closes it (Blizzard convention).
+    -- ESC closes it (Blizzard convention). UISpecialFrames handles this
+    -- automatically: when ESC is pressed and no editbox has focus, the
+    -- topmost UISpecialFrames entry gets Hide()d. No custom OnKeyDown
+    -- needed on the root frame -- and importantly, no keyboard grab.
     tinsert(UISpecialFrames, "StockClerkFrame")
-    f:SetScript("OnKeyDown", function(self, key)
-        if key == "ESCAPE" then
-            self:SetPropagateKeyboardInput(false)
-            MF:Hide()
-        else
-            self:SetPropagateKeyboardInput(true)
-        end
-    end)
 
     -- Position + size (both persisted per-character). Size lives on the
     -- same uiPos table so one save/restore cycle handles both.
