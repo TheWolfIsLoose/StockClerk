@@ -69,6 +69,15 @@ function StockClerk:OnEnable()
     self:RegisterEvent("PLAYER_INTERACTION_MANAGER_FRAME_HIDE", "OnInteractionHide")
     self:RegisterEvent("AUCTION_HOUSE_SHOW",   "OnAuctionHouseShow")
     self:RegisterEvent("AUCTION_HOUSE_CLOSED", "OnAuctionHouseClosed")
+
+    -- AH commodity search + buy events for the restock loop. AH.lua
+    -- filters by in-flight itemID/mode so misfires on other addons'
+    -- searches are harmless no-ops.
+    self:RegisterEvent("COMMODITY_SEARCH_RESULTS_UPDATED", "OnCommoditySearchUpdated")
+    self:RegisterEvent("COMMODITY_PRICE_UPDATED",          "OnCommodityPriceUpdated")
+    self:RegisterEvent("COMMODITY_PRICE_UNAVAILABLE",      "OnCommodityPriceUnavailable")
+    self:RegisterEvent("COMMODITY_PURCHASE_SUCCEEDED",     "OnCommodityPurchaseSucceeded")
+    self:RegisterEvent("COMMODITY_PURCHASE_FAILED",        "OnCommodityPurchaseFailed")
 end
 
 -- ---------------------------------------------------------------------------
@@ -102,6 +111,27 @@ function StockClerk:OnInteractionHide(_, interactionType)
     end
 end
 
+-- ---- AH commodity events (forward to ADDON.AH state machine) --------
+function StockClerk:OnCommoditySearchUpdated(_, itemID)
+    if ADDON.AH then ADDON.AH:OnCommoditySearchUpdated(itemID) end
+end
+
+function StockClerk:OnCommodityPriceUpdated(_, itemID, newTotal)
+    if ADDON.AH then ADDON.AH:OnCommodityPriceUpdated(itemID, newTotal) end
+end
+
+function StockClerk:OnCommodityPriceUnavailable(_, itemID)
+    if ADDON.AH then ADDON.AH:OnCommodityPriceUnavailable(itemID) end
+end
+
+function StockClerk:OnCommodityPurchaseSucceeded(_, itemID)
+    if ADDON.AH then ADDON.AH:OnCommodityPurchaseSucceeded(itemID) end
+end
+
+function StockClerk:OnCommodityPurchaseFailed(_, itemID)
+    if ADDON.AH then ADDON.AH:OnCommodityPurchaseFailed(itemID) end
+end
+
 function StockClerk:OnAuctionHouseShow()
     if not ADDON.DB:Settings().autoOpenAtAH then return end
 
@@ -117,6 +147,12 @@ function StockClerk:OnAuctionHouseShow()
 end
 
 function StockClerk:OnAuctionHouseClosed()
+    -- Abort any in-flight AH operation before hiding UI.
+    if ADDON.AH        then ADDON.AH:OnAuctionHouseClosed() end
+    if ADDON.RestockLoop and ADDON.RestockLoop.IsActive and ADDON.RestockLoop:IsActive() then
+        ADDON.RestockLoop:Stop("AH closed, restock loop stopped.")
+    end
+
     -- Close on AH close only when WE opened it. If the user has since
     -- interacted with the window, leave it alone.
     if ADDON.MainFrame and ADDON.MainFrame.openedByAH then

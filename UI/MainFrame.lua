@@ -226,6 +226,27 @@ local function BuildRow(row)
             local edit = ChatEdit_ChooseBoxForSend()
             ChatEdit_ActivateChat(edit)
             edit:Insert(self._itemLink)
+            return
+        end
+        -- Plain Left Click while AH is open -> browse this item at the AH.
+        -- Callback logs to the status bar; doesn't buy anything.
+        if mouseButton == "LeftButton" and self._itemID
+           and AuctionHouseFrame and AuctionHouseFrame:IsShown() then
+            local id = self._itemID
+            MF:SetStatus(("Searching AH for %s..."):format(self.name:GetText() or ("item:" .. id)))
+            ADDON.AH:SearchItem(id, function(ok, results)
+                if not ok then
+                    MF:SetStatus("|cffff8888AH search failed: " .. tostring(results) .. "|r")
+                    return
+                end
+                local cheapest = results[1] and results[1].unitPrice
+                if cheapest then
+                    MF:SetStatus(("Cheapest: %s / unit (%d listings)"):format(
+                        GetCoinTextureString(cheapest), #results))
+                else
+                    MF:SetStatus("No auctions found")
+                end
+            end)
         end
     end)
     row:RegisterForClicks("LeftButtonUp", "RightButtonUp")
@@ -288,8 +309,9 @@ local function InitializeRow(row, data)
         row._built = true
     end
 
-    row._itemID = data.itemID
-    row._need   = data.need
+    row._itemID   = data.itemID
+    row._need     = data.need
+    row._maxPrice = data.maxPrice
 
     local name, link, quality, _, _, _, _, _, _, tex = C_Item.GetItemInfo(data.itemID)
     local icon = tex or select(5, C_Item.GetItemInfoInstant(data.itemID)) or QUESTION_ICON
@@ -325,6 +347,9 @@ local function InitializeRow(row, data)
         countText = ("%d / %d  |cff888888(+%d)|r"):format(have, data.need, stashed)
     else
         countText = ("%d / %d"):format(have, data.need)
+    end
+    if data.maxPrice then
+        countText = countText .. ("  |cff888888\226\137\164 %dg|r"):format(math.floor(data.maxPrice / 10000))
     end
     row.count:SetText(countText)
 
@@ -454,31 +479,50 @@ function MF:Build()
     countLabel:SetTextColor(unpack(Palette.fontHeader))
 
     local countBox = CreateFrame("EditBox", nil, toolbar, "InputBoxTemplate")
-    countBox:SetSize(60, 22)
+    countBox:SetSize(50, 22)
     countBox:SetPoint("TOPLEFT", countLabel, "BOTTOMLEFT", 6, -4)
     countBox:SetAutoFocus(false)
     countBox:SetNumeric(true)
     countBox:SetMaxLetters(5)
     countBox:SetText("20")
 
+    -- Per-item max price (gold). Copper units in DB; multiply by 10000 on
+    -- write. Blank/0 means "no cap".
+    local priceLabel = toolbar:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+    priceLabel:SetPoint("TOPLEFT", countBox, "TOPRIGHT", 12, 12)
+    priceLabel:SetText("Max g/unit")
+    priceLabel:SetTextColor(unpack(Palette.fontHeader))
+
+    local priceBox = CreateFrame("EditBox", nil, toolbar, "InputBoxTemplate")
+    priceBox:SetSize(60, 22)
+    priceBox:SetPoint("TOPLEFT", priceLabel, "BOTTOMLEFT", 6, -4)
+    priceBox:SetAutoFocus(false)
+    priceBox:SetNumeric(true)
+    priceBox:SetMaxLetters(7)
+    priceBox:SetText("")
+
     local addBtn = CreateFrame("Button", nil, toolbar, "UIPanelButtonTemplate")
     addBtn:SetSize(100, 24)
-    addBtn:SetPoint("LEFT", countBox, "RIGHT", 12, 0)
+    addBtn:SetPoint("LEFT", priceBox, "RIGHT", 12, 0)
     addBtn:SetText(L.BTN_ADD_ITEM or "Add Item")
 
     local function DoAdd()
         local input = addBox:GetText()
         if not input or input == "" then return end
         local need = tonumber(countBox:GetText()) or 20
+        local priceGold = tonumber(priceBox:GetText())
+        local maxPriceCopper = (priceGold and priceGold > 0) and (priceGold * 10000) or nil
         ADDON.ItemResolver:Resolve(input, function(itemID, name, _)
             if not itemID then
                 MF:SetStatus("|cffff8888" .. tostring(name) .. "|r")
                 return
             end
-            ADDON.DB:SetItem(itemID, need)
+            ADDON.DB:SetItem(itemID, need, maxPriceCopper)
             ADDON.Inventory:Invalidate()
             addBox:SetText("")
-            MF:SetStatus(("Added %s (need %d)"):format(name, need))
+            priceBox:SetText("")
+            local pMsg = maxPriceCopper and (", cap %dg"):format(priceGold) or ""
+            MF:SetStatus(("Added %s (need %d%s)"):format(name, need, pMsg))
             MF:Refresh()
         end)
     end
@@ -487,6 +531,8 @@ function MF:Build()
     addBox:SetScript("OnEscapePressed", function(self) self:ClearFocus() end)
     countBox:SetScript("OnEnterPressed", function() DoAdd() addBox:ClearFocus() end)
     countBox:SetScript("OnEscapePressed", function(self) self:ClearFocus() end)
+    priceBox:SetScript("OnEnterPressed", function() DoAdd() addBox:ClearFocus() end)
+    priceBox:SetScript("OnEscapePressed", function(self) self:ClearFocus() end)
 
     -- Separator under toolbar
     local sep = f:CreateTexture(nil, "ARTWORK")
@@ -495,6 +541,14 @@ function MF:Build()
     sep:SetHeight(1)
     sep:SetPoint("TOPLEFT", toolbar, "BOTTOMLEFT", 0, -4)
     sep:SetPoint("TOPRIGHT", toolbar, "BOTTOMRIGHT", 0, -4)
+
+    -- One-line hint under the separator so the user isn't guessing the
+    -- interaction model. Keep it terse; the tooltip carries the rest.
+    local hint = f:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
+    hint:SetPoint("TOPLEFT", sep, "BOTTOMLEFT", 4, -4)
+    hint:SetPoint("TOPRIGHT", sep, "BOTTOMRIGHT", -4, -4)
+    hint:SetJustifyH("LEFT")
+    hint:SetText("|cff888888Shift+Click a row to link \194\183 Click 'x' to remove \194\183 Click the target to edit \194\183 Restock at AH to buy|r")
 
     -- ---- Status bar (bottom) -----------------------------------------
     local statusBar = f:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
@@ -509,9 +563,28 @@ function MF:Build()
     closeBtn:SetText(L.BTN_CLOSE or "Close")
     closeBtn:SetScript("OnClick", function() MF:Hide() end)
 
+    -- Restock at AH. Enabled only while the AH frame is shown. Text
+    -- toggles between "Restock at AH" and "Stop" based on loop state.
+    local restockBtn = CreateFrame("Button", nil, f, "UIPanelButtonTemplate")
+    restockBtn:SetSize(140, 22)
+    restockBtn:SetPoint("RIGHT", closeBtn, "LEFT", -8, 0)
+    restockBtn:SetText("Restock at AH")
+    restockBtn:SetScript("OnClick", function()
+        if ADDON.RestockLoop:IsActive() then
+            ADDON.RestockLoop:Stop("Restock loop stopped.")
+        else
+            ADDON.RestockLoop:Start()
+        end
+    end)
+    self.restockBtn = restockBtn
+
+    -- Refresh the button state whenever the frame is shown (RefreshRestockBtn
+    -- is also called from Refresh() when the shortlist changes).
+    f:HookScript("OnShow", function() MF:RefreshRestockBtn() end)
+
     -- ---- ScrollBox (list of rows) ------------------------------------
     local listHolder = CreateFrame("Frame", nil, f)
-    listHolder:SetPoint("TOPLEFT", sep, "BOTTOMLEFT", 0, -6)
+    listHolder:SetPoint("TOPLEFT", hint, "BOTTOMLEFT", -4, -6)
     listHolder:SetPoint("BOTTOMRIGHT", closeBtn, "TOPRIGHT", 0, 8)
 
     local scrollBox = CreateFrame("Frame", nil, listHolder, "WowScrollBoxList")
@@ -587,10 +660,11 @@ function MF:Refresh()
         local have = ADDON.Inventory:GetCount(it.itemID) or 0
         if have < it.need then shortCount = shortCount + 1 end
         newProvider:Insert({
-            itemID = it.itemID,
-            name   = it.name,
-            need   = it.need,
-            _index = i,
+            itemID   = it.itemID,
+            name     = it.name,
+            need     = it.need,
+            maxPrice = it.maxPrice,
+            _index   = i,
         })
     end
 
@@ -604,6 +678,36 @@ function MF:Refresh()
         self:SetStatus(("|cffffd200%d items tracked|r  |cff888888|||r  |cfff87171%d short|r"):format(#items, shortCount))
     else
         self:SetStatus(("|cffffd200%d items tracked|r  |cff888888|||r  |cff4ade80all stocked|r"):format(#items))
+    end
+
+    self:RefreshRestockBtn(shortCount)
+end
+
+-- Enable the Restock button only when the AH is open AND we have at least
+-- one shortfall item to restock. The loop itself handles empty queues and
+-- caps -- this is just first-line UX so the button doesn't look clickable
+-- when it can't do anything.
+function MF:RefreshRestockBtn(shortCount)
+    if not self.restockBtn then return end
+    if shortCount == nil then
+        shortCount = 0
+        for _, it in ipairs(ADDON.DB:GetSortedItems()) do
+            local have = ADDON.Inventory:GetCount(it.itemID) or 0
+            if have < it.need then shortCount = shortCount + 1 end
+        end
+    end
+    local ahOpen = AuctionHouseFrame and AuctionHouseFrame:IsShown()
+    local looping = ADDON.RestockLoop and ADDON.RestockLoop:IsActive()
+    if looping then
+        self.restockBtn:SetText("Stop restock")
+        self.restockBtn:Enable()
+    else
+        self.restockBtn:SetText("Restock at AH")
+        if ahOpen and shortCount > 0 then
+            self.restockBtn:Enable()
+        else
+            self.restockBtn:Disable()
+        end
     end
 end
 

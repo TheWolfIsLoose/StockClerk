@@ -76,7 +76,12 @@ function DB:GetSortedItems()
     local list = {}
     for itemID, entry in pairs(self.char.items) do
         local name = C_Item.GetItemInfo(itemID) or ("item:" .. itemID)
-        list[#list + 1] = { itemID = itemID, need = entry.need, name = name }
+        list[#list + 1] = {
+            itemID   = itemID,
+            need     = entry.need,
+            name     = name,
+            maxPrice = entry.maxPrice, -- copper, may be nil ("no cap set")
+        }
     end
     table.sort(list, function(a, b)
         if a.name == b.name then return a.itemID < b.itemID end
@@ -85,7 +90,7 @@ function DB:GetSortedItems()
     return list
 end
 
-function DB:SetItem(itemID, need)
+function DB:SetItem(itemID, need, maxPrice)
     if not itemID or need == nil then return end
     itemID = tonumber(itemID)
     need   = tonumber(need)
@@ -96,10 +101,25 @@ function DB:SetItem(itemID, need)
         local existing = self.char.items[itemID]
         if existing then
             existing.need = need
+            if maxPrice ~= nil then existing.maxPrice = maxPrice end
         else
-            self.char.items[itemID] = { need = need, addedAt = time() }
+            self.char.items[itemID] = {
+                need     = need,
+                maxPrice = maxPrice, -- copper; nil means "unlimited" / not set
+                addedAt  = time(),
+            }
         end
     end
+end
+
+-- Update just the maxPrice for an existing item; no-op if the item isn't
+-- tracked. Pass nil to clear the cap.
+function DB:SetItemMaxPrice(itemID, maxPriceCopper)
+    itemID = tonumber(itemID)
+    if not itemID then return end
+    local entry = self.char.items[itemID]
+    if not entry then return end
+    entry.maxPrice = maxPriceCopper
 end
 
 function DB:RemoveItem(itemID)

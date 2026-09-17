@@ -14,11 +14,15 @@ Locale.lua
 DB.lua
 ItemResolver.lua
 Inventory.lua
+AH.lua
 Core.lua
 
 Sources\Bags.lua
 
+RestockLoop.lua
+
 UI\MainFrame.lua
+UI\BuyDialog.lua
 
 #@debug@
 Dev\RecommendedLists.lua
