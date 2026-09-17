@@ -54,7 +54,18 @@ function INV:GetCount(itemID)
 
     self.cache[itemID] = count
     if ADDON.debug then
-        print(("|cff98FF98[SC:debug]|r GetCount(%d) = %d (fresh from C_Item.GetItemCount)"):format(itemID, count))
+        -- Break the total down by container to see whether bag<->bank
+        -- moves actually change any component. If they don't, the metric
+        -- itself is invariant (bags+bank+warband stays constant on a
+        -- self-move) and "stale count" isn't a bug — it's math.
+        local bagsOnly = C_Item.GetItemCount(itemID) or 0
+        local plusBank = C_Item.GetItemCount(itemID, true) or 0
+        local plusReagent = C_Item.GetItemCount(itemID, true, false, true) or 0
+        local plusWarband = C_Item.GetItemCount(itemID, true, false, true, true) or 0
+        print(("|cff98FF98[SC:debug]|r GetCount(%d): bags=%d +bank=%d(+%d) +reagent=%d(+%d) +warband=%d(+%d)  ⇒ total=%d"):format(
+            itemID, bagsOnly, plusBank, plusBank - bagsOnly,
+            plusReagent, plusReagent - plusBank,
+            plusWarband, plusWarband - plusReagent, count))
     end
     return count
 end
