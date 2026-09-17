@@ -28,10 +28,12 @@ manual-changelog:
 # Comments MUST be on their own line here — inline `# ...` after a list
 # entry silently breaks the ignore rule for that entry in the BigWigsMods
 # packager, which is why an earlier dry-run leaked update.bat / Dev / README.
+#
+# All dev docs, notes, and utilities live under Dev/ so the single
+# `Dev` entry covers them. The remaining three are repo-root config
+# files that packager/git need at build time but don't belong in the
+# shipped zip.
 ignore:
-  - update.bat
-  - .branch
-  - README.md
   - Dev
   - .github
   - .gitignore

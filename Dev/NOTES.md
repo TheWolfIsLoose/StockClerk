@@ -4,9 +4,21 @@ Living roadmap for pre-1.0. Not user-facing; excluded from packaged
 releases via `.pkgmeta` (`Dev/` is ignored).
 
 **Current tag:** v0.4.0 (baseline for tester feedback, Sept 17 2026).
+**Current HEAD (unreleased):** v0.5 work — mail-delivery gate + PT-1
+price polish + default-cap for auto — merged to main 2026-09-17,
+awaiting smoke test before tagging.
+
 **Release policy:** GitHub-only until 1.0 (see `.pkgmeta`). Tags are
 free to bump between now and 1.0; CurseForge / Wago wiring is a
 deliberate go-wide decision.
+
+**Workflow (2026-09-17 revision):**
+- Solo dev, no feature branches. All work lands on `main`.
+- Every push to main is a candidate for the next tag.
+- Tag bumps are the primary versioning surface (v0.4.0 → v0.5.0 → ...).
+- Testers pull via `Dev/update.bat` which always tracks `main`.
+- `Dev/` folder is `.pkgmeta`-ignored, so notes/README/update.bat
+  never ship in the packaged zip.
 
 ---
 
