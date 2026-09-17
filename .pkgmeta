@@ -30,6 +30,7 @@ manual-changelog:
 # packager, which is why an earlier dry-run leaked update.bat / Dev / README.
 ignore:
   - update.bat
+  - .branch
   - README.md
   - Dev
   - .github

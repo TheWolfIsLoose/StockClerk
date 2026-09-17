@@ -3,3 +3,6 @@
 .DS_Store
 Thumbs.db
 *.bak
+
+# Per-machine update.bat branch marker (see update.bat header).
+.branch
