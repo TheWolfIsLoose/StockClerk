@@ -44,4 +44,5 @@ ignore:
   - Dev
   - .github
   - .gitignore
+  - .gitattributes
   - .pkgmeta

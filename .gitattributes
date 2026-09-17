@@ -1,0 +1,29 @@
+# Normalize line endings on checkout to avoid Windows CRLF drift
+# showing every file as "modified" in `git status`.
+#
+# * text=auto: git detects text files and normalizes them to LF in the
+#   repo. On Windows checkouts they get CRLF; on macOS/Linux they get
+#   LF. Either way the working tree matches what the platform expects
+#   and git status stays clean.
+* text=auto
+
+# Lua and TOC source: force LF everywhere. WoW loads either fine, but
+# LF-only avoids any diff churn if the file gets edited on Windows
+# with an editor that respects .gitattributes (VS Code, Sublime, etc.).
+*.lua   text eol=lf
+*.toc   text eol=lf
+*.xml   text eol=lf
+*.md    text eol=lf
+
+# Windows-native files: force CRLF so a Unix checkout doesn't strip
+# them (cmd.exe requires CRLF in .bat files).
+*.bat   text eol=crlf
+
+# Binary formats: never touch.
+*.png   binary
+*.jpg   binary
+*.tga   binary
+*.blp   binary
+*.ogg   binary
+*.mp3   binary
+*.zip   binary
