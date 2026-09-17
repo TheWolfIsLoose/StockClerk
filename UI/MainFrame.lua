@@ -468,13 +468,13 @@ local function BuildRow(row)
     row.needEdit:SetJustifyH("CENTER")
     row.needEdit:SetSize(56, 20)
     row.needEdit:SetPoint("CENTER", row.needCell, "CENTER")
-    -- Explicitly single-line + keyboard-enabled + non-propagating so
-    -- Enter routes to OnEnterPressed and only OnEnterPressed. Belt-and-
-    -- suspenders: without SetMultiLine(false) some retail builds route
-    -- Enter to OnTextChanged (newline) instead of OnEnterPressed, which
-    -- makes the field feel like it "only commits on click-away".
+    -- Explicitly single-line so Enter routes to OnEnterPressed rather
+    -- than being consumed as a newline. Do NOT call EnableKeyboard(true)
+    -- here: an EditBox already handles keystrokes when it has focus,
+    -- and EnableKeyboard(true) on a hidden EditBox that never releases
+    -- keyboard capture causes the addon to swallow ALL keys game-wide
+    -- (chat, hotbars, movement) until /reload.
     row.needEdit:SetMultiLine(false)
-    row.needEdit:EnableKeyboard(true)
     row.needEditBg:SetPoint("TOPLEFT",     row.needEdit, "TOPLEFT",     -4, 2)
     row.needEditBg:SetPoint("BOTTOMRIGHT", row.needEdit, "BOTTOMRIGHT",  4, -2)
     row.needEdit:SetFrameLevel(row.needCell:GetFrameLevel() + 1)
@@ -495,9 +495,9 @@ local function BuildRow(row)
     row.priceEdit:SetFontObject("GameFontHighlight")
     row.priceEdit:SetAutoFocus(false)
     row.priceEdit:SetNumeric(true)
-    -- See row.needEdit above for why single-line + explicit keyboard.
+    -- See row.needEdit above for why single-line and why we deliberately
+    -- do NOT call EnableKeyboard(true) here.
     row.priceEdit:SetMultiLine(false)
-    row.priceEdit:EnableKeyboard(true)
     row.priceEdit:SetMaxLetters(7)
     row.priceEdit:SetJustifyH("CENTER")
     row.priceEdit:SetSize(72, 20)
