@@ -1,21 +1,29 @@
 --[[
     Stock Clerk - UI/MainFrame.lua
 
-    Native Blizzard UI. Built on PortraitFrameTemplate (the same chrome
-    Bags / Collections / Character use) and the modern ScrollBox +
+    Flat atrocityEssentials-style chrome. Plain Frame with one WHITE8X8
+    fill and a 1px pure-black overlay border on a dedicated TOOLTIP-strata
+    child; header / toolbar / list / footer are internal sub-regions
+    separated by 1px black borders alone (no per-section fills). Rows
+    have no background either — the only hover signal is a translucent
+    grey wash ("mouse is here"), and the only accent is brand blue
+    #7381FF ("this opens something"). Uses the modern ScrollBox +
     ScrollView + DataProvider system introduced in Dragonflight.
 
     Design system (kept in one place at the top so the theme can be
     tweaked without hunting through the file):
 
         ROW_HEIGHT           row height in pixels
-        Palette.rowBgOdd     dim base row (odd index)
-        Palette.rowBgEven    slightly brighter base row (even index)
-        Palette.rowBgShort   red tint overlay when have < need
-        Palette.rowBgOk      subtle green tint overlay when satisfied
-        Palette.hover        white overlay on mouseover
-        Palette.pillOkBg / pillOkText   green "ok" pill
-        Palette.pillShortBg / pillShortText  red "-N" pill
+        BORDER_SIZE          border thickness in pixels (1)
+        ANIM_DUR             border colour animation duration in seconds
+        Palette.bgDark       window fill
+        Palette.bgMedium     control fill (buttons, editbox containers, cap cell)
+        Palette.hoverWash    translucent grey "mouse is here" overlay
+        Palette.pressFill    translucent grey button press feedback
+        Palette.border       pure black, alpha 1
+        Palette.brand        #7381FF accent (focus rings, cap value, title accent)
+        Palette.textPrimary / textSecondary / textMuted   greyscale text
+        Palette.ok / short   semantic status colours (kept only for text)
 
     Row shape:
 
@@ -44,50 +52,230 @@ ADDON.MainFrame = MF
 -- ---------------------------------------------------------------------------
 -- Theme
 -- ---------------------------------------------------------------------------
-local ROW_HEIGHT = 32
+local ROW_HEIGHT = 30
+
+-- ---------------------------------------------------------------------------
+-- Palette — ported from atrocityEssentials' ThemeDefaults (near-black,
+-- flat, ElvUI-family). One rule: the WINDOW paints one fill; nested regions
+-- get separated only by 1px pure-black borders, not by additional shades.
+-- Accent = atrocity blue #7381FF, kept everywhere the addon used to paint
+-- gold (title, focus borders, section labels).
+-- ---------------------------------------------------------------------------
 local Palette = {
-    rowBgOdd      = { 0.00, 0.00, 0.00, 0.35 },
-    rowBgEven     = { 1.00, 1.00, 1.00, 0.03 },
-    rowBgShort    = { 0.60, 0.10, 0.10, 0.30 },
-    rowBgOk       = { 0.10, 0.35, 0.15, 0.18 },
-    hover         = { 1.00, 1.00, 1.00, 0.08 },
-    pillOkBg      = { 0.12, 0.36, 0.20, 0.85 },
-    pillOkText    = "|cff4ade80ok|r",
-    pillShortBg   = { 0.36, 0.12, 0.12, 0.85 },
-    -- pillShortText is built dynamically from the delta
-    fontHeader    = { 1.00, 0.82, 0.00 },  -- Blizzard gold
-    fontMuted     = { 0.65, 0.65, 0.65 },
+    -- Backgrounds
+    bgDark        = { 0.031, 0.031, 0.031, 0.94 }, -- #080808 window fill
+    bgLight       = { 0.055, 0.055, 0.055, 0.85 }, -- #0e0e0e card body
+    bgMedium      = { 0.055, 0.055, 0.055, 0.95 }, -- #0e0e0e @ 0.95 controls/buttons
+    -- Interaction wash: grey D9D9D9 @ 0.15 ("the mouse is here"). Never used
+    -- to imply selection or brand — that's the border color's job.
+    hoverWash     = { 0.851, 0.851, 0.851, 0.15 },
+    pressFill     = { 0.851, 0.851, 0.851, 0.22 },
+    -- Border color: pure black, drawn 1px on an OVERLAY layer via SetColorTexture.
+    border        = { 0.00, 0.00, 0.00, 1.00 },
+    -- Atrocity brand (their signature). Used on focus borders, section
+    -- headers, title accent word, and the shortfall count number.
+    brand         = { 0.451, 0.506, 1.000, 1.00 }, -- #7381FF
+    brandDim      = { 0.451, 0.506, 1.000, 0.55 },
+    -- Text
+    textPrimary   = { 1.00, 1.00, 1.00, 1.00 },
+    textSecondary = { 0.78, 0.78, 0.78, 1.00 },
+    textMuted     = { 0.50, 0.50, 0.50, 1.00 },
+    -- Semantic (kept for status pill / shortfall; muted so they don't
+    -- outshine the brand blue)
+    ok            = { 0.30, 0.80, 0.40, 1.00 },
+    short         = { 0.90, 0.30, 0.30, 1.00 },
 }
+
+local BORDER_SIZE = 1
+local ANIM_DUR    = 0.15
 
 local WHITE_TEX = "Interface\\Buttons\\WHITE8x8"
 local TRASH_TEX = "Interface\\Buttons\\UI-GroupLoot-Pass-Up"   -- red X, native asset
 local QUESTION_ICON = 134400
 
 -- ---------------------------------------------------------------------------
--- Helpers
+-- Helpers (atrocity-style theming primitives)
 -- ---------------------------------------------------------------------------
-local function ApplyBackdrop(frame, r, g, b, a)
+
+-- PixelSnap: turn off texel snapping / bias so 1px borders don't smear across
+-- two physical pixel rows when the UI scale is off-grid. Verbatim from atrocity's
+-- AE:PixelSnapRegions (Core/AddonTheme.lua). Every border texture goes through
+-- this or you get the classic "1px line looks 2px thick and blurry" bug.
+local function PixelSnap(tex)
+    if not tex then return end
+    if tex.SetSnapToPixelGrid then
+        tex:SetSnapToPixelGrid(false)
+        tex:SetTexelSnappingBias(0)
+    end
+end
+
+-- Fill: opaque flat background on ARTWORK sublevel -8 (behind content).
+local function ApplyFill(frame, color)
     if not frame._bg then
-        frame._bg = frame:CreateTexture(nil, "BACKGROUND")
+        frame._bg = frame:CreateTexture(nil, "BACKGROUND", nil, -8)
         frame._bg:SetAllPoints(true)
         frame._bg:SetTexture(WHITE_TEX)
+        PixelSnap(frame._bg)
     end
-    frame._bg:SetVertexColor(r, g, b, a)
+    frame._bg:SetVertexColor(color[1], color[2], color[3], color[4] or 1)
     frame._bg:Show()
 end
 
-local function ApplyOverlay(frame, r, g, b, a)
-    if not frame._overlay then
-        frame._overlay = frame:CreateTexture(nil, "ARTWORK")
-        frame._overlay:SetAllPoints(true)
-        frame._overlay:SetTexture(WHITE_TEX)
+-- BlackBorder: 1px pure-black frame around any region, on the OVERLAY layer
+-- of a dedicated child frame so nothing else can paint over it. Atrocity uses
+-- a whole tooltip-strata border frame for the window; for interior widgets a
+-- 4-texture ring on the widget itself is enough.
+-- Returns { top, bottom, left, right } for later recolor (focus animation).
+local function AddBlackBorder(frame, color)
+    color = color or Palette.border
+    local textures = {}
+    for _, side in ipairs({"top", "bottom", "left", "right"}) do
+        local t = frame:CreateTexture(nil, "OVERLAY", nil, 7)
+        t:SetTexture(WHITE_TEX)
+        t:SetColorTexture(color[1], color[2], color[3], color[4] or 1)
+        PixelSnap(t)
+        textures[side] = t
     end
-    frame._overlay:SetVertexColor(r, g, b, a)
-    frame._overlay:Show()
+    textures.top:SetHeight(BORDER_SIZE)
+    textures.top:SetPoint("TOPLEFT", frame, "TOPLEFT", 0, 0)
+    textures.top:SetPoint("TOPRIGHT", frame, "TOPRIGHT", 0, 0)
+    textures.bottom:SetHeight(BORDER_SIZE)
+    textures.bottom:SetPoint("BOTTOMLEFT", frame, "BOTTOMLEFT", 0, 0)
+    textures.bottom:SetPoint("BOTTOMRIGHT", frame, "BOTTOMRIGHT", 0, 0)
+    textures.left:SetWidth(BORDER_SIZE)
+    textures.left:SetPoint("TOPLEFT", frame, "TOPLEFT", 0, 0)
+    textures.left:SetPoint("BOTTOMLEFT", frame, "BOTTOMLEFT", 0, 0)
+    textures.right:SetWidth(BORDER_SIZE)
+    textures.right:SetPoint("TOPRIGHT", frame, "TOPRIGHT", 0, 0)
+    textures.right:SetPoint("BOTTOMRIGHT", frame, "BOTTOMRIGHT", 0, 0)
+    frame._border = textures
+    return textures
 end
 
-local function HideOverlay(frame)
-    if frame._overlay then frame._overlay:Hide() end
+-- SetBorderColor: recolor an existing 4-texture border.
+local function SetBorderColor(frame, r, g, b, a)
+    if not frame._border then return end
+    a = a or 1
+    for _, t in pairs(frame._border) do
+        t:SetColorTexture(r, g, b, a)
+    end
+end
+
+-- Animated border color: smoothly transition a widget's border between
+-- the resting color (black) and a target (brand blue on hover/focus).
+-- Atrocity's EditBox uses the same pattern (AnimateEditBoxBorder).
+local function AttachBorderAnimator(frame)
+    if frame._borderAnim then return end
+    local group = frame:CreateAnimationGroup()
+    local anim = group:CreateAnimation("Animation")
+    anim:SetDuration(ANIM_DUR)
+    local from, to = {0,0,0,1}, {0,0,0,1}
+    local cur = {0,0,0,1}
+    group:SetScript("OnUpdate", function(g)
+        local p = g:GetProgress() or 0
+        cur[1] = from[1] + (to[1] - from[1]) * p
+        cur[2] = from[2] + (to[2] - from[2]) * p
+        cur[3] = from[3] + (to[3] - from[3]) * p
+        cur[4] = from[4] + (to[4] - from[4]) * p
+        SetBorderColor(frame, cur[1], cur[2], cur[3], cur[4])
+    end)
+    group:SetScript("OnFinished", function()
+        SetBorderColor(frame, to[1], to[2], to[3], to[4])
+        cur[1], cur[2], cur[3], cur[4] = to[1], to[2], to[3], to[4]
+    end)
+    frame._borderAnim = {
+        group = group, from = from, to = to, cur = cur,
+        AnimateTo = function(target)
+            group:Stop()
+            from[1], from[2], from[3], from[4] = cur[1], cur[2], cur[3], cur[4]
+            to[1], to[2], to[3], to[4] = target[1], target[2], target[3], target[4] or 1
+            group:Play()
+        end,
+    }
+end
+
+-- HoverWash: the atrocity signature interaction — a grey #D9D9D9 @ 0.15
+-- rectangle on ARTWORK sublevel 7 (NOT the HIGHLIGHT layer; HIGHLIGHT would
+-- draw over OVERLAY font strings and wash the label out). Hooked (not Set)
+-- so existing OnEnter/OnLeave handlers survive.
+local function AddHoverWash(btn, insetX, insetY)
+    if btn._hoverWash then return btn._hoverWash end
+    insetX = insetX or 1
+    insetY = insetY or 1
+    local wash = btn:CreateTexture(nil, "ARTWORK", nil, 7)
+    wash:SetTexture(WHITE_TEX)
+    wash:SetColorTexture(Palette.hoverWash[1], Palette.hoverWash[2], Palette.hoverWash[3], Palette.hoverWash[4])
+    wash:SetPoint("TOPLEFT", insetX, -insetY)
+    wash:SetPoint("BOTTOMRIGHT", -insetX, insetY)
+    wash:Hide()
+    btn:HookScript("OnEnter", function() if not btn._selected then wash:Show() end end)
+    btn:HookScript("OnLeave", function() wash:Hide() end)
+    btn._hoverWash = wash
+    return wash
+end
+
+-- StyleButton: turn a plain Button into an atrocity-flat button.
+-- Flat fill + 1px black border + grey hover wash. Optional press-fill via mouse down.
+local function StyleButton(btn, opts)
+    opts = opts or {}
+    ApplyFill(btn, opts.fill or Palette.bgMedium)
+    AddBlackBorder(btn)
+    AddHoverWash(btn)
+    -- Press feedback: darken/lighten fill briefly.
+    btn:HookScript("OnMouseDown", function(self)
+        if self:IsEnabled() and self:IsEnabled() ~= 0 then
+            ApplyFill(self, Palette.pressFill)
+        end
+    end)
+    btn:HookScript("OnMouseUp", function(self)
+        ApplyFill(self, opts.fill or Palette.bgMedium)
+    end)
+    if btn.SetNormalFontObject then
+        btn:SetNormalFontObject("GameFontNormal")
+        btn:SetHighlightFontObject("GameFontHighlight")
+        btn:SetDisabledFontObject("GameFontDisable")
+    end
+end
+
+-- StyleEditBox: for a plain WoW EditBox that already lives inside a
+-- container Frame (the container gets the border + fill; the EditBox stays
+-- transparent). Wires up brand-blue border animation on hover/focus.
+local function StyleEditBoxContainer(container, editBox)
+    ApplyFill(container, Palette.bgDark)
+    AddBlackBorder(container)
+    AttachBorderAnimator(container)
+    local function toBrand() container._borderAnim.AnimateTo(Palette.brand) end
+    local function toBase()
+        if editBox and editBox:HasFocus() then return end
+        container._borderAnim.AnimateTo(Palette.border)
+    end
+    container:EnableMouse(true)
+    container:HookScript("OnEnter", toBrand)
+    container:HookScript("OnLeave", toBase)
+    if editBox then
+        editBox:HookScript("OnEditFocusGained", toBrand)
+        editBox:HookScript("OnEditFocusLost", function()
+            if not container:IsMouseOver() then
+                container._borderAnim.AnimateTo(Palette.border)
+            end
+        end)
+    end
+end
+
+-- Row hover wash: on-demand rectangle we manage without wash-registration
+-- (we're driving it from RowEnter/RowLeave directly so it works even though
+-- the row uses non-HookScript SetScript handlers).
+local function ApplyRowHover(frame, on)
+    if not frame._rowHover then
+        local wash = frame:CreateTexture(nil, "ARTWORK", nil, 7)
+        wash:SetTexture(WHITE_TEX)
+        wash:SetColorTexture(Palette.hoverWash[1], Palette.hoverWash[2], Palette.hoverWash[3], Palette.hoverWash[4])
+        wash:SetPoint("TOPLEFT", 1, -1)
+        wash:SetPoint("BOTTOMRIGHT", -1, 1)
+        wash:Hide()
+        frame._rowHover = wash
+    end
+    if on then frame._rowHover:Show() else frame._rowHover:Hide() end
 end
 
 local function ShowItemTooltip(anchor, itemID)
@@ -124,7 +312,7 @@ end
 local function BuildRow(row)
     row:SetHeight(ROW_HEIGHT)
 
-    -- Backdrop textures created lazily by ApplyBackdrop/ApplyOverlay.
+    -- Row hover wash is created lazily by ApplyRowHover on first RowEnter.
 
     -- Icon
     row.icon = row:CreateTexture(nil, "OVERLAY")
@@ -132,22 +320,41 @@ local function BuildRow(row)
     row.icon:SetPoint("LEFT", 8, 0)
     row.icon:SetTexCoord(0.08, 0.92, 0.08, 0.92)   -- trim default 5% border
 
-    -- Name
+    -- Name (fills leftmost region up to the Have column)
     row.name = row:CreateFontString(nil, "OVERLAY", "GameFontNormal")
     row.name:SetPoint("LEFT", row.icon, "RIGHT", 8, 0)
-    row.name:SetPoint("RIGHT", row, "RIGHT", -180, 0)
+    row.name:SetPoint("RIGHT", row, "RIGHT", -260, 0)
     row.name:SetJustifyH("LEFT")
     row.name:SetWordWrap(false)
 
-    -- Count "27 / 20"
+    -- Have column: "27 / 20" (right-justified; source-suffix appended)
     row.count = row:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
-    row.count:SetPoint("RIGHT", row, "RIGHT", -140, 0)
+    row.count:SetPoint("RIGHT", row, "RIGHT", -170, 0)
     row.count:SetJustifyH("RIGHT")
+
+    -- Cap column: dedicated cell for the max price. Right-click to edit.
+    -- Always visible so the user can see (and click to change) the cap
+    -- without hunting for it inside the count string.
+    row.capCell = CreateFrame("Button", nil, row)
+    row.capCell:SetSize(56, 20)
+    row.capCell:SetPoint("RIGHT", row, "RIGHT", -108, 0)
+    row.capCell:RegisterForClicks("LeftButtonUp", "RightButtonUp")
+    row.capCell:SetFrameLevel(row:GetFrameLevel() + 2)
+
+    -- Cap cell has its own flat fill + 1px black border. On hover the border
+    -- animates to brand blue ("this opens something", per atrocity's rule).
+    ApplyFill(row.capCell, Palette.bgMedium)
+    AddBlackBorder(row.capCell)
+    AttachBorderAnimator(row.capCell)
+
+    row.cap = row:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+    row.cap:SetPoint("CENTER", row.capCell, "CENTER")
+    row.cap:SetJustifyH("CENTER")
 
     -- Inline EditBox (hidden until target number clicked)
     row.editBg = row:CreateTexture(nil, "BACKGROUND")
     row.editBg:SetTexture(WHITE_TEX)
-    row.editBg:SetVertexColor(0, 0, 0, 0.6)
+    row.editBg:SetVertexColor(Palette.bgDark[1], Palette.bgDark[2], Palette.bgDark[3], 1)
     row.editBg:Hide()
 
     row.edit = CreateFrame("EditBox", nil, row)
@@ -162,13 +369,15 @@ local function BuildRow(row)
     row.editBg:SetPoint("BOTTOMRIGHT", row.edit, "BOTTOMRIGHT", 4, -2)
     row.edit:Hide()
 
-    -- Price cap editor (hidden until Right-Click on the row).
-    -- Overlaid to the LEFT of the count so it visually replaces the
-    -- 'max Ng' suffix while active. Empty submit clears the cap.
-    row.priceBg = row:CreateTexture(nil, "BACKGROUND")
-    row.priceBg:SetTexture(WHITE_TEX)
-    row.priceBg:SetVertexColor(0, 0, 0, 0.6)
-    row.priceBg:Hide()
+    -- Price cap inline editor (hidden until the cap cell is clicked).
+    -- Anchored TO the cap cell so it lands exactly where the value was.
+    -- The cap cell already carries the flat black border and brand-blue
+    -- focus animation — the editor just needs a slightly darker fill so
+    -- the caret has enough contrast.
+    row.priceEditBg = row:CreateTexture(nil, "BACKGROUND")
+    row.priceEditBg:SetTexture(WHITE_TEX)
+    row.priceEditBg:SetVertexColor(Palette.bgDark[1], Palette.bgDark[2], Palette.bgDark[3], 1)
+    row.priceEditBg:Hide()
 
     row.priceEdit = CreateFrame("EditBox", nil, row)
     row.priceEdit:SetFontObject("GameFontHighlight")
@@ -176,24 +385,23 @@ local function BuildRow(row)
     row.priceEdit:SetNumeric(true)
     row.priceEdit:SetMaxLetters(7)
     row.priceEdit:SetJustifyH("CENTER")
-    row.priceEdit:SetSize(70, 20)
-    row.priceEdit:SetPoint("RIGHT", row, "RIGHT", -195, 0)
-    row.priceBg:SetPoint("TOPLEFT", row.priceEdit, "TOPLEFT", -4, 2)
-    row.priceBg:SetPoint("BOTTOMRIGHT", row.priceEdit, "BOTTOMRIGHT", 4, -2)
+    row.priceEdit:SetSize(56, 20)
+    row.priceEdit:SetPoint("CENTER", row.capCell, "CENTER")
+    row.priceEditBg:SetPoint("TOPLEFT",     row.priceEdit, "TOPLEFT",     -4, 2)
+    row.priceEditBg:SetPoint("BOTTOMRIGHT", row.priceEdit, "BOTTOMRIGHT",  4, -2)
+    row.priceEdit:SetFrameLevel(row.capCell:GetFrameLevel() + 1)
     row.priceEdit:Hide()
 
-    row.priceHint = row:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
-    row.priceHint:SetPoint("BOTTOM", row.priceEdit, "TOP", 0, 1)
-    row.priceHint:SetText("|cffffd200max g/unit \194\183 blank = no cap|r")
-    row.priceHint:Hide()
-
-    -- Status pill (ok / -N)
+    -- Status pill (ok / -N) - Status column.
+    -- Flat, 1px black border, subtle fill. The COLORED TEXT (green ok /
+    -- red -N) carries the semantic; the pill itself stays neutral so the
+    -- overall aesthetic reads as one palette instead of a traffic-light
+    -- panel.
     row.pill = CreateFrame("Frame", nil, row)
     row.pill:SetSize(52, 20)
-    row.pill:SetPoint("RIGHT", row, "RIGHT", -46, 0)
-    row.pill.bg = row.pill:CreateTexture(nil, "BACKGROUND")
-    row.pill.bg:SetAllPoints(true)
-    row.pill.bg:SetTexture(WHITE_TEX)
+    row.pill:SetPoint("RIGHT", row, "RIGHT", -36, 0)
+    ApplyFill(row.pill, Palette.bgMedium)
+    AddBlackBorder(row.pill)
     row.pill.text = row.pill:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
     row.pill.text:SetPoint("CENTER")
 
@@ -211,7 +419,7 @@ local function BuildRow(row)
     --     hide path.
     row.trash = CreateFrame("Button", nil, row)
     row.trash:SetSize(18, 18)
-    row.trash:SetPoint("RIGHT", row, "RIGHT", -8, 0)
+    row.trash:SetPoint("RIGHT", row, "RIGHT", -6, 0)
     row.trash:SetFrameLevel(row:GetFrameLevel() + 5)
     row.trash:SetNormalTexture(TRASH_TEX)
     row.trash:SetHighlightTexture(TRASH_TEX)
@@ -221,7 +429,7 @@ local function BuildRow(row)
     row.trash:RegisterForClicks("LeftButtonUp")
 
     local function RowEnter(r)
-        ApplyOverlay(r, unpack(Palette.hover))
+        ApplyRowHover(r, true)
         if r._itemID then ShowItemTooltip(r, r._itemID) end
         r.trash:Show()
     end
@@ -234,7 +442,7 @@ local function BuildRow(row)
             if r:IsMouseOver() or r.trash:IsMouseOver() then
                 return -- still hovering some part of the row cluster
             end
-            HideOverlay(r)
+            ApplyRowHover(r, false)
             GameTooltip:Hide()
             r.trash:Hide()
         end)
@@ -251,19 +459,6 @@ local function BuildRow(row)
             local edit = ChatEdit_ChooseBoxForSend()
             ChatEdit_ActivateChat(edit)
             edit:Insert(self._itemLink)
-            return
-        end
-        -- Right Click -> edit the per-item max price cap. Blank + Enter
-        -- clears the cap. Escape aborts without saving.
-        if mouseButton == "RightButton" and self._itemID then
-            local currentG = self._maxPrice and math.floor(self._maxPrice / 10000) or nil
-            self.priceEdit:SetText(currentG and tostring(currentG) or "")
-            self.priceEdit:Show()
-            self.priceBg:Show()
-            self.priceHint:Show()
-            self.count:Hide()
-            self.priceEdit:SetFocus()
-            self.priceEdit:HighlightText()
             return
         end
         -- Plain Left Click while AH is open -> browse this item at the AH.
@@ -287,7 +482,46 @@ local function BuildRow(row)
             end)
         end
     end)
-    row:RegisterForClicks("LeftButtonUp", "RightButtonUp")
+    row:RegisterForClicks("LeftButtonUp")
+
+    -- Cap cell hover + click: opens the inline price editor.
+    local function OpenPriceEdit(r)
+        local currentG = r._maxPrice and math.floor(r._maxPrice / 10000) or nil
+        r.priceEdit:SetText(currentG and tostring(currentG) or "")
+        r.cap:Hide()
+        r.priceEdit:Show()
+        r.priceEditBg:Show()
+        r.priceEdit:SetFocus()
+        r.priceEdit:HighlightText()
+        r.capCell._priceEditActive = true
+        r.capCell._borderAnim.AnimateTo(Palette.brand)
+    end
+    row.capCell:SetScript("OnClick", function(self)
+        OpenPriceEdit(self:GetParent())
+    end)
+    row.capCell:SetScript("OnEnter", function(self)
+        local r = self:GetParent()
+        -- Delegate to row hover so tooltip + trash + wash all appear.
+        r:GetScript("OnEnter")(r)
+        -- Border animates to brand blue — the "this opens something" signal.
+        self._borderAnim.AnimateTo(Palette.brand)
+        GameTooltip:Hide()
+        GameTooltip:SetOwner(self, "ANCHOR_TOP")
+        if r._maxPrice then
+            GameTooltip:SetText(("Max %dg / unit"):format(math.floor(r._maxPrice / 10000)), 1, 1, 1)
+            GameTooltip:AddLine("Click to change  \194\183  blank = no cap", 0.7, 0.7, 0.7)
+        else
+            GameTooltip:SetText("No price cap set", 1, 1, 1)
+            GameTooltip:AddLine("Click to set a max gold/unit", 0.7, 0.7, 0.7)
+        end
+        GameTooltip:Show()
+    end)
+    row.capCell:SetScript("OnLeave", function(self)
+        if not self._priceEditActive then
+            self._borderAnim.AnimateTo(Palette.border)
+        end
+        self:GetParent():GetScript("OnLeave")(self:GetParent())
+    end)
 
     -- Click the count -> inline edit target.
     -- FontStrings don't reliably take clicks; use an overlay Button instead.
@@ -338,12 +572,18 @@ local function BuildRow(row)
     end)
 
     -- Price editor: Escape aborts, Enter commits (blank = clear cap).
+    local function ClosePriceEdit(r)
+        r.priceEdit:ClearFocus()
+        r.priceEdit:Hide()
+        r.priceEditBg:Hide()
+        r.cap:Show()
+        r.capCell._priceEditActive = false
+        if not r.capCell:IsMouseOver() then
+            r.capCell._borderAnim.AnimateTo(Palette.border)
+        end
+    end
     row.priceEdit:SetScript("OnEscapePressed", function(self)
-        self:ClearFocus()
-        self:Hide()
-        self:GetParent().priceBg:Hide()
-        self:GetParent().priceHint:Hide()
-        self:GetParent().count:Show()
+        ClosePriceEdit(self:GetParent())
     end)
     row.priceEdit:SetScript("OnEnterPressed", function(self)
         local r = self:GetParent()
@@ -360,11 +600,7 @@ local function BuildRow(row)
                 MF:SetStatus(("Cap cleared for %s"):format(name))
             end
         end
-        self:ClearFocus()
-        self:Hide()
-        r.priceBg:Hide()
-        r.priceHint:Hide()
-        r.count:Show()
+        ClosePriceEdit(r)
         MF:Refresh()
     end)
 end
@@ -422,42 +658,37 @@ local function InitializeRow(row, data)
         if bd.warband > 0 then parts[#parts+1] = bd.warband .. " warband" end
         countText = countText .. ("  |cff888888(+%d: %s)|r"):format(stashed, table.concat(parts, ", "))
     end
-    if data.maxPrice then
-        countText = countText .. ("  |cff888888max %dg|r"):format(math.floor(data.maxPrice / 10000))
-    end
     row.count:SetText(countText)
+
+    -- Cap column value. Dim '--' when no cap; brand-blue when set. The
+    -- number is the emphasized element in the row (per atrocity's rule:
+    -- accent color goes on the value, not on the chrome).
+    if data.maxPrice then
+        row.cap:SetText(("|cff7381FF%dg|r"):format(math.floor(data.maxPrice / 10000)))
+    else
+        row.cap:SetText("|cff555555\226\128\148|r") -- em-dash for a real "unset" glyph
+    end
 
     if ADDON.debug then
         print(("|cff98FF98[SC:debug]|r InitializeRow: id=%d bags=%d stashed=%d need=%d"):format(
             data.itemID, have, stashed, data.need))
     end
 
+    -- Status pill: neutral flat cell; color lives in the text only.
     local short = data.need - have
     if short > 0 then
-        row.pill.bg:SetVertexColor(unpack(Palette.pillShortBg))
-        row.pill.text:SetText(("|cfff87171-%d|r"):format(short))
+        -- Red short text (#e5624a — muted red, tuned to sit with the dark bg
+        -- and the brand blue without shouting).
+        row.pill.text:SetText(("|cffe5624a-%d|r"):format(short))
     else
-        row.pill.bg:SetVertexColor(unpack(Palette.pillOkBg))
-        row.pill.text:SetText(Palette.pillOkText)
+        row.pill.text:SetText("|cff4ade80ok|r")
     end
 
-    -- Row background: alternate stripe, plus red / green wash by status.
-    local baseR, baseG, baseB, baseA
-    if data._index % 2 == 1 then
-        baseR, baseG, baseB, baseA = unpack(Palette.rowBgOdd)
-    else
-        -- Composite: base odd + even highlight blended
-        baseR, baseG, baseB, baseA = 0.05, 0.05, 0.05, 0.35
-    end
-    ApplyBackdrop(row, baseR, baseG, baseB, baseA)
-
-    -- Status wash goes in the ARTWORK overlay slot; hover replaces it.
-    if short > 0 then
-        row._statusWash = Palette.rowBgShort
-    else
-        row._statusWash = Palette.rowBgOk
-    end
-    ApplyOverlay(row, unpack(row._statusWash))
+    -- Row background: NONE. Atrocity's aesthetic is one window fill; rows
+    -- are separated by the 1px black bottom border from the header/list and
+    -- by content spacing, not by per-row backgrounds. Selection = hover wash.
+    -- (Status is signaled by the pill text color + the cap-column number, not
+    -- by a full-row wash.)
 
     -- Trash click wire. Read from row._itemID rather than closing over
     -- `data`, so a recycled row can't accidentally delete a stale item.
@@ -481,43 +712,77 @@ end
 -- ---------------------------------------------------------------------------
 -- Frame construction
 -- ---------------------------------------------------------------------------
+-- Small factory: a labeled, atrocity-styled editbox in a container.
+-- Returns the container frame; the actual EditBox is at container.editBox.
+local function MakeEditBox(parent, labelText, width, isNumeric, maxLetters, initial)
+    local row = CreateFrame("Frame", nil, parent)
+    row:SetSize(width, 38)
+
+    local label = row:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+    label:SetPoint("TOPLEFT", 0, 0)
+    label:SetText(labelText)
+    label:SetTextColor(Palette.textSecondary[1], Palette.textSecondary[2], Palette.textSecondary[3], 1)
+
+    local container = CreateFrame("Frame", nil, row)
+    container:SetHeight(22)
+    container:SetPoint("TOPLEFT", label, "BOTTOMLEFT", 0, -3)
+    container:SetPoint("TOPRIGHT", row, "TOPRIGHT", 0, -14)
+
+    local eb = CreateFrame("EditBox", nil, container)
+    eb:SetPoint("TOPLEFT", 6, -3)
+    eb:SetPoint("BOTTOMRIGHT", -6, 3)
+    eb:SetFontObject("GameFontHighlight")
+    eb:SetTextColor(1, 1, 1, 1)
+    eb:SetAutoFocus(false)
+    if isNumeric then eb:SetNumeric(true) end
+    if maxLetters then eb:SetMaxLetters(maxLetters) end
+    if initial then eb:SetText(initial) end
+
+    StyleEditBoxContainer(container, eb)
+    row.editBox = eb
+    row.container = container
+    row.label = label
+    return row
+end
+
 function MF:Build()
     if self.frame then return self.frame end
 
-    local f = CreateFrame("Frame", "StockClerkFrame", UIParent, "PortraitFrameTemplate")
-    f:SetSize(620, 480)
+    -- ---- Root frame (no template; atrocity-flat window) ----------------
+    -- Plain Frame: single WHITE8X8 fill + 1px black overlay border. Header,
+    -- toolbar, list, and footer are drawn as sub-regions separated by 1px
+    -- black bottom borders, not stacked backdrops. All of this is the
+    -- ElvUI/atrocityEssentials aesthetic verbatim.
+    local f = CreateFrame("Frame", "StockClerkFrame", UIParent, "BackdropTemplate")
+    f:SetSize(680, 500)
     f:SetFrameStrata("HIGH")
     f:SetToplevel(true)
     f:SetClampedToScreen(true)
     f:SetMovable(true)
+    f:SetResizable(false)
     f:EnableMouse(true)
+    f:EnableKeyboard(true)
 
-    -- Body background. PortraitFrameTemplate in current builds only provides
-    -- the border chrome; the inner panel is transparent, so we paint an
-    -- opaque dark backdrop over the frame area (inset to leave the border).
-    local body = f:CreateTexture(nil, "BACKGROUND", nil, -8)
-    body:SetTexture(WHITE_TEX)
-    body:SetVertexColor(0.06, 0.06, 0.08, 0.94)
-    body:SetPoint("TOPLEFT", 8, -22)
-    body:SetPoint("BOTTOMRIGHT", -8, 8)
+    -- Window fill + border. Border sits on a dedicated child frame at
+    -- TOOLTIP strata so nothing draws over it (atrocity's own recipe: they
+    -- go so far as to raise the border frame 100 levels above the parent).
+    ApplyFill(f, Palette.bgDark)
+    local borderFrame = CreateFrame("Frame", nil, f)
+    borderFrame:SetAllPoints(f)
+    borderFrame:SetFrameStrata("TOOLTIP")
+    borderFrame:SetFrameLevel(f:GetFrameLevel() + 100)
+    AddBlackBorder(borderFrame)
 
-    -- Title + portrait
-    f:SetTitle(L.MAIN_TITLE or "Stock Clerk")
-    if f.SetPortraitToAsset then
-        f:SetPortraitToAsset("Interface\\ICONS\\INV_Misc_Book_11")
-    end
-
-    -- Drag by title bar
-    if f.TitleContainer then
-        f.TitleContainer:EnableMouse(true)
-        f.TitleContainer:RegisterForDrag("LeftButton")
-        f.TitleContainer:SetScript("OnDragStart", function() f:StartMoving() end)
-        f.TitleContainer:SetScript("OnDragStop",  function()
-            f:StopMovingOrSizing()
-            local point, _, _, x, y = f:GetPoint()
-            ADDON.DB.char.uiPos = { point = point, x = x, y = y }
-        end)
-    end
+    -- ESC closes it (Blizzard convention).
+    tinsert(UISpecialFrames, "StockClerkFrame")
+    f:SetScript("OnKeyDown", function(self, key)
+        if key == "ESCAPE" then
+            self:SetPropagateKeyboardInput(false)
+            MF:Hide()
+        else
+            self:SetPropagateKeyboardInput(true)
+        end
+    end)
 
     -- Position
     local pos = ADDON.DB.char.uiPos
@@ -528,57 +793,95 @@ function MF:Build()
         f:SetPoint("CENTER")
     end
 
-    -- Escape closes it, like Bags
-    tinsert(UISpecialFrames, "StockClerkFrame")
+    -- ---- Header (title bar) --------------------------------------------
+    -- Height 32, no fill of its own (window paints one bg), 1px black
+    -- bottom border to separate it from the toolbar. Title has an accented
+    -- word ("Stock") in brand blue and a neutral second word ("Clerk") —
+    -- verbatim structure from atrocity's AccentedTitle recipe.
+    local header = CreateFrame("Frame", nil, f)
+    header:SetHeight(32)
+    header:SetPoint("TOPLEFT", 0, 0)
+    header:SetPoint("TOPRIGHT", 0, 0)
+    header:EnableMouse(true)
+    header:RegisterForDrag("LeftButton")
+    header:SetScript("OnDragStart", function() f:StartMoving() end)
+    header:SetScript("OnDragStop", function()
+        f:StopMovingOrSizing()
+        local point, _, _, x, y = f:GetPoint()
+        ADDON.DB.char.uiPos = { point = point, x = x, y = y }
+    end)
 
-    -- ---- Toolbar ------------------------------------------------------
+    local headerSep = header:CreateTexture(nil, "OVERLAY", nil, 6)
+    headerSep:SetTexture(WHITE_TEX)
+    headerSep:SetColorTexture(Palette.border[1], Palette.border[2], Palette.border[3], 1)
+    headerSep:SetHeight(BORDER_SIZE)
+    headerSep:SetPoint("BOTTOMLEFT", 0, 0)
+    headerSep:SetPoint("BOTTOMRIGHT", 0, 0)
+    PixelSnap(headerSep)
+
+    local title = header:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
+    title:SetPoint("LEFT", header, "LEFT", 12, 0)
+    title:SetText("|cff7381FFStock|r|cffFFFFFFClerk|r")
+    title:SetShadowOffset(0, 0)
+
+    -- Close X button in the header (atrocity's aesClose recipe, WoW-adapted).
+    -- Uses a font-string "×" since we don't have the atrocity texture; the
+    -- shape is functionally the same and it snaps to pixels cleanly.
+    local closeX = CreateFrame("Button", nil, header)
+    closeX:SetSize(28, 22)
+    closeX:SetPoint("RIGHT", header, "RIGHT", -4, 0)
+    local closeXText = closeX:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
+    closeXText:SetPoint("CENTER")
+    closeXText:SetText("×")
+    closeXText:SetTextColor(0.85, 0.85, 0.85, 1)
+    closeX:SetScript("OnEnter", function(self)
+        closeXText:SetTextColor(Palette.brand[1], Palette.brand[2], Palette.brand[3], 1)
+        GameTooltip:SetOwner(self, "ANCHOR_BOTTOM")
+        GameTooltip:SetText("Close")
+        GameTooltip:Show()
+    end)
+    closeX:SetScript("OnLeave", function()
+        closeXText:SetTextColor(0.85, 0.85, 0.85, 1)
+        GameTooltip:Hide()
+    end)
+    closeX:SetScript("OnClick", function() MF:Hide() end)
+
+    -- ---- Toolbar (add item + controls) ---------------------------------
+    -- Sits directly under the header. No fill; the labels + editboxes
+    -- provide enough visual weight. Ends with a 1px black bottom border
+    -- separating it from the list.
     local toolbar = CreateFrame("Frame", nil, f)
-    toolbar:SetHeight(52)
-    toolbar:SetPoint("TOPLEFT", 12, -32)
-    toolbar:SetPoint("TOPRIGHT", -12, -32)
+    toolbar:SetHeight(48)
+    toolbar:SetPoint("TOPLEFT", header, "BOTTOMLEFT", 0, 0)
+    toolbar:SetPoint("TOPRIGHT", header, "BOTTOMRIGHT", 0, 0)
 
-    local addLabel = toolbar:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-    addLabel:SetPoint("TOPLEFT", 4, -4)
-    addLabel:SetText(L.PROMPT_ADD_ITEM or "Enter item name or itemID")
-    addLabel:SetTextColor(unpack(Palette.fontHeader))
+    local toolbarSep = toolbar:CreateTexture(nil, "OVERLAY", nil, 6)
+    toolbarSep:SetTexture(WHITE_TEX)
+    toolbarSep:SetColorTexture(Palette.border[1], Palette.border[2], Palette.border[3], 1)
+    toolbarSep:SetHeight(BORDER_SIZE)
+    toolbarSep:SetPoint("BOTTOMLEFT", 0, 0)
+    toolbarSep:SetPoint("BOTTOMRIGHT", 0, 0)
+    PixelSnap(toolbarSep)
 
-    local addBox = CreateFrame("EditBox", nil, toolbar, "InputBoxTemplate")
-    addBox:SetSize(300, 22)
-    addBox:SetPoint("TOPLEFT", addLabel, "BOTTOMLEFT", 6, -4)
-    addBox:SetAutoFocus(false)
+    local addEB   = MakeEditBox(toolbar, L.PROMPT_ADD_ITEM or "Item name or ID", 260, false, nil,   nil)
+    local countEB = MakeEditBox(toolbar, L.PROMPT_ADD_COUNT or "Target",         60,  true,  5,     "20")
+    local priceEB = MakeEditBox(toolbar, "Max g/unit",                            80,  true,  7,     nil)
+    local addBox   = addEB.editBox
+    local countBox = countEB.editBox
+    local priceBox = priceEB.editBox
 
-    local countLabel = toolbar:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-    countLabel:SetPoint("TOPLEFT", addBox, "TOPRIGHT", 18, 12)
-    countLabel:SetText(L.PROMPT_ADD_COUNT or "Target")
-    countLabel:SetTextColor(unpack(Palette.fontHeader))
+    addEB:SetPoint("TOPLEFT", toolbar, "TOPLEFT", 12, -4)
+    countEB:SetPoint("LEFT", addEB, "RIGHT", 10, 0)
+    priceEB:SetPoint("LEFT", countEB, "RIGHT", 10, 0)
 
-    local countBox = CreateFrame("EditBox", nil, toolbar, "InputBoxTemplate")
-    countBox:SetSize(50, 22)
-    countBox:SetPoint("TOPLEFT", countLabel, "BOTTOMLEFT", 6, -4)
-    countBox:SetAutoFocus(false)
-    countBox:SetNumeric(true)
-    countBox:SetMaxLetters(5)
-    countBox:SetText("20")
-
-    -- Per-item max price (gold). Copper units in DB; multiply by 10000 on
-    -- write. Blank/0 means "no cap".
-    local priceLabel = toolbar:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-    priceLabel:SetPoint("TOPLEFT", countBox, "TOPRIGHT", 12, 12)
-    priceLabel:SetText("Max g/unit")
-    priceLabel:SetTextColor(unpack(Palette.fontHeader))
-
-    local priceBox = CreateFrame("EditBox", nil, toolbar, "InputBoxTemplate")
-    priceBox:SetSize(60, 22)
-    priceBox:SetPoint("TOPLEFT", priceLabel, "BOTTOMLEFT", 6, -4)
-    priceBox:SetAutoFocus(false)
-    priceBox:SetNumeric(true)
-    priceBox:SetMaxLetters(7)
-    priceBox:SetText("")
-
-    local addBtn = CreateFrame("Button", nil, toolbar, "UIPanelButtonTemplate")
-    addBtn:SetSize(100, 24)
-    addBtn:SetPoint("LEFT", priceBox, "RIGHT", 12, 0)
-    addBtn:SetText(L.BTN_ADD_ITEM or "Add Item")
+    local addBtn = CreateFrame("Button", nil, toolbar)
+    addBtn:SetSize(96, 22)
+    addBtn:SetPoint("LEFT", priceEB, "RIGHT", 12, -6)
+    StyleButton(addBtn)
+    local addBtnText = addBtn:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+    addBtnText:SetPoint("CENTER")
+    addBtnText:SetText(L.BTN_ADD_ITEM or "Add Item")
+    addBtnText:SetTextColor(1, 1, 1, 1)
 
     local function DoAdd()
         local input = addBox:GetText()
@@ -608,41 +911,88 @@ function MF:Build()
     priceBox:SetScript("OnEnterPressed", function() DoAdd() addBox:ClearFocus() end)
     priceBox:SetScript("OnEscapePressed", function(self) self:ClearFocus() end)
 
-    -- Separator under toolbar
-    local sep = f:CreateTexture(nil, "ARTWORK")
-    sep:SetTexture(WHITE_TEX)
-    sep:SetVertexColor(1, 0.82, 0, 0.35)
-    sep:SetHeight(1)
-    sep:SetPoint("TOPLEFT", toolbar, "BOTTOMLEFT", 0, -4)
-    sep:SetPoint("TOPRIGHT", toolbar, "BOTTOMRIGHT", 0, -4)
-
-    -- One-line hint under the separator so the user isn't guessing the
-    -- interaction model. Keep it terse; the tooltip carries the rest.
+    -- ---- Hint (below toolbar) ------------------------------------------
     local hint = f:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
-    hint:SetPoint("TOPLEFT", sep, "BOTTOMLEFT", 4, -4)
-    hint:SetPoint("TOPRIGHT", sep, "BOTTOMRIGHT", -4, -4)
+    hint:SetPoint("TOPLEFT", toolbar, "BOTTOMLEFT", 12, -6)
+    hint:SetPoint("TOPRIGHT", toolbar, "BOTTOMRIGHT", -12, -6)
     hint:SetJustifyH("LEFT")
-    hint:SetText("|cff888888Shift+Click to link \194\183 Right-click to edit price cap \194\183 Click 'x' to remove \194\183 Click the target to edit|r")
+    hint:SetText("|cff888888Shift+Click to link \194\183 Click 'x' to remove \194\183 Click a value to edit it \194\183 Left-click a row (AH open) to search|r")
 
-    -- ---- Status bar (bottom) -----------------------------------------
-    local statusBar = f:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-    statusBar:SetPoint("BOTTOMLEFT", 14, 12)
-    statusBar:SetPoint("BOTTOMRIGHT", -14, 12)
+    -- ---- Column headers -----------------------------------------------
+    -- Sits under the hint; no fill (matches atrocity's headerless section
+    -- headers — the labels themselves + the 1px bottom border are enough).
+    -- Labels in brand blue (accent = section-header rule).
+    local headers = CreateFrame("Frame", nil, f)
+    headers:SetHeight(20)
+    headers:SetPoint("TOPLEFT", hint, "BOTTOMLEFT", -12, -4)
+    headers:SetPoint("TOPRIGHT", hint, "BOTTOMRIGHT", 12, -4)
+
+    local headersSep = headers:CreateTexture(nil, "OVERLAY", nil, 6)
+    headersSep:SetTexture(WHITE_TEX)
+    headersSep:SetColorTexture(Palette.border[1], Palette.border[2], Palette.border[3], 1)
+    headersSep:SetHeight(BORDER_SIZE)
+    headersSep:SetPoint("BOTTOMLEFT", 0, 0)
+    headersSep:SetPoint("BOTTOMRIGHT", 0, 0)
+    PixelSnap(headersSep)
+
+    local function MakeHeader(text, anchorPoint, xOffset, isLeft)
+        local fs = headers:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+        fs:SetTextColor(Palette.brand[1], Palette.brand[2], Palette.brand[3], 1)
+        fs:SetText(text)
+        if isLeft then
+            fs:SetPoint("LEFT", headers, "LEFT", xOffset, 0)
+        else
+            fs:SetPoint("RIGHT", headers, "RIGHT", xOffset, 0)
+        end
+        return fs
+    end
+    -- Column pixel positions match BuildRow's SetPoint offsets exactly.
+    MakeHeader("Item",         nil, 52,   true)   -- left edge + 40 (icon + 12 pad)
+    MakeHeader("Have / Need",  nil, -170, false)  -- right-anchored
+    MakeHeader("Max g",        nil, -108, false)  -- cap column center
+    MakeHeader("Status",       nil, -46,  false)  -- pill center
+
+    -- ---- Footer / bottom bar ------------------------------------------
+    -- Fixed 36px bar; status text on the left, action buttons on the right.
+    -- 1px black top border to separate from the list.
+    local footer = CreateFrame("Frame", nil, f)
+    footer:SetHeight(38)
+    footer:SetPoint("BOTTOMLEFT", 0, 0)
+    footer:SetPoint("BOTTOMRIGHT", 0, 0)
+
+    local footerSep = footer:CreateTexture(nil, "OVERLAY", nil, 6)
+    footerSep:SetTexture(WHITE_TEX)
+    footerSep:SetColorTexture(Palette.border[1], Palette.border[2], Palette.border[3], 1)
+    footerSep:SetHeight(BORDER_SIZE)
+    footerSep:SetPoint("TOPLEFT", 0, 0)
+    footerSep:SetPoint("TOPRIGHT", 0, 0)
+    PixelSnap(footerSep)
+
+    local statusBar = footer:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+    statusBar:SetPoint("LEFT", 14, 0)
+    statusBar:SetPoint("RIGHT", footer, "RIGHT", -260, 0)
     statusBar:SetJustifyH("LEFT")
     self.statusBar = statusBar
 
-    local closeBtn = CreateFrame("Button", nil, f, "UIPanelButtonTemplate")
+    local closeBtn = CreateFrame("Button", nil, footer)
     closeBtn:SetSize(80, 22)
-    closeBtn:SetPoint("BOTTOMRIGHT", -14, 8)
-    closeBtn:SetText(L.BTN_CLOSE or "Close")
+    closeBtn:SetPoint("RIGHT", -12, 0)
+    StyleButton(closeBtn)
+    local closeBtnText = closeBtn:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+    closeBtnText:SetPoint("CENTER")
+    closeBtnText:SetText(L.BTN_CLOSE or "Close")
+    closeBtnText:SetTextColor(1, 1, 1, 1)
     closeBtn:SetScript("OnClick", function() MF:Hide() end)
 
-    -- Restock at AH. Enabled only while the AH frame is shown. Text
-    -- toggles between "Restock at AH" and "Stop" based on loop state.
-    local restockBtn = CreateFrame("Button", nil, f, "UIPanelButtonTemplate")
+    local restockBtn = CreateFrame("Button", nil, footer)
     restockBtn:SetSize(140, 22)
     restockBtn:SetPoint("RIGHT", closeBtn, "LEFT", -8, 0)
-    restockBtn:SetText("Restock at AH")
+    StyleButton(restockBtn)
+    local restockBtnText = restockBtn:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+    restockBtnText:SetPoint("CENTER")
+    restockBtnText:SetTextColor(1, 1, 1, 1)
+    restockBtn._label = restockBtnText
+    restockBtnText:SetText("Restock at AH")
     restockBtn:SetScript("OnClick", function()
         if ADDON.RestockLoop:IsActive() then
             ADDON.RestockLoop:Stop("Restock loop stopped.")
@@ -650,16 +1000,16 @@ function MF:Build()
             ADDON.RestockLoop:Start()
         end
     end)
+    -- Wrap Enable/Disable to visually dim (StyleButton doesn't hook these
+    -- because plain Buttons don't call them; we drive it from RefreshRestockBtn).
     self.restockBtn = restockBtn
 
-    -- Refresh the button state whenever the frame is shown (RefreshRestockBtn
-    -- is also called from Refresh() when the shortlist changes).
     f:HookScript("OnShow", function() MF:RefreshRestockBtn() end)
 
-    -- ---- ScrollBox (list of rows) ------------------------------------
+    -- ---- ScrollBox (list of rows) --------------------------------------
     local listHolder = CreateFrame("Frame", nil, f)
-    listHolder:SetPoint("TOPLEFT", hint, "BOTTOMLEFT", -4, -6)
-    listHolder:SetPoint("BOTTOMRIGHT", closeBtn, "TOPRIGHT", 0, 8)
+    listHolder:SetPoint("TOPLEFT", headers, "BOTTOMLEFT", 4, -2)
+    listHolder:SetPoint("BOTTOMRIGHT", footer, "TOPRIGHT", -4, 2)
 
     local scrollBox = CreateFrame("Frame", nil, listHolder, "WowScrollBoxList")
     scrollBox:SetPoint("TOPLEFT")
@@ -749,9 +1099,9 @@ function MF:Refresh()
     self.dataProvider = newProvider
 
     if shortCount > 0 then
-        self:SetStatus(("|cffffd200%d items tracked|r  |cff888888|||r  |cfff87171%d short|r"):format(#items, shortCount))
+        self:SetStatus(("|cff7381FF%d items tracked|r  |cff888888|||r  |cfff87171%d short|r"):format(#items, shortCount))
     else
-        self:SetStatus(("|cffffd200%d items tracked|r  |cff888888|||r  |cff4ade80all stocked|r"):format(#items))
+        self:SetStatus(("|cff7381FF%d items tracked|r  |cff888888|||r  |cff4ade80all stocked|r"):format(#items))
     end
 
     self:RefreshRestockBtn(shortCount)
@@ -772,15 +1122,23 @@ function MF:RefreshRestockBtn(shortCount)
     end
     local ahOpen = AuctionHouseFrame and AuctionHouseFrame:IsShown()
     local looping = ADDON.RestockLoop and ADDON.RestockLoop:IsActive()
+    local btn = self.restockBtn
     if looping then
-        self.restockBtn:SetText("Stop restock")
-        self.restockBtn:Enable()
+        if btn._label then btn._label:SetText("Stop restock") end
+        btn:Enable()
+        btn:EnableMouse(true)
+        if btn._label then btn._label:SetTextColor(1, 1, 1, 1) end
     else
-        self.restockBtn:SetText("Restock at AH")
-        if ahOpen and shortCount > 0 then
-            self.restockBtn:Enable()
+        if btn._label then btn._label:SetText("Restock at AH") end
+        local enabled = ahOpen and shortCount > 0
+        if enabled then
+            btn:Enable()
+            btn:EnableMouse(true)
+            if btn._label then btn._label:SetTextColor(1, 1, 1, 1) end
         else
-            self.restockBtn:Disable()
+            btn:Disable()
+            btn:EnableMouse(false)
+            if btn._label then btn._label:SetTextColor(Palette.textMuted[1], Palette.textMuted[2], Palette.textMuted[3], 1) end
         end
     end
 end
