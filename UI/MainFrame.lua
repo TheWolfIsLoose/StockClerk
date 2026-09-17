@@ -566,11 +566,15 @@ local function BuildRow(row)
     row.priceEdit = CreateFrame("EditBox", nil, row)
     row.priceEdit:SetFontObject("GameFontHighlight")
     row.priceEdit:SetAutoFocus(false)
-    row.priceEdit:SetNumeric(true)
+    -- PT-1 v0.5: accept g/s/c tokens ("12g50s", "500c"), so numeric mode
+    -- must be off -- Blizzard's SetNumeric strips any non-digit keystroke.
+    -- Bare digits are still accepted and interpreted as gold by the shared
+    -- parser for backward compat with the pre-v0.5 UI.
+    row.priceEdit:SetNumeric(false)
     -- See row.needEdit above for why single-line and why we deliberately
     -- do NOT call EnableKeyboard(true) here.
     row.priceEdit:SetMultiLine(false)
-    row.priceEdit:SetMaxLetters(7)
+    row.priceEdit:SetMaxLetters(14) -- fits "1234g56s78c" comfortably
     row.priceEdit:SetJustifyH("CENTER")
     row.priceEdit:SetSize(72, 20)
     row.priceEdit:SetPoint("CENTER", row.capCell, "CENTER")
@@ -713,10 +717,16 @@ local function BuildRow(row)
     end)
     row:RegisterForClicks("LeftButtonUp")
 
-    -- Cap cell hover + click: opens the inline price editor.
+    -- Cap cell hover + click: opens the inline price editor. Prefills
+    -- with the short g/s/c representation of the current cap so the
+    -- user can edit it in place (e.g. "12g50s") instead of having to
+    -- retype the whole string.
     local function OpenPriceEdit(r)
-        local currentG = r._maxPrice and math.floor(r._maxPrice / 10000) or nil
-        r.priceEdit:SetText(currentG and tostring(currentG) or "")
+        local prefill = ""
+        if r._maxPrice and ADDON.DB and ADDON.DB.FormatCopperShort then
+            prefill = ADDON.DB.FormatCopperShort(r._maxPrice) or ""
+        end
+        r.priceEdit:SetText(prefill)
         r.cap:Hide()
         r.priceEdit:Show()
         r.priceEditBg:Show()
@@ -739,11 +749,15 @@ local function BuildRow(row)
         GameTooltip:Hide()
         GameTooltip:SetOwner(self, "ANCHOR_TOP")
         if r._maxPrice then
-            GameTooltip:SetText(("Max %dg / unit"):format(math.floor(r._maxPrice / 10000)), 1, 1, 1)
+            local shortText = (ADDON.DB and ADDON.DB.FormatCopperShort)
+                and ADDON.DB.FormatCopperShort(r._maxPrice)
+                or (("%dg"):format(math.floor(r._maxPrice / 10000)))
+            GameTooltip:SetText(("Max %s / unit"):format(shortText), 1, 1, 1)
             GameTooltip:AddLine("Click to change  \194\183  blank = no cap", 0.7, 0.7, 0.7)
+            GameTooltip:AddLine("Accepts g/s/c: 12g50s, 500c, 1.5g", 0.5, 0.5, 0.5)
         else
             GameTooltip:SetText("No price cap set", 1, 1, 1)
-            GameTooltip:AddLine("Click to set a max gold/unit", 0.7, 0.7, 0.7)
+            GameTooltip:AddLine("Click to set a max price (g/s/c)", 0.7, 0.7, 0.7)
         end
         GameTooltip:Show()
     end)
@@ -882,15 +896,34 @@ local function BuildRow(row)
         local changed = false
         if r._itemID then
             local raw = r.priceEdit:GetText()
-            local priceGold = tonumber(raw)
-            local maxPriceCopper = (priceGold and priceGold > 0) and (priceGold * 10000) or nil
+            -- PT-1 v0.5: parse via the shared g/s/c parser instead of
+            -- treating the field as gold-only. Bare numbers still mean
+            -- gold (backward compatible with the pre-v0.5 UI); anything
+            -- with a g/s/c suffix is parsed by unit. On parse failure
+            -- (typed garbage) we leave the cap unchanged and show an
+            -- error status -- silent no-op would look like the edit was
+            -- committed to a value it wasn't.
+            local maxPriceCopper, ok = nil, true
+            if ADDON.DB and ADDON.DB.ParsePriceString then
+                maxPriceCopper, ok = ADDON.DB.ParsePriceString(raw)
+            else
+                local n = tonumber(raw)
+                maxPriceCopper = (n and n > 0) and (n * 10000) or nil
+            end
+            local name = r.name:GetText() or ("item:" .. r._itemID)
+            if not ok then
+                MF:SetStatus(("|cffff8888Cap for %s unchanged: couldn't parse '%s'.|r"):format(name, raw))
+                ClosePriceEdit(r)
+                return
+            end
             if maxPriceCopper ~= r._maxPrice then
                 local oldMax = r._maxPrice
-                ADDON.DB:SetItemMaxPrice(r._itemID, maxPriceCopper)
+                ADDON.DB:SetItemMaxPrice(r._itemID, maxPriceCopper, "user")
                 r._maxPrice = maxPriceCopper
-                local name = r.name:GetText() or ("item:" .. r._itemID)
                 if maxPriceCopper then
-                    MF:SetStatus(("Cap for %s set to %dg"):format(name, priceGold))
+                    local shortText = (ADDON.DB.FormatCopperShort and ADDON.DB.FormatCopperShort(maxPriceCopper))
+                        or (("%dg"):format(math.floor(maxPriceCopper / 10000)))
+                    MF:SetStatus(("Cap for %s set to %s"):format(name, shortText))
                 else
                     MF:SetStatus(("Cap cleared for %s"):format(name))
                 end
@@ -902,7 +935,13 @@ local function BuildRow(row)
                 -- Update the inline fontstring so the change is visible
                 -- without a full Refresh.
                 if r.cap then
-                    r.cap:SetText(maxPriceCopper and ("%dg"):format(priceGold) or "")
+                    if maxPriceCopper then
+                        local shortText = (ADDON.DB.FormatCopperShort and ADDON.DB.FormatCopperShort(maxPriceCopper))
+                            or (("%dg"):format(math.floor(maxPriceCopper / 10000)))
+                        r.cap:SetText(shortText)
+                    else
+                        r.cap:SetText("")
+                    end
                 end
                 changed = true
             end
@@ -1014,12 +1053,28 @@ local function InitializeRow(row, data)
     -- Plain text, not a glyph: WoW's stock fonts lack U+263D (moon),
     -- which was used here first and rendered as a placeholder box --
     -- the same bug class the v0.3 glyph fixes addressed for cog/log.
+    --
+    -- PT-1 v0.5: cap tint reflects the last-seen price when both are
+    -- known. Above cap = pink (a buy would be rejected), at-or-below =
+    -- brand mint (buy would fire). If lastPrice is missing or stale
+    -- (older than TTL), fall back to unconditional brand mint so a stale
+    -- 3-day-old price never falsely paints a healthy cap pink.
     local autoOn = ADDON.DB:Settings().autoPurchase == true
     if data.maxPrice then
-        -- Use a lighter tint of the brand hue for the value itself — pure
-        -- Brand mint #98FF98 on near-black reads cleanly at small sizes
-        -- (same tone the addon uses in tooltip headers and status text).
-        row.cap:SetText(("|cff98FF98%dg|r"):format(math.floor(data.maxPrice / 10000)))
+        local capColor = "98FF98" -- brand mint by default
+        if data.lastPrice and data.lastPrice.copper and data.lastPrice.seenAt then
+            local staleCutoff = (ADDON.DB:Settings() and ADDON.DB:Settings().lastPriceTTL) or 86400
+            local age = time() - data.lastPrice.seenAt
+            if age <= staleCutoff and data.lastPrice.copper > data.maxPrice then
+                capColor = "ff8888" -- pink: last-seen exceeds our cap
+            end
+        end
+        -- Prefer short g/s/c format so sub-gold caps (5s, 50c) don't
+        -- collapse to "0g". Whole-gold caps still render as "12g".
+        local capText = (ADDON.DB and ADDON.DB.FormatCopperShort)
+            and ADDON.DB.FormatCopperShort(data.maxPrice)
+            or ("%dg"):format(math.floor(data.maxPrice / 10000))
+        row.cap:SetText(("|cff%s%s|r"):format(capColor, capText))
     elseif autoOn then
         -- Dim gray so it doesn't compete with the mint capped values
         -- in the same column.
@@ -1540,7 +1595,10 @@ function MF:Build()
     -- Numeric-only input avoids the ambiguity entirely.
     local addEB   = MakeEditBox(toolbar, "Item ID",         240, true,  8,     "e.g. 212283")
     local countEB = MakeEditBox(toolbar, "Target",          100, true,  5,     "20")
-    local priceEB = MakeEditBox(toolbar, "Price Cap / Unit", 120, true,  7,     "none")
+    -- PT-1 v0.5: cap field now accepts g/s/c tokens, so isNumeric must
+    -- be false (numeric mode strips letters). Parser accepts bare
+    -- numbers as gold for backward compat.
+    local priceEB = MakeEditBox(toolbar, "Price Cap / Unit", 120, false, 12,    "e.g. 12g50s")
     local addBox   = addEB.editBox
     local countBox = countEB.editBox
     local priceBox = priceEB.editBox
@@ -1571,8 +1629,22 @@ function MF:Build()
             return
         end
         local need = tonumber(countBox:GetText()) or 20
-        local priceGold = tonumber(priceBox:GetText())
-        local maxPriceCopper = (priceGold and priceGold > 0) and (priceGold * 10000) or nil
+        -- PT-1 v0.5: toolbar cap input accepts g/s/c via the shared
+        -- parser. Bare numbers remain gold for backward compat with the
+        -- pre-v0.5 UI. On parse failure we surface a status message
+        -- and abort the add rather than silently dropping the cap.
+        local rawPrice = priceBox:GetText() or ""
+        local maxPriceCopper, priceOk = nil, true
+        if ADDON.DB and ADDON.DB.ParsePriceString then
+            maxPriceCopper, priceOk = ADDON.DB.ParsePriceString(rawPrice)
+        else
+            local n = tonumber(rawPrice)
+            maxPriceCopper = (n and n > 0) and (n * 10000) or nil
+        end
+        if not priceOk then
+            MF:SetStatus(("|cffff8888Cap not added: couldn't parse '%s' (try 12g, 12g50s, 500c).|r"):format(rawPrice))
+            return
+        end
 
         -- ItemResolver still runs (async cache-warm path) so we get the
         -- item's canonical name + link for the status message and for
@@ -1583,7 +1655,7 @@ function MF:Build()
                 MF:SetStatus(("|cffff8888Unknown item ID: %d|r"):format(itemID))
                 return
             end
-            ADDON.DB:SetItem(resolvedID, need, maxPriceCopper)
+            ADDON.DB:SetItem(resolvedID, need, maxPriceCopper, "user")
             ADDON.Inventory:Invalidate()
             if ADDON.Log then
                 ADDON.Log:Emit("add", resolvedID, {
@@ -1600,7 +1672,12 @@ function MF:Build()
             addBox:ClearFocus()
             countBox:ClearFocus()
             priceBox:ClearFocus()
-            local pMsg = maxPriceCopper and (", cap %dg"):format(priceGold) or ""
+            local pMsg = ""
+            if maxPriceCopper then
+                local shortText = (ADDON.DB and ADDON.DB.FormatCopperShort and ADDON.DB.FormatCopperShort(maxPriceCopper))
+                    or (("%dg"):format(math.floor(maxPriceCopper / 10000)))
+                pMsg = (", cap %s"):format(shortText)
+            end
             MF:SetStatus(("Added %s (need %d%s)"):format(name, need, pMsg))
             MF:Refresh()
         end)
@@ -2039,12 +2116,13 @@ function MF:Refresh()
         local have = ADDON.Inventory:GetCount(it.itemID) or 0
         if have < it.need then shortCount = shortCount + 1 end
         newProvider:Insert({
-            itemID    = it.itemID,
-            name      = it.name,
-            need      = it.need,
-            maxPrice  = it.maxPrice,
-            lastPrice = it.lastPrice,   -- { copper, seenAt, source }; feeds the Last Seen column
-            _index    = i,
+            itemID      = it.itemID,
+            name        = it.name,
+            need        = it.need,
+            maxPrice    = it.maxPrice,
+            priceSource = it.priceSource, -- PT-1: "user"/"vendor"/"template" or nil; reserved for row-level UI in Wave 2
+            lastPrice   = it.lastPrice,   -- { copper, seenAt, source }; feeds the Last Seen column
+            _index      = i,
         })
     end
 

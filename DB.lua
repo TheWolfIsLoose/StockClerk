@@ -6,12 +6,21 @@
     Schema:
       char.items = {
         [itemID:number] = {
-          need      = number,
-          maxPrice  = copper,          -- optional; nil = no cap set
-          addedAt   = timestamp,
-          lastPrice = { copper, seenAt, source },   -- optional; QA-11
-          sortOrder = number,          -- user-arranged list position;
-                                       -- doubles as restock priority
+          need        = number,
+          maxPrice    = copper,          -- optional; nil = no cap set
+          priceSource = string,          -- optional; PT-1 v0.5. Records
+                                         -- how the current maxPrice was
+                                         -- chosen: "user" (manually typed),
+                                         -- "vendor" (reserved -- vendor
+                                         -- price plumbing lands in Wave 2),
+                                         -- "template" (came in via a saved
+                                         -- template import). Purely metadata
+                                         -- today; no runtime behavior reads
+                                         -- it. Nil is treated as "user".
+          addedAt     = timestamp,
+          lastPrice   = { copper, seenAt, source },   -- optional; QA-11
+          sortOrder   = number,          -- user-arranged list position;
+                                         -- doubles as restock priority
         }
       }
       char.uiPos = { point, x, y }           -- last MainFrame position
@@ -165,12 +174,13 @@ function DB:GetSortedItems()
     for itemID, entry in pairs(self.char.items) do
         local name = C_Item.GetItemInfo(itemID) or ("item:" .. itemID)
         list[#list + 1] = {
-            itemID    = itemID,
-            need      = entry.need,
-            name      = name,
-            maxPrice  = entry.maxPrice,  -- copper, may be nil ("no cap set")
-            lastPrice = entry.lastPrice, -- { copper, seenAt, source } or nil
-            sortOrder = entry.sortOrder,
+            itemID      = itemID,
+            need        = entry.need,
+            name        = name,
+            maxPrice    = entry.maxPrice,    -- copper, may be nil ("no cap set")
+            priceSource = entry.priceSource, -- "user"/"vendor"/"template" or nil
+            lastPrice   = entry.lastPrice,   -- { copper, seenAt, source } or nil
+            sortOrder   = entry.sortOrder,
         }
     end
     table.sort(list, function(a, b)
@@ -221,7 +231,11 @@ function DB:MoveItem(itemID, delta)
     return true
 end
 
-function DB:SetItem(itemID, need, maxPrice)
+-- Create-or-update an item entry. `maxPrice` is copper or nil. `source`
+-- (PT-1 priceSource) defaults to "user" when a maxPrice is provided;
+-- callers that import from a template or vendor path should pass their
+-- tag explicitly.
+function DB:SetItem(itemID, need, maxPrice, source)
     if not itemID or need == nil then return end
     itemID = tonumber(itemID)
     need   = tonumber(need)
@@ -232,7 +246,10 @@ function DB:SetItem(itemID, need, maxPrice)
         local existing = self.char.items[itemID]
         if existing then
             existing.need = need
-            if maxPrice ~= nil then existing.maxPrice = maxPrice end
+            if maxPrice ~= nil then
+                existing.maxPrice    = maxPrice
+                existing.priceSource = source or "user"
+            end
         else
             -- New items go to the END of the user's arranged list: the
             -- list is priority order, so silently inserting a newcomer
@@ -244,23 +261,106 @@ function DB:SetItem(itemID, need, maxPrice)
                 end
             end
             self.char.items[itemID] = {
-                need      = need,
-                maxPrice  = maxPrice, -- copper; nil means "unlimited" / not set
-                addedAt   = time(),
-                sortOrder = maxOrder + 10,
+                need        = need,
+                maxPrice    = maxPrice, -- copper; nil means "unlimited" / not set
+                priceSource = maxPrice and (source or "user") or nil,
+                addedAt     = time(),
+                sortOrder   = maxOrder + 10,
             }
         end
     end
 end
 
+-- PT-1: parse a user-entered price string into copper.
+-- Accepts (in order of specificity):
+--   "12g50s"       -> 12*10000 + 50*100      copper
+--   "12g"          -> 12*10000               copper
+--   "50s"          -> 50*100                 copper
+--   "5c"           -> 5                      copper
+--   "12g 50s 5c"   -> 12*10000 + 50*100 + 5  copper (whitespace tolerated)
+--   "12.5g"        -> 12*10000 + 5000        copper (fractional gold)
+--   "12"           -> 12*10000               copper (bare number = gold
+--                                             for backward compatibility
+--                                             with the pre-v0.5 editor)
+--   ""             -> nil                    (blank = clear cap)
+--   invalid text   -> nil                    (caller decides what to do)
+-- Returns (copper, ok). `ok` is false on parse failure so callers can
+-- distinguish "cleared" (nil, true) from "bad input" (nil, false).
+function DB.ParsePriceString(str)
+    if type(str) ~= "string" then return nil, false end
+    local trimmed = str:gsub("^%s+", ""):gsub("%s+$", "")
+    if trimmed == "" then return nil, true end
+    local lower = trimmed:lower()
+
+    -- Any g/s/c suffix present? If so, use the token parser.
+    if lower:find("[gsc]") then
+        local copper = 0
+        local seenAny = false
+        -- Match all (number, unit) pairs. Number may be integer or decimal.
+        for numStr, unit in lower:gmatch("([%d%.]+)%s*([gsc])") do
+            local n = tonumber(numStr)
+            if not n or n < 0 then return nil, false end
+            if unit == "g" then
+                copper = copper + math.floor(n * 10000 + 0.5)
+            elseif unit == "s" then
+                copper = copper + math.floor(n * 100 + 0.5)
+            else -- "c"
+                copper = copper + math.floor(n + 0.5)
+            end
+            seenAny = true
+        end
+        if not seenAny then return nil, false end
+        -- Any leftover non-token junk = bad input. Rebuild the parsed
+        -- string and compare to the sanitized original to detect it.
+        local sanitized = lower:gsub("%s+", "")
+        local consumed = ""
+        for numStr, unit in lower:gmatch("([%d%.]+)%s*([gsc])") do
+            consumed = consumed .. numStr .. unit
+        end
+        if sanitized ~= consumed then return nil, false end
+        return copper, true
+    end
+
+    -- No suffix: bare number, interpret as GOLD for backward compat with
+    -- pre-v0.5 UIs that only ever accepted whole gold.
+    local n = tonumber(trimmed)
+    if not n or n < 0 then return nil, false end
+    return math.floor(n * 10000 + 0.5), true
+end
+
+-- PT-1: format copper as a short g/s/c string. Skips zero components and
+-- collapses so 12g0s0c prints as "12g", 0g50s0c as "50s", etc. Returns
+-- "0c" for exactly zero copper. Nil in returns nil out ("no cap").
+function DB.FormatCopperShort(copper)
+    if copper == nil then return nil end
+    copper = math.floor(copper + 0.5)
+    if copper <= 0 then return "0c" end
+    local g = math.floor(copper / 10000)
+    local s = math.floor((copper % 10000) / 100)
+    local c = copper % 100
+    local parts = {}
+    if g > 0 then parts[#parts + 1] = g .. "g" end
+    if s > 0 then parts[#parts + 1] = s .. "s" end
+    if c > 0 then parts[#parts + 1] = c .. "c" end
+    return table.concat(parts, " ")
+end
+
 -- Update just the maxPrice for an existing item; no-op if the item isn't
--- tracked. Pass nil to clear the cap.
-function DB:SetItemMaxPrice(itemID, maxPriceCopper)
+-- tracked. Pass nil to clear the cap. `source` is the PT-1 priceSource
+-- tag ("user" / "vendor" / "template"); defaults to "user" when omitted
+-- because every UI-driven call site is a user edit. Passing nil for
+-- maxPriceCopper clears the source tag too -- an unset cap has no source.
+function DB:SetItemMaxPrice(itemID, maxPriceCopper, source)
     itemID = tonumber(itemID)
     if not itemID then return end
     local entry = self.char.items[itemID]
     if not entry then return end
     entry.maxPrice = maxPriceCopper
+    if maxPriceCopper == nil then
+        entry.priceSource = nil
+    else
+        entry.priceSource = source or "user"
+    end
 end
 
 -- QA-11: stamp the most-recent observed unit price for an item. Sources:
