@@ -162,6 +162,31 @@ local function BuildRow(row)
     row.editBg:SetPoint("BOTTOMRIGHT", row.edit, "BOTTOMRIGHT", 4, -2)
     row.edit:Hide()
 
+    -- Price cap editor (hidden until Right-Click on the row).
+    -- Overlaid to the LEFT of the count so it visually replaces the
+    -- 'max Ng' suffix while active. Empty submit clears the cap.
+    row.priceBg = row:CreateTexture(nil, "BACKGROUND")
+    row.priceBg:SetTexture(WHITE_TEX)
+    row.priceBg:SetVertexColor(0, 0, 0, 0.6)
+    row.priceBg:Hide()
+
+    row.priceEdit = CreateFrame("EditBox", nil, row)
+    row.priceEdit:SetFontObject("GameFontHighlight")
+    row.priceEdit:SetAutoFocus(false)
+    row.priceEdit:SetNumeric(true)
+    row.priceEdit:SetMaxLetters(7)
+    row.priceEdit:SetJustifyH("CENTER")
+    row.priceEdit:SetSize(70, 20)
+    row.priceEdit:SetPoint("RIGHT", row, "RIGHT", -195, 0)
+    row.priceBg:SetPoint("TOPLEFT", row.priceEdit, "TOPLEFT", -4, 2)
+    row.priceBg:SetPoint("BOTTOMRIGHT", row.priceEdit, "BOTTOMRIGHT", 4, -2)
+    row.priceEdit:Hide()
+
+    row.priceHint = row:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
+    row.priceHint:SetPoint("BOTTOM", row.priceEdit, "TOP", 0, 1)
+    row.priceHint:SetText("|cffffd200max g/unit \194\183 blank = no cap|r")
+    row.priceHint:Hide()
+
     -- Status pill (ok / -N)
     row.pill = CreateFrame("Frame", nil, row)
     row.pill:SetSize(52, 20)
@@ -226,6 +251,19 @@ local function BuildRow(row)
             local edit = ChatEdit_ChooseBoxForSend()
             ChatEdit_ActivateChat(edit)
             edit:Insert(self._itemLink)
+            return
+        end
+        -- Right Click -> edit the per-item max price cap. Blank + Enter
+        -- clears the cap. Escape aborts without saving.
+        if mouseButton == "RightButton" and self._itemID then
+            local currentG = self._maxPrice and math.floor(self._maxPrice / 10000) or nil
+            self.priceEdit:SetText(currentG and tostring(currentG) or "")
+            self.priceEdit:Show()
+            self.priceBg:Show()
+            self.priceHint:Show()
+            self.count:Hide()
+            self.priceEdit:SetFocus()
+            self.priceEdit:HighlightText()
             return
         end
         -- Plain Left Click while AH is open -> browse this item at the AH.
@@ -296,6 +334,37 @@ local function BuildRow(row)
         r.editBg:Hide()
         r.count:Show()
         r.pill:Show()
+        MF:Refresh()
+    end)
+
+    -- Price editor: Escape aborts, Enter commits (blank = clear cap).
+    row.priceEdit:SetScript("OnEscapePressed", function(self)
+        self:ClearFocus()
+        self:Hide()
+        self:GetParent().priceBg:Hide()
+        self:GetParent().priceHint:Hide()
+        self:GetParent().count:Show()
+    end)
+    row.priceEdit:SetScript("OnEnterPressed", function(self)
+        local r = self:GetParent()
+        if r._itemID then
+            local raw = self:GetText()
+            local priceGold = tonumber(raw)
+            local maxPriceCopper = (priceGold and priceGold > 0) and (priceGold * 10000) or nil
+            ADDON.DB:SetItemMaxPrice(r._itemID, maxPriceCopper)
+            r._maxPrice = maxPriceCopper
+            local name = r.name:GetText() or ("item:" .. r._itemID)
+            if maxPriceCopper then
+                MF:SetStatus(("Cap for %s set to %dg"):format(name, priceGold))
+            else
+                MF:SetStatus(("Cap cleared for %s"):format(name))
+            end
+        end
+        self:ClearFocus()
+        self:Hide()
+        r.priceBg:Hide()
+        r.priceHint:Hide()
+        r.count:Show()
         MF:Refresh()
     end)
 end
@@ -553,7 +622,7 @@ function MF:Build()
     hint:SetPoint("TOPLEFT", sep, "BOTTOMLEFT", 4, -4)
     hint:SetPoint("TOPRIGHT", sep, "BOTTOMRIGHT", -4, -4)
     hint:SetJustifyH("LEFT")
-    hint:SetText("|cff888888Shift+Click a row to link \194\183 Click 'x' to remove \194\183 Click the target to edit \194\183 Restock at AH to buy|r")
+    hint:SetText("|cff888888Shift+Click to link \194\183 Right-click to edit price cap \194\183 Click 'x' to remove \194\183 Click the target to edit|r")
 
     -- ---- Status bar (bottom) -----------------------------------------
     local statusBar = f:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
