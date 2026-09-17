@@ -309,3 +309,53 @@ to directly. But it's a good reference for how the Auctionator/
 Syndicator/Baganator ecosystem chains data addons behind UI addons —
 the same shape we're building (Stock Clerk = UI + logic, delegates to
 Syndicator for cross-char data and Auctionator for AH queries).
+
+---
+
+## UI polish — borrow atrocityEssentials custom assets (added 2026-09-16)
+
+**User ask (verbatim):** "AES ships with custom assets for GUI construction. Maybe we borrow some of those to make the aesthetic more cohesive."
+
+**Context:** Current UI uses Blizzard-native textures for the resize grip
+(`Interface\ChatFrame\UI-ChatIM-SizeGrabber-*`) plus a couple of solid-color
+`WHITE8X8` fills, black 1px overlay borders, and `GameFontNormal/Highlight`
+FontStrings. That reads as "well-behaved Blizzard addon" but not
+distinctively AES-family. AES ships its own texture pack that unifies its
+whole suite of addons visually.
+
+### What AES ships (audit before pulling anything in)
+The user's uploaded `atrocityEssentials.zip` should contain a
+`Media/` (or `Assets/`) directory with things like:
+- Corner / edge / grip pixels
+- Button up/down/highlight states
+- Section-divider hairlines
+- Check/radio marks
+- Slider thumbs / scroll thumbs
+- Font atlas or a bundled TTF
+
+Before borrowing: `unzip -l atrocityEssentials.zip` to list the media dir,
+then look at how AES's own `.lua` references those paths so we know the
+intended usage and any anchor conventions.
+
+### Candidate swaps (once we know what's in the pack)
+| Current                              | AES swap candidate                     |
+|--------------------------------------|----------------------------------------|
+| Blizz `SizeGrabber-*` (resize grip)  | AES corner-grip trio if bundled        |
+| WHITE8X8 button fills                | AES flat button plate + hover state    |
+| 1px `Palette.border` textures        | AES hairline / crisp-pixel border      |
+| `GameFontDisableSmall` ghost text    | AES muted font style (if a font ships) |
+| Custom scroll-thumb (if any)         | AES scroll thumb                       |
+
+### Licensing / attribution
+Before shipping any borrowed asset: check AES's license (README/LICENSE
+in the zip). Most addon authors are permissive but explicit MIT/CC-BY
+attribution may be required. If unclear, ask the AES author on
+CurseForge before publishing v0.3+.
+
+### Rollout strategy
+Do this as a dedicated **UI-cohesion pass** (own version bump, own
+CHANGELOG entry), not smuggled into a feature release — makes it easy
+to revert if the aesthetic doesn't land or if we hit a licensing snag.
+Keep the current Blizz-native fallbacks in the code path (e.g. via a
+`Palette.assets = "atrocity" or "blizzard"` toggle) so users on
+low-memory setups or with texture-pack conflicts have an escape hatch.
