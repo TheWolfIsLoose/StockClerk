@@ -4,6 +4,12 @@
 
 <h1 align="center">Stock Clerk</h1>
 
+<p align="center">
+  <a href="https://www.curseforge.com/wow/addons/stock-clerk">CurseForge</a>
+  ·
+  <a href="https://github.com/TheWolfIsLoose/StockClerk/releases">GitHub Releases</a>
+</p>
+
 A lightweight, per-character consumable restock tracker for World of
 Warcraft. Set a target count for every consumable you want to keep on
 hand, and Stock Clerk shows you at a glance which ones you're short on
@@ -51,10 +57,13 @@ to get more?"*
 
 ## Installation
 
-Download the packaged release from the
+**CurseForge:** install [Stock Clerk on
+CurseForge](https://www.curseforge.com/wow/addons/stock-clerk) via
+the CurseForge desktop app or your addon manager of choice.
+
+**Manual:** download the packaged zip from the
 [Releases page](https://github.com/TheWolfIsLoose/StockClerk/releases)
-and unzip into your `Interface/AddOns/` folder. CurseForge and Wago
-listings are coming.
+and unzip into your `Interface/AddOns/` folder.
 
 ## Roadmap
 

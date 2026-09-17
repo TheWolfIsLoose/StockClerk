@@ -20,6 +20,18 @@ deliberate go-wide decision.
 - `Dev/` folder is `.pkgmeta`-ignored, so notes/README/update.bat
   never ship in the packaged zip.
 
+**Publishing IDs:**
+- CurseForge project: **1700292** — slug `stock-clerk` —
+  https://www.curseforge.com/wow/addons/stock-clerk
+- CurseForge Project ID is wired into `StockClerk.toc` as
+  `X-Curse-Project-ID`; the packager reads this to associate uploads.
+- Wago: not yet published. When we do, add `X-Wago-ID` to the .toc.
+- CurseForge auto-packaging is via CF's GitHub webhook (set up on
+  the CF project side). Push a `vX.Y.Z` tag → CF fetches, runs the
+  packager against `.pkgmeta`, and publishes. Verify each release
+  landed by checking https://www.curseforge.com/wow/addons/stock-clerk/files
+  a few minutes after the tag push.
+
 ---
 
 ## Section 1: Shipped (what testers actually have on v0.4.0)
