@@ -10,23 +10,29 @@ full visual reskin.
 - **Resizable window** with a drag handle in the bottom-right corner
   (Blizzard-native SizeGrabber texture). Minimum width 640, maximum
   1200x1200. Size and position persist per character.
-- **Tab / Shift+Tab navigation** across the whole editable surface in
-  row-major order: Item -> Target -> Price Cap -> row 1 Need -> row 1
-  Price Cap -> row 2 Need -> ... and wraps. If the next cell isn't
-  currently on screen the list scrolls to it automatically.
+- **Full keyboard-only entry.** Tab / Shift+Tab walks the entire
+  editable surface in row-major order: Item ID -> Target -> Price
+  Cap -> Add Item button (mint focus ring, activates on Space or
+  Enter) -> row 1 Need -> row 1 Price Cap -> row 2 Need -> ... and
+  wraps. Off-screen rows auto-scroll into view before opening.
 - **Inline edits commit on blur** as well as on Enter. Tabbing or
   clicking away no longer discards the pending value. Escape still
-  cancels.
-- **Row cell values stay visible on hover.** Previously the higher-
-  level cell fill occluded the value on hover; the FontStrings are
-  now parented to the cell itself so they draw over the fill.
-- **Placeholder hints** in all three toolbar fields; the fields also
+  cancels without committing.
+- **Row cell values stay visible on hover.** Previously the cell fill
+  occluded the value on hover; the FontStrings are now parented to
+  the cell itself so they draw over the fill.
+- **Placeholder hints** in all three toolbar fields; the fields
   clear back to their placeholders after a successful add.
 - **Column-header band** stretches flush to the right edge of the
   window, matching the toolbar and footer bands.
-- **Ambiguous-name hint.** When you add an item by name, the status
-  line now shows the resolved itemID so you can re-add by exact ID if
-  the resolver picked the wrong quality variant.
+- **Item ID-only add.** The Item field now accepts numeric item IDs
+  only (e.g. `212283`). Name-based add is deferred to a future
+  release because Blizzard's API returns non-deterministic matches
+  when a display name maps to multiple item IDs (rank 1/2/3 craft
+  variants, event duplicates).
+- **Escape releases keyboard cleanly.** Pressing Escape out of an
+  editbox no longer leaves the window holding keyboard input --
+  bag hotkeys, chat toggle, and macro binds all fire immediately.
 
 ### New
 
