@@ -6,8 +6,8 @@
     child; header / toolbar / list / footer are internal sub-regions
     separated by 1px black borders alone (no per-section fills). Rows
     have no background either — the only hover signal is a translucent
-    grey wash ("mouse is here"), and the only accent is brand blue
-    #7381FF ("this opens something"). Uses the modern ScrollBox +
+    grey wash ("mouse is here"), and the only accent is brand mint
+    #98FF98 ("this opens something"). Uses the modern ScrollBox +
     ScrollView + DataProvider system introduced in Dragonflight.
 
     Design system (kept in one place at the top so the theme can be
@@ -21,7 +21,7 @@
         Palette.hoverWash    translucent grey "mouse is here" overlay
         Palette.pressFill    translucent grey button press feedback
         Palette.border       pure black, alpha 1
-        Palette.brand        #7381FF accent (focus rings, cap value, title accent)
+        Palette.brand        #98FF98 accent (focus rings, cap value, title accent)
         Palette.textPrimary / textSecondary / textMuted   greyscale text
         Palette.ok / short   semantic status colours (kept only for text)
 
@@ -58,7 +58,7 @@ local ROW_HEIGHT = 30
 -- Palette — ported from atrocityEssentials' ThemeDefaults (near-black,
 -- flat, ElvUI-family). One rule: the WINDOW paints one fill; nested regions
 -- get separated only by 1px pure-black borders, not by additional shades.
--- Accent = atrocity blue #7381FF, kept everywhere the addon used to paint
+-- Accent = SharedMedia_Tones organic mint green #98FF98, kept everywhere the addon used to paint
 -- gold (title, focus borders, section labels).
 -- ---------------------------------------------------------------------------
 local Palette = {
@@ -74,14 +74,14 @@ local Palette = {
     border        = { 0.00, 0.00, 0.00, 1.00 },
     -- Atrocity brand (their signature). Used on focus borders, section
     -- headers, title accent word, and the shortfall count number.
-    brand         = { 0.451, 0.506, 1.000, 1.00 }, -- #7381FF
+    brand         = { 0.596, 1.000, 0.596, 1.00 }, -- #98FF98 (SharedMedia_Tones organic)
     brandDim      = { 0.451, 0.506, 1.000, 0.55 },
     -- Text
     textPrimary   = { 1.00, 1.00, 1.00, 1.00 },
     textSecondary = { 0.78, 0.78, 0.78, 1.00 },
     textMuted     = { 0.50, 0.50, 0.50, 1.00 },
     -- Semantic (kept for status pill / shortfall; muted so they don't
-    -- outshine the brand blue)
+    -- outshine the brand mint)
     ok            = { 0.30, 0.80, 0.40, 1.00 },
     short         = { 0.90, 0.30, 0.30, 1.00 },
 }
@@ -162,7 +162,7 @@ local function SetBorderColor(frame, r, g, b, a)
 end
 
 -- Animated border color: smoothly transition a widget's border between
--- the resting color (black) and a target (brand blue on hover/focus).
+-- the resting color (black) and a target (brand mint on hover/focus).
 -- Atrocity's EditBox uses the same pattern (AnimateEditBoxBorder).
 local function AttachBorderAnimator(frame)
     if frame._borderAnim then return end
@@ -239,7 +239,7 @@ end
 
 -- StyleEditBox: for a plain WoW EditBox that already lives inside a
 -- container Frame (the container gets the border + fill; the EditBox stays
--- transparent). Wires up brand-blue border animation on hover/focus.
+-- transparent). Wires up brand-mint border animation on hover/focus.
 local function StyleEditBoxContainer(container, editBox)
     ApplyFill(container, Palette.bgDark)
     AddBlackBorder(container)
@@ -343,7 +343,7 @@ local function BuildRow(row)
 
     -- Cap cell: no idle fill or border — the value sits directly on the
     -- window background (same visual weight as the Have/Need column). On
-    -- hover the border grows in as brand blue and a subtle dark fill
+    -- hover the border grows in as brand mint and a subtle dark fill
     -- appears, so the affordance ("this opens something") stays
     -- discoverable. All colours start at alpha 0 and animate up.
     local CAP_FILL_IDLE = { Palette.bgMedium[1], Palette.bgMedium[2], Palette.bgMedium[3], 0 }
@@ -380,7 +380,7 @@ local function BuildRow(row)
 
     -- Price cap inline editor (hidden until the cap cell is clicked).
     -- Anchored TO the cap cell so it lands exactly where the value was.
-    -- The cap cell already carries the flat black border and brand-blue
+    -- The cap cell already carries the flat black border and brand-mint
     -- focus animation — the editor just needs a slightly darker fill so
     -- the caret has enough contrast.
     row.priceEditBg = row:CreateTexture(nil, "BACKGROUND")
@@ -513,7 +513,7 @@ local function BuildRow(row)
         local r = self:GetParent()
         -- Delegate to row hover so tooltip + trash + wash all appear.
         r:GetScript("OnEnter")(r)
-        -- Border animates to brand blue — the "this opens something" signal.
+        -- Border animates to brand mint — the "this opens something" signal.
         self._borderAnim.AnimateTo(Palette.brand)
         if self._bg then self._bg:SetVertexColor(unpack(self._fillHover)) end
         GameTooltip:Hide()
@@ -673,15 +673,14 @@ local function InitializeRow(row, data)
     end
     row.count:SetText(countText)
 
-    -- Cap column value. Dim '--' when no cap; brand-blue when set. The
+    -- Cap column value. Dim '--' when no cap; brand-mint when set. The
     -- number is the emphasized element in the row (per atrocity's rule:
     -- accent color goes on the value, not on the chrome).
     if data.maxPrice then
         -- Use a lighter tint of the brand hue for the value itself — pure
-        -- #7381FF sits too close to the near-black window fill to be
-        -- comfortably readable at small sizes. #B8C0FF is atrocity's own
-        -- brand-text-on-dark tone.
-        row.cap:SetText(("|cffB8C0FF%dg|r"):format(math.floor(data.maxPrice / 10000)))
+        -- Brand mint #98FF98 on near-black reads cleanly at small sizes
+        -- (same tone the addon uses in tooltip headers and status text).
+        row.cap:SetText(("|cff98FF98%dg|r"):format(math.floor(data.maxPrice / 10000)))
     else
         row.cap:SetText("|cff555555\226\128\148|r") -- em-dash for a real "unset" glyph
     end
@@ -695,7 +694,7 @@ local function InitializeRow(row, data)
     local short = data.need - have
     if short > 0 then
         -- Red short text (#e5624a — muted red, tuned to sit with the dark bg
-        -- and the brand blue without shouting).
+        -- and the brand mint without shouting).
         row.pill.text:SetText(("|cffe5624a-%d|r"):format(short))
     else
         row.pill.text:SetText("|cff4ade80ok|r")
@@ -813,7 +812,7 @@ function MF:Build()
     -- ---- Header (title bar) --------------------------------------------
     -- Height 32, no fill of its own (window paints one bg), 1px black
     -- bottom border to separate it from the toolbar. Title has an accented
-    -- word ("Stock") in brand blue and a neutral second word ("Clerk") —
+    -- word ("Stock") in brand mint and a neutral second word ("Clerk") —
     -- verbatim structure from atrocity's AccentedTitle recipe.
     local header = CreateFrame("Frame", nil, f)
     header:SetHeight(32)
@@ -838,7 +837,7 @@ function MF:Build()
 
     local title = header:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
     title:SetPoint("LEFT", header, "LEFT", 12, 0)
-    title:SetText("|cff7381FFStock|r|cffFFFFFFClerk|r")
+    title:SetText("|cff98FF98Stock|r|cffFFFFFFClerk|r")
     title:SetShadowOffset(0, 0)
 
     -- Close X button in the header (atrocity's aesClose recipe, WoW-adapted).
@@ -941,7 +940,7 @@ function MF:Build()
     -- ---- Column headers -----------------------------------------------
     -- Sits under the hint; no fill (matches atrocity's headerless section
     -- headers — the labels themselves + the 1px bottom border are enough).
-    -- Labels in brand blue (accent = section-header rule).
+    -- Labels in brand mint (accent = section-header rule).
     local headers = CreateFrame("Frame", nil, f)
     headers:SetHeight(20)
     headers:SetPoint("TOPLEFT", hint, "BOTTOMLEFT", -12, -4)
@@ -1119,9 +1118,9 @@ function MF:Refresh()
     self.dataProvider = newProvider
 
     if shortCount > 0 then
-        self:SetStatus(("|cff7381FF%d items tracked|r  |cff888888|||r  |cfff87171%d short|r"):format(#items, shortCount))
+        self:SetStatus(("|cff98FF98%d items tracked|r  |cff888888|||r  |cfff87171%d short|r"):format(#items, shortCount))
     else
-        self:SetStatus(("|cff7381FF%d items tracked|r  |cff888888|||r  |cff4ade80all stocked|r"):format(#items))
+        self:SetStatus(("|cff98FF98%d items tracked|r  |cff888888|||r  |cff4ade80all stocked|r"):format(#items))
     end
 
     self:RefreshRestockBtn(shortCount)
