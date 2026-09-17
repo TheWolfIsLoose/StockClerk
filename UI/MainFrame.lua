@@ -342,14 +342,19 @@ local function InitializeRow(row, data)
     row._have      = have
     row._breakdown = bd
 
-    local countText
+    local countText = ("%d / %d"):format(have, data.need)
     if stashed > 0 then
-        countText = ("%d / %d  |cff888888(+%d)|r"):format(have, data.need, stashed)
-    else
-        countText = ("%d / %d"):format(have, data.need)
+        -- Show source labels for whatever's outside the bags. Keeps the
+        -- annotation short by joining with '+' (bags-only stays the primary
+        -- metric; this is context for where the rest lives).
+        local parts = {}
+        if bd.bank    > 0 then parts[#parts+1] = bd.bank    .. " bank"    end
+        if bd.reagent > 0 then parts[#parts+1] = bd.reagent .. " reagent" end
+        if bd.warband > 0 then parts[#parts+1] = bd.warband .. " warband" end
+        countText = countText .. ("  |cff888888(+%d: %s)|r"):format(stashed, table.concat(parts, ", "))
     end
     if data.maxPrice then
-        countText = countText .. ("  |cff888888\226\137\164 %dg|r"):format(math.floor(data.maxPrice / 10000))
+        countText = countText .. ("  |cff888888max %dg|r"):format(math.floor(data.maxPrice / 10000))
     end
     row.count:SetText(countText)
 

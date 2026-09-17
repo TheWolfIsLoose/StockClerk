@@ -173,8 +173,15 @@ function AH:BuyUpTo(itemID, quantity, maxUnitPrice, callback)
         if toBuy == 0 then
             local cheapest = resultsOrErr[1] and resultsOrErr[1].unitPrice or nil
             if callback then
-                callback(false, "no listings under cap"
-                    .. (cheapest and (" (cheapest = " .. GetCoinTextureString(cheapest) .. ")") or ""))
+                if cheapest and maxUnitPrice then
+                    local capG = math.floor(maxUnitPrice / 10000)
+                    callback(false, ("cheapest %s is above your %dg cap"):format(
+                        GetCoinTextureString(cheapest), capG))
+                elseif cheapest then
+                    callback(false, "cheapest " .. GetCoinTextureString(cheapest) .. " but no quantity available")
+                else
+                    callback(false, "no auctions listed")
+                end
             end
             return
         end
@@ -217,6 +224,9 @@ function AH:ExecutePurchase(itemID, quantity, expectedSpend, callback)
 
     self.state.timeoutTimer = C_Timer.NewTimer(SEARCH_TIMEOUT_SEC, function()
         DebugPrint("buy timeout id=" .. itemID)
+        -- Cancel the pending server-side purchase so the next buy isn't
+        -- blocked by an orphaned StartCommoditiesPurchase.
+        pcall(C_AuctionHouse.CancelCommoditiesPurchase)
         Finish(false, "buy timeout")
     end)
 end
@@ -232,15 +242,26 @@ function AH:OnCommoditySearchUpdated(itemID)
 end
 
 -- Server tells us the current price/total for the pending StartCommoditiesPurchase.
--- If it matches (or is under) what we expected, auto-confirm. If it went UP,
--- bail out and let the user re-decide.
-function AH:OnCommodityPriceUpdated(itemID, newTotal)
-    if self.state.mode ~= "buy" or self.state.itemID ~= itemID then return end
+-- IMPORTANT: COMMODITY_PRICE_UPDATED fires with (unitPrice, totalPrice) --
+-- NO itemID payload. We rely on AH.state.itemID (only one buy in flight).
+-- If the total matches (or is under) what we expected, auto-confirm. If
+-- it went UP, bail out and let the user re-decide.
+function AH:OnCommodityPriceUpdated(newUnitPrice, newTotalPrice)
+    if self.state.mode ~= "buy" then return end
+    local itemID   = self.state.itemID
     local expected = self.state.expectedSpend or math.huge
-    DebugPrint(("price update id=%d new=%d expected=%d"):format(itemID, newTotal or 0, expected))
-    if newTotal and newTotal <= expected then
+    DebugPrint(("price update id=%d unit=%d total=%d expected=%d"):format(
+        itemID or 0, newUnitPrice or 0, newTotalPrice or 0, expected))
+    if newTotalPrice and newTotalPrice <= expected then
         DebugPrint("price acceptable, confirming")
         C_AuctionHouse.ConfirmCommoditiesPurchase(itemID, self.state.quantity)
+        -- Reset timeout for the confirm ack.
+        if self.state.timeoutTimer then self.state.timeoutTimer:Cancel() end
+        self.state.timeoutTimer = C_Timer.NewTimer(SEARCH_TIMEOUT_SEC, function()
+            DebugPrint("confirm ack timeout id=" .. (itemID or 0))
+            C_AuctionHouse.CancelCommoditiesPurchase()
+            Finish(false, "purchase confirm timed out")
+        end)
     else
         DebugPrint("price increased beyond cap, cancelling")
         C_AuctionHouse.CancelCommoditiesPurchase()
@@ -248,16 +269,19 @@ function AH:OnCommodityPriceUpdated(itemID, newTotal)
     end
 end
 
-function AH:OnCommodityPriceUnavailable(itemID)
-    if self.state.mode ~= "buy" or self.state.itemID ~= itemID then return end
-    DebugPrint("price unavailable id=" .. itemID)
+-- These fire without a reliable itemID payload. We only ever have one buy
+-- in flight, so state.mode == "buy" is enough of a filter.
+function AH:OnCommodityPriceUnavailable()
+    if self.state.mode ~= "buy" then return end
+    DebugPrint("price unavailable id=" .. (self.state.itemID or 0))
     C_AuctionHouse.CancelCommoditiesPurchase()
     Finish(false, "listings stale, re-search needed")
 end
 
-function AH:OnCommodityPurchaseSucceeded(itemID)
-    if self.state.mode ~= "buy" or self.state.itemID ~= itemID then return end
-    DebugPrint("purchase succeeded id=" .. itemID)
+function AH:OnCommodityPurchaseSucceeded()
+    if self.state.mode ~= "buy" then return end
+    local itemID = self.state.itemID
+    DebugPrint("purchase succeeded id=" .. (itemID or 0))
     Finish(true, {
         itemID   = itemID,
         quantity = self.state.quantity,
@@ -265,9 +289,9 @@ function AH:OnCommodityPurchaseSucceeded(itemID)
     })
 end
 
-function AH:OnCommodityPurchaseFailed(itemID)
-    if self.state.mode ~= "buy" or self.state.itemID ~= itemID then return end
-    DebugPrint("purchase failed id=" .. itemID)
+function AH:OnCommodityPurchaseFailed()
+    if self.state.mode ~= "buy" then return end
+    DebugPrint("purchase failed id=" .. (self.state.itemID or 0))
     Finish(false, "server reported purchase failed")
 end
 

@@ -116,20 +116,27 @@ function StockClerk:OnCommoditySearchUpdated(_, itemID)
     if ADDON.AH then ADDON.AH:OnCommoditySearchUpdated(itemID) end
 end
 
-function StockClerk:OnCommodityPriceUpdated(_, itemID, newTotal)
-    if ADDON.AH then ADDON.AH:OnCommodityPriceUpdated(itemID, newTotal) end
+-- COMMODITY_PRICE_UPDATED fires with (unitPrice, totalPrice) -- NO itemID.
+-- (Auctionator's Tabs/Buying/Commodity/Mixins/Main.lua confirms this:
+--  `self:CheckPurchase(eventData, ...)` where eventData=unitPrice.)
+-- We know which itemID we're waiting on from AH.state, so we just pass
+-- the price data through.
+function StockClerk:OnCommodityPriceUpdated(_, newUnitPrice, newTotalPrice)
+    if ADDON.AH then ADDON.AH:OnCommodityPriceUpdated(newUnitPrice, newTotalPrice) end
 end
 
-function StockClerk:OnCommodityPriceUnavailable(_, itemID)
-    if ADDON.AH then ADDON.AH:OnCommodityPriceUnavailable(itemID) end
+-- These three don't carry a reliable itemID payload; AH.lua filters by
+-- the currently in-flight operation.
+function StockClerk:OnCommodityPriceUnavailable()
+    if ADDON.AH then ADDON.AH:OnCommodityPriceUnavailable() end
 end
 
-function StockClerk:OnCommodityPurchaseSucceeded(_, itemID)
-    if ADDON.AH then ADDON.AH:OnCommodityPurchaseSucceeded(itemID) end
+function StockClerk:OnCommodityPurchaseSucceeded()
+    if ADDON.AH then ADDON.AH:OnCommodityPurchaseSucceeded() end
 end
 
-function StockClerk:OnCommodityPurchaseFailed(_, itemID)
-    if ADDON.AH then ADDON.AH:OnCommodityPurchaseFailed(itemID) end
+function StockClerk:OnCommodityPurchaseFailed()
+    if ADDON.AH then ADDON.AH:OnCommodityPurchaseFailed() end
 end
 
 function StockClerk:OnAuctionHouseShow()
