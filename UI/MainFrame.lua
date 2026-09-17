@@ -1165,6 +1165,102 @@ function MF:Build()
         end)
     end
     addBtn:SetScript("OnClick", DoAdd)
+
+    -- ---- Add-button keyboard focus (Tab stop) --------------------------
+    -- WoW Buttons don't get keyboard focus the way EditBoxes do, so we
+    -- roll our own: a visible mint focus ring around the button when it
+    -- is the current Tab stop, EnableKeyboard(true) with an OnKeyDown
+    -- handler for Tab / Shift+Tab / Enter / Space / Escape, and helpers
+    -- MF:FocusAddButton / MF:BlurAddButton to move focus into and out of
+    -- it programmatically. Without this, priceBox forward-Tab would have
+    -- to jump past the Add button straight into the list, and mouse-
+    -- averse users could never trigger Add without Enter-inside-a-box.
+    local ring = addBtn:CreateTexture(nil, "OVERLAY")
+    ring:SetPoint("TOPLEFT", addBtn, "TOPLEFT", -2, 2)
+    ring:SetPoint("BOTTOMRIGHT", addBtn, "BOTTOMRIGHT", 2, -2)
+    ring:SetColorTexture(0, 0, 0, 0) -- transparent center; edges drawn via 4 sub-textures below
+    ring:Hide()
+    -- Blizzard textures don't support border-only strokes, so build the
+    -- ring from four 1px mint edges rather than a filled rect.
+    local function edge(parent, r, g, b, a)
+        local t = parent:CreateTexture(nil, "OVERLAY")
+        t:SetColorTexture(r, g, b, a)
+        return t
+    end
+    local mint = { 0x98/255, 0xFF/255, 0x98/255, 1 }
+    local edgeT = edge(addBtn, mint[1], mint[2], mint[3], mint[4])
+    local edgeB = edge(addBtn, mint[1], mint[2], mint[3], mint[4])
+    local edgeL = edge(addBtn, mint[1], mint[2], mint[3], mint[4])
+    local edgeR = edge(addBtn, mint[1], mint[2], mint[3], mint[4])
+    edgeT:SetPoint("TOPLEFT", -2, 2); edgeT:SetPoint("TOPRIGHT", 2, 2); edgeT:SetHeight(1)
+    edgeB:SetPoint("BOTTOMLEFT", -2, -2); edgeB:SetPoint("BOTTOMRIGHT", 2, -2); edgeB:SetHeight(1)
+    edgeL:SetPoint("TOPLEFT", -2, 2); edgeL:SetPoint("BOTTOMLEFT", -2, -2); edgeL:SetWidth(1)
+    edgeR:SetPoint("TOPRIGHT", 2, 2); edgeR:SetPoint("BOTTOMRIGHT", 2, -2); edgeR:SetWidth(1)
+    edgeT:Hide(); edgeB:Hide(); edgeL:Hide(); edgeR:Hide()
+
+    local function setRing(shown)
+        edgeT:SetShown(shown); edgeB:SetShown(shown)
+        edgeL:SetShown(shown); edgeR:SetShown(shown)
+    end
+
+    self.addBtn = addBtn
+
+    function MF:FocusAddButton()
+        -- Steal focus from any currently-focused EditBox so its blur
+        -- commit fires (mirrors what happens when Tab moves between two
+        -- editboxes).
+        local cur = GetCurrentKeyBoardFocus and GetCurrentKeyBoardFocus()
+        if cur and cur.ClearFocus then cur:ClearFocus() end
+        addBtn:EnableKeyboard(true)
+        addBtn:SetPropagateKeyboardInput(false)
+        setRing(true)
+        self._addBtnFocused = true
+    end
+
+    function MF:BlurAddButton()
+        addBtn:SetPropagateKeyboardInput(true)
+        addBtn:EnableKeyboard(false)
+        setRing(false)
+        self._addBtnFocused = false
+    end
+
+    addBtn:SetScript("OnKeyDown", function(_, key)
+        if not MF._addBtnFocused then return end
+        if key == "TAB" then
+            if IsShiftKeyDown() then
+                MF:BlurAddButton()
+                if priceBox then priceBox:SetFocus() end
+            else
+                MF:BlurAddButton()
+                -- Forward from Add button goes into the list; wrap back
+                -- to addBox (the first tab stop) if the list is empty.
+                if not MF:TabToFirstRowCell() then
+                    if addBox then addBox:SetFocus() end
+                end
+            end
+        elseif key == "ENTER" or key == "SPACE" then
+            DoAdd()
+            -- DoAdd clears the editbox focuses on success. Keep keyboard
+            -- focus on the Add button so the user can immediately Shift+
+            -- Tab back to Price Cap or Tab into the list without a mouse.
+        elseif key == "ESCAPE" then
+            MF:BlurAddButton()
+        end
+    end)
+    -- Clicking the button (mouse) should also clear the keyboard-focus
+    -- state so we don't leave a stale ring behind.
+    addBtn:HookScript("OnClick", function() MF:BlurAddButton() end)
+
+    -- If any toolbar editbox gains focus while the Add button had the
+    -- ring, drop the ring. Prevents 'two focused controls' visual bug
+    -- when the user clicks an editbox with a mouse after tabbing into
+    -- the Add button.
+    for _, eb in ipairs({ addBox, countBox, priceBox }) do
+        eb:HookScript("OnEditFocusGained", function()
+            if MF._addBtnFocused then MF:BlurAddButton() end
+        end)
+    end
+
     addBox:SetScript("OnEnterPressed", function() DoAdd() addBox:ClearFocus() end)
     addBox:SetScript("OnEscapePressed", function(self) self:ClearFocus() end)
     countBox:SetScript("OnEnterPressed", function() DoAdd() addBox:ClearFocus() end)
@@ -1184,12 +1280,19 @@ function MF:Build()
     -- (QA-7: unified row-major loop). Shift+Tab reverses.
     -- WoW EditBoxes fire OnTabPressed for the Tab key (no modifier check
     -- in the event itself — IsShiftKeyDown() reads live state).
+    -- Forward tab chain: addBox -> countBox -> priceBox -> addBtn -> rows -> (wrap to addBox)
+    -- Reverse chain is the mirror. addBtn is a Button, not an EditBox,
+    -- so its Tab handling lives in its OnKeyDown above (set up by
+    -- MF:FocusAddButton). The row list's reverse wrap now targets addBtn
+    -- instead of priceBox (see MF:TabFromCell) so the button is a full
+    -- Tab-stop citizen.
     addBox:SetScript("OnTabPressed", function(self)
         if IsShiftKeyDown() then
             -- Shift+Tab from toolbar's first field wraps to the LAST
             -- editable cell in the list (last row's Price Cap). If the
-            -- list is empty, wrap to the toolbar's last field instead.
-            if not MF:TabToLastRowCell() then priceBox:SetFocus() end
+            -- list is empty, wrap to the Add button instead so the
+            -- reverse loop still passes through every stop.
+            if not MF:TabToLastRowCell() then MF:FocusAddButton() end
         else
             countBox:SetFocus()
         end
@@ -1201,9 +1304,10 @@ function MF:Build()
         if IsShiftKeyDown() then
             countBox:SetFocus()
         else
-            -- Forward Tab from the toolbar's LAST field enters the list.
-            -- Falls back to wrapping to addBox if the list is empty.
-            if not MF:TabToFirstRowCell() then addBox:SetFocus() end
+            -- Forward Tab from the toolbar's last editbox now goes to
+            -- the Add button (was: straight into the list). From there
+            -- Tab continues into the row list.
+            MF:FocusAddButton()
         end
     end)
 
@@ -1548,6 +1652,9 @@ end
 -- in exactly one place per cell.
 local function OpenRowCellEditor(row, cell)
     if not row then return end
+    -- If the Add button had keyboard focus, drop its ring so we don't
+    -- end up with two 'focused' controls at once.
+    if MF._addBtnFocused then MF:BlurAddButton() end
     local target = (cell == "need") and row.needCell or row.capCell
     if target and target:GetScript("OnClick") then
         target:GetScript("OnClick")(target)
@@ -1645,10 +1752,11 @@ function MF:TabFromCell(row, cell, dir)
         -- Forward Tab.
         if cell == "need" then
             self:FocusRowCell(idx, "price")
-        else -- cell == "price": move to next row's need, or wrap to toolbar
+        else -- cell == "price": next row's need, or wrap to toolbar's first stop
             if idx < size then
                 self:FocusRowCell(idx + 1, "need")
             else
+                -- End of list wraps forward to addBox (start of the loop).
                 if self.addBox then self.addBox:SetFocus() end
             end
         end
@@ -1656,11 +1764,13 @@ function MF:TabFromCell(row, cell, dir)
         -- Backward Tab.
         if cell == "price" then
             self:FocusRowCell(idx, "need")
-        else -- cell == "need": move to prev row's price, or wrap to toolbar
+        else -- cell == "need": prev row's price, or wrap to Add button
             if idx > 1 then
                 self:FocusRowCell(idx - 1, "price")
             else
-                if self.priceBox then self.priceBox:SetFocus() end
+                -- Top of list wraps backward to the Add button, which is
+                -- the tab stop immediately before the row list.
+                self:FocusAddButton()
             end
         end
     end
