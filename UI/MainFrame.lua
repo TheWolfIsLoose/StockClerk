@@ -903,7 +903,16 @@ function MF:Build()
     f:SetToplevel(true)
     f:SetClampedToScreen(true)
     f:SetMovable(true)
-    f:SetResizable(false)
+    f:SetResizable(true)
+    -- Min: everything the toolbar needs to fit + a couple of visible rows.
+    -- Max: enough vertical room for very long lists on a 4K display, plus
+    -- horizontal slack for extra-long item names.
+    if f.SetResizeBounds then
+        f:SetResizeBounds(560, 320, 1200, 1200)
+    else
+        f:SetMinResize(560, 320)
+        f:SetMaxResize(1200, 1200)
+    end
     f:EnableMouse(true)
     f:EnableKeyboard(true)
 
@@ -928,13 +937,17 @@ function MF:Build()
         end
     end)
 
-    -- Position
+    -- Position + size (both persisted per-character). Size lives on the
+    -- same uiPos table so one save/restore cycle handles both.
     local pos = ADDON.DB.char.uiPos
     if pos and pos.point then
         f:ClearAllPoints()
         f:SetPoint(pos.point, UIParent, pos.point, pos.x or 0, pos.y or 0)
     else
         f:SetPoint("CENTER")
+    end
+    if pos and pos.width and pos.height then
+        f:SetSize(pos.width, pos.height)
     end
 
     -- ---- Header (title bar) --------------------------------------------
@@ -956,7 +969,9 @@ function MF:Build()
     header:SetScript("OnDragStop", function()
         f:StopMovingOrSizing()
         local point, _, _, x, y = f:GetPoint()
-        ADDON.DB.char.uiPos = { point = point, x = x, y = y }
+        local existing = ADDON.DB.char.uiPos or {}
+        existing.point, existing.x, existing.y = point, x, y
+        ADDON.DB.char.uiPos = existing
     end)
 
     local headerSep = header:CreateTexture(nil, "OVERLAY", nil, 6)
@@ -1144,18 +1159,20 @@ function MF:Build()
         end
         return fs
     end
-    -- Column pixel positions match BuildRow's SetPoint offsets exactly.
-    --   name:     LEFT+40..RIGHT-330
-    --   have:     RIGHT edge at -270 (right-aligned FontString)
-    --   needCell: 56w centered at RIGHT -200 (spans -172 .. -228)
-    --   capCell:  72w centered at RIGHT -110 (spans  -74 .. -146)
-    --   pill:     52w centered at RIGHT  -36 (spans  -10 ..  -62)
-    --   trash:    18w centered at RIGHT   -6
+    -- Column pixel positions. Cells in BuildRow anchor their RIGHT edge to
+    -- row.RIGHT (SetPoint("RIGHT", row, "RIGHT", -N, 0)). To sit each
+    -- header LABEL over the visual CENTER of its cell, subtract half the
+    -- cell's width from that RIGHT-edge offset:
+    --   needCell: right at -200, width 56 -> center at -200 - 28 = -228
+    --   capCell:  right at -110, width 72 -> center at -110 - 36 = -146
+    --   pill:     right at  -36, width 52 -> center at  -36 - 26 =  -62
+    -- Have is a right-justified FontString whose right edge sits at -270,
+    -- so its header is right-anchored to the same -270 for edge-alignment.
     MakeHeader("Item",      "left",    52)      -- left edge + 40 (icon + 12 pad)
     MakeHeader("Have",      "right",   -270)    -- right-edge-aligned bags value
-    MakeHeader("Need",      "center",  -200)    -- centered over needCell
-    MakeHeader("Price Cap", "center",  -110)    -- centered over capCell
-    MakeHeader("Status",    "center",  -36)     -- centered over pill
+    MakeHeader("Need",      "center",  -228)    -- centered over needCell
+    MakeHeader("Price Cap", "center",  -146)    -- centered over capCell
+    MakeHeader("Status",    "center",  -62)     -- centered over pill
 
     -- ---- Footer / bottom bar ------------------------------------------
     -- Fixed 36px bar; status text on the left, action buttons on the right.
@@ -1211,6 +1228,47 @@ function MF:Build()
     -- Wrap Enable/Disable to visually dim (StyleButton doesn't hook these
     -- because plain Buttons don't call them; we drive it from RefreshRestockBtn).
     self.restockBtn = restockBtn
+
+    -- ---- Resize grip (bottom-right corner) -----------------------------
+    -- Small transparent hit region at the very corner of the window with a
+    -- subtle diagonal-line texture (two 1px stripes drawn in Palette.brand
+    -- at low alpha) so the affordance is visible without competing with
+    -- the flat aesthetic. StartSizing("BOTTOMRIGHT") lets Blizzard's frame
+    -- resize handle everything; SetResizeBounds above enforces the min/max.
+    local grip = CreateFrame("Button", nil, f)
+    grip:SetSize(16, 16)
+    grip:SetPoint("BOTTOMRIGHT", f, "BOTTOMRIGHT", -1, 1)
+    grip:SetFrameLevel(f:GetFrameLevel() + 5)
+    grip:EnableMouse(true)
+    -- Two thin diagonal stripes as the affordance mark.
+    for i, offset in ipairs({ 3, 7 }) do
+        local stripe = grip:CreateTexture(nil, "OVERLAY", nil, 7)
+        stripe:SetTexture(WHITE_TEX)
+        stripe:SetColorTexture(Palette.brand[1], Palette.brand[2], Palette.brand[3], 0.35)
+        stripe:SetSize(10, 1)
+        stripe:SetPoint("BOTTOMRIGHT", grip, "BOTTOMRIGHT", -offset, offset)
+        -- Rotate to a 45° diagonal.
+        stripe:SetRotation(math.rad(-45))
+        PixelSnap(stripe)
+    end
+    grip:SetScript("OnMouseDown", function(_, button)
+        if button == "LeftButton" then f:StartSizing("BOTTOMRIGHT") end
+    end)
+    grip:SetScript("OnMouseUp", function()
+        f:StopMovingOrSizing()
+        -- Persist new size alongside position on the same uiPos table.
+        local point, _, _, x, y = f:GetPoint()
+        local existing = ADDON.DB.char.uiPos or {}
+        existing.point, existing.x, existing.y = point, x, y
+        existing.width, existing.height = f:GetWidth(), f:GetHeight()
+        ADDON.DB.char.uiPos = existing
+    end)
+    grip:SetScript("OnEnter", function()
+        GameTooltip:SetOwner(grip, "ANCHOR_LEFT")
+        GameTooltip:SetText("Drag to resize", 1, 1, 1)
+        GameTooltip:Show()
+    end)
+    grip:SetScript("OnLeave", function() GameTooltip:Hide() end)
 
     f:HookScript("OnShow", function() MF:RefreshRestockBtn() end)
 
