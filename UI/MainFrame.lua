@@ -1070,6 +1070,21 @@ function MF:Build()
     priceBox:SetScript("OnEnterPressed", function() DoAdd() addBox:ClearFocus() end)
     priceBox:SetScript("OnEscapePressed", function(self) self:ClearFocus() end)
 
+    -- Tab navigation across the add-item form. Matches standard desktop
+    -- form behavior: Tab moves forward through Item -> Target -> Price Cap
+    -- and wraps back to Item; Shift+Tab moves the same order in reverse.
+    -- WoW EditBoxes fire OnTabPressed for the Tab key (no modifier check
+    -- in the event itself — IsShiftKeyDown() reads live state).
+    addBox:SetScript("OnTabPressed", function(self)
+        if IsShiftKeyDown() then priceBox:SetFocus() else countBox:SetFocus() end
+    end)
+    countBox:SetScript("OnTabPressed", function(self)
+        if IsShiftKeyDown() then addBox:SetFocus() else priceBox:SetFocus() end
+    end)
+    priceBox:SetScript("OnTabPressed", function(self)
+        if IsShiftKeyDown() then countBox:SetFocus() else addBox:SetFocus() end
+    end)
+
     -- ---- Hint (below toolbar) ------------------------------------------
     local hint = f:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
     hint:SetPoint("TOPLEFT", toolbar, "BOTTOMLEFT", 12, -6)
