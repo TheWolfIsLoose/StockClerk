@@ -555,3 +555,41 @@ entries into daily/weekly buckets to keep SavedVariables size bounded.
 
 Green/yellow/red color band vs the USER's own price history, not
 some external oracle, so the addon stays fully self-contained.
+
+---
+
+## The receipts (an easter egg, buried here on purpose)
+
+Not for the public README, not for the CurseForge page, not for the
+Wago page. Just for whoever's poking around the source.
+
+Stock Clerk v0.1.0 through v0.2.0 was built across five active build
+days on the Perplexity Computer platform (Sept 11-15, 2026, UTC),
+plus a v0.2.0 finalize/release day (Sept 16-17, still shaking out at
+the time of writing).
+
+Perplexity Computer's usage analytics for those five aggregated days,
+scoped to this account, report:
+
+- 2026-09-11: 2,820 credits  (Wave 1 scaffolding, DB, UI, first build)
+- 2026-09-12:   184 credits  (small polish + user testing)
+- 2026-09-13:   890 credits  (Wave 2 sources, AH search)
+- 2026-09-14:   485 credits  (QA pass 1)
+- 2026-09-15:   422 credits  (QA pass 2, packaging)
+
+**Five-day total: 4,801 credits ≈ $48.01 USD.**
+
+That figure excludes Sept 16-17 (v0.2.0 tag + release + this README),
+which was still in flight when the snapshot was taken. Real total
+through first-public-release is a little higher.
+
+Caveat: the number is an *upper* bound for what Stock Clerk cost --
+this account only did Stock Clerk work on those days, but the credit
+counter doesn't itemize by session. If another project had piggy-
+backed on the same day, that would be baked in too. On these five
+days, nothing else was.
+
+So: forty-eight dollars and one cent, in AI-assistance tokens, to get
+a WoW addon from empty repo to first public release. The audio-
+processing sibling project SharedMedia_Tones cost roughly similar over
+its own build window. Cheaper than a raid tier's worth of consumables.
