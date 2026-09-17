@@ -78,6 +78,12 @@ function StockClerk:OnEnable()
     self:RegisterEvent("COMMODITY_PRICE_UNAVAILABLE",      "OnCommodityPriceUnavailable")
     self:RegisterEvent("COMMODITY_PURCHASE_SUCCEEDED",     "OnCommodityPurchaseSucceeded")
     self:RegisterEvent("COMMODITY_PURCHASE_FAILED",        "OnCommodityPurchaseFailed")
+
+    -- PT-4 mail-delivery gate: MAIL_INBOX_UPDATE fires when the mailbox
+    -- opens and each time the inbox refreshes. RestockLoop reconciles
+    -- its persisted pendingBuys ledger against actual mail contents,
+    -- which is how the auto-pass gate opens after cross-session buys.
+    self:RegisterEvent("MAIL_INBOX_UPDATE",                "OnMailInboxUpdate")
 end
 
 -- ---------------------------------------------------------------------------
@@ -137,6 +143,12 @@ end
 
 function StockClerk:OnCommodityPurchaseFailed()
     if ADDON.AH then ADDON.AH:OnCommodityPurchaseFailed() end
+end
+
+function StockClerk:OnMailInboxUpdate()
+    if ADDON.RestockLoop and ADDON.RestockLoop._OnMailInboxUpdate then
+        ADDON.RestockLoop:_OnMailInboxUpdate()
+    end
 end
 
 function StockClerk:OnAuctionHouseShow()
@@ -247,6 +259,7 @@ function StockClerk:OnSlashCommand(msg)
         self:Print(L.HELP_RESET)
         self:Print(L.HELP_DUMP)
         self:Print(L.HELP_BUDGET)
+        self:Print(L.HELP_PENDING)
         return
     end
 
@@ -323,6 +336,37 @@ function StockClerk:OnSlashCommand(msg)
             self:Print(("Daily auto budget: |cffff8888not set|r · %dg spent today · resets in %s"):format(
                 spentG, resetTxt))
         end
+        return
+    end
+
+    -- PT-4: mail-delivery ledger inspection + test-only wipe. Parallels
+    -- /clerk budget: prints what's currently pending on-hand confirmation,
+    -- and `clear` empties it (bypasses the auto-pass gate for testing).
+    if cmd == "pending" then
+        local sub = (rest or ""):match("^(%S+)") or ""
+        sub = sub:lower()
+        local ledger = ADDON.DB and ADDON.DB.char and ADDON.DB.char.pendingBuys or {}
+        if sub == "clear" then
+            if ADDON.DB and ADDON.DB.char then
+                ADDON.DB.char.pendingBuys = {}
+            end
+            self:Print("|cff98FF98Pending ledger cleared.|r Auto-pass gate open.")
+            return
+        end
+        -- No arg: print current pending items.
+        if not next(ledger) then
+            self:Print("|cff4ade80Nothing pending.|r Auto-pass gate open.")
+            return
+        end
+        local now = GetServerTime and GetServerTime() or time()
+        local rows = {}
+        for id, p in pairs(ledger) do
+            local nm = C_Item.GetItemInfo(id) or ("item:" .. id)
+            local ageH = (p.boughtAt and ((now - p.boughtAt) / 3600)) or 0
+            rows[#rows + 1] = ("%s x%d (%.1fh ago)"):format(nm, p.qty, ageH)
+        end
+        table.sort(rows)
+        self:Print("|cffff8888Pending delivery:|r " .. table.concat(rows, ", "))
         return
     end
 

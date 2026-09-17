@@ -36,9 +36,19 @@
       (AllocateBudget / budgetSlice) was deleted -- it computed slices
       nothing consumed, and tacit list-order priority replaced it.
 
-    Corollary for repeated presses: with the session purchase ledger
-    (pendingBuys) + daily budget, hammering "Restock at AH" is safe --
-    items already bought are skipped, and the allowance persists.
+    Repeat-press safety (v0.5 mail-delivery gate):
+      pendingBuys is now PERSISTED on char.pendingBuys (not session-
+      scoped as it was in v0.4). Once auto has bought anything, the
+      next auto pass is BLOCKED until the ledger is empty. The ledger
+      empties by either:
+        (a) bag-count catch-up via _EffectiveHave -- items landing in
+            bags absorb ledger qty, or
+        (b) mailbox reconciliation via _OnMailInboxUpdate -- opening a
+            mailbox with pending items lets us cross-check against
+            actual mail contents and clamp or delete accordingly.
+      Manual mode is NOT gated (standing rule: manual is full user
+      discretion). Gate exists to force a natural on-hand confirmation
+      checkpoint on the AUTO path only.
 
     Contract:
       * Only runs while the AH is open. If the user closes the AH we
@@ -82,48 +92,109 @@ local function Status(msg)
 end
 
 -- ---------------------------------------------------------------------------
--- Session purchase ledger (itemID -> { qty, baseHave })
+-- Purchase ledger (itemID -> { qty, baseHave, boughtAt })
 --
 -- WHY: AH commodity purchases are delivered by MAIL, not straight to bags,
 -- so Inventory:GetCount (bags-only) doesn't reflect a successful buy until
 -- the user loots their mailbox. Without this ledger the shortfall math
 -- (short = need - have) never sees the purchase, and every press of
--- "Restock at AH" re-buys everything it just bought. That was the live
--- user bug: repeated Restock presses kept re-purchasing with no memory
--- of prior success.
+-- "Restock at AH" re-buys everything it just bought.
 --
--- Recording each success as (qty bought, bag count at buy time) lets the
--- shortfall math treat those units as provisionally owned. When the user
--- loots the mail, the bag count rises by qty and effectivePending()
--- decays to zero on its own -- no event watching needed. Session-scoped
--- on purpose: never persisted, so no stale-offset hazard across logouts.
+-- v0.5 change (PT-4): PERSISTED on char.pendingBuys (was session-only in
+-- v0.4). Two reasons: (1) the ledger closes the auto-pass gate, and if a
+-- user buys then logs out, the gate must remain closed on next login
+-- until on-hand confirmation; (2) mailbox reconciliation needs the
+-- ledger to survive across sessions because auction mail sits in the
+-- inbox for up to 30 days.
+--
+-- Stale-offset hazard is bounded by:
+--   * 30-day GC in DB:Initialize -- entries older than 30 days are
+--     dropped on load (auction mail expires server-side at 30 days).
+--   * MAIL_INBOX_UPDATE reconciliation -- opening the mailbox clamps
+--     ledger entries to actual mail contents. Missing entries deleted.
+--   * Bag-count decay in _EffectiveHave -- unchanged from v0.4.
 -- ---------------------------------------------------------------------------
-Loop.pendingBuys = {}
+
+-- Accessor: resolves to the persisted store. DB init runs before any
+-- Loop method fires (Core.lua orders it that way), so the nil branch
+-- is defensive against load-order regressions only.
+function Loop:_Ledger()
+    return ADDON.DB and ADDON.DB.char and ADDON.DB.char.pendingBuys or nil
+end
 
 function Loop:_RecordPurchase(itemID, qty)
+    local ledger = self:_Ledger()
+    if not ledger then return end
     local haveNow = ADDON.Inventory:GetCount(itemID) or 0
-    local cur = self.pendingBuys[itemID]
+    local now     = GetServerTime and GetServerTime() or time()
+    local cur     = ledger[itemID]
     if cur then
         -- Stack onto the same baseline so decay still works after the
         -- mail from the FIRST purchase is looted.
-        cur.qty = cur.qty + qty
+        cur.qty      = cur.qty + qty
+        cur.boughtAt = now
     else
-        self.pendingBuys[itemID] = { qty = qty, baseHave = haveNow }
+        ledger[itemID] = { qty = qty, baseHave = haveNow, boughtAt = now }
     end
 end
 
--- Bag count + outstanding (mailed-but-unlooted) purchases from this
--- session. Decays automatically as the bag count catches up.
+-- Bag count + outstanding (mailed-but-unlooted) purchases. Decays
+-- automatically as the bag count catches up.
 function Loop:_EffectiveHave(itemID)
-    local have = ADDON.Inventory:GetCount(itemID) or 0
-    local p = self.pendingBuys[itemID]
+    local have   = ADDON.Inventory:GetCount(itemID) or 0
+    local ledger = self:_Ledger()
+    if not ledger then return have end
+    local p = ledger[itemID]
     if not p then return have end
     local unlooted = math.max(0, p.qty - math.max(0, have - p.baseHave))
     if unlooted <= 0 then
-        self.pendingBuys[itemID] = nil -- fully absorbed, stop tracking
+        ledger[itemID] = nil -- fully absorbed, stop tracking
         return have
     end
     return have + unlooted
+end
+
+-- MAIL_INBOX_UPDATE reconciliation. When the mailbox is open the
+-- server has streamed inbox contents to the client; walk the inbox
+-- and clamp the ledger to reality.
+--
+-- Cases handled:
+--   * Ledger entry NOT in mailbox = looted (bag decay already
+--     zeroed it) OR expired server-side OR never existed. Drop it.
+--   * Ledger entry qty > mailbox qty = partially looted. Clamp.
+--   * Ledger entry qty <= mailbox qty = expected quantity still
+--     present, no change.
+--
+-- We do NOT delete or shrink entries whose mail count exceeds ledger
+-- qty -- surplus is from unrelated mail (gifts, sold-auctions, etc).
+function Loop:_OnMailInboxUpdate()
+    local ledger = self:_Ledger()
+    if not ledger or not next(ledger) then return end
+    -- GetInboxNumItems can return 0 before the server has streamed
+    -- items; a subsequent MAIL_INBOX_UPDATE will fire with the real
+    -- list, so bail on empty rather than deleting the ledger.
+    local n = GetInboxNumItems()
+    if not n or n == 0 then return end
+    local seen = {}
+    for i = 1, n do
+        local attCount = ATTACHMENTS_MAX_RECEIVE or 16
+        for j = 1, attCount do
+            local _, itemID, _, count = GetInboxItem(i, j)
+            if itemID and count and count > 0 then
+                seen[itemID] = (seen[itemID] or 0) + count
+            end
+        end
+    end
+    for id, p in pairs(ledger) do
+        local inMail = seen[id] or 0
+        if inMail == 0 then
+            DebugPrint(("reconcile: id=%d cleared (not in mail)"):format(id))
+            ledger[id] = nil
+        elseif inMail < p.qty then
+            DebugPrint(("reconcile: id=%d clamped %d -> %d"):format(id, p.qty, inMail))
+            p.qty = inMail
+        end
+    end
 end
 
 -- ---------------------------------------------------------------------------
@@ -190,6 +261,35 @@ function Loop:Start()
         mode = "auto"
         budgetCopper = s.autoBudgetGold * 10000
     end
+
+    -- PT-4 mail-delivery gate. Auto passes are blocked while any
+    -- purchase from a prior pass is still awaiting on-hand
+    -- confirmation. We nudge _EffectiveHave on each ledger entry
+    -- first so passive bag-count decay runs -- items already looted
+    -- to bags drop out on the spot. Whatever remains is genuinely
+    -- outstanding. Manual mode is not gated.
+    if mode == "auto" then
+        local ledger = self:_Ledger()
+        if ledger then
+            for id in pairs(ledger) do self:_EffectiveHave(id) end
+            if next(ledger) then
+                local pieces = {}
+                for id, p in pairs(ledger) do
+                    local nm = C_Item.GetItemInfo(id) or ("item:" .. id)
+                    pieces[#pieces + 1] = ("%s x%d"):format(nm, p.qty)
+                end
+                table.sort(pieces)
+                Status(("|cffff8888Auto blocked -- awaiting mail delivery: %s. Loot mail to continue.|r")
+                    :format(table.concat(pieces, ", ")))
+                DebugPrint("gate closed: pending=" .. table.concat(pieces, ", "))
+                if ADDON.Log then
+                    ADDON.Log:Emit("loop_gate_blocked", nil, { pending = pieces })
+                end
+                return
+            end
+        end
+    end
+
     local dailyLeft = (mode == "auto") and ADDON.DB:GetDailyAutoBudgetLeft() or nil
 
     self.state.active       = true
@@ -462,7 +562,9 @@ function Loop:Stop(reason)
 
     -- One human-readable statusbar summary. Kept short; the sidecar
     -- has the full breakdown. Auto runs append the daily allowance
-    -- readout (the number the user actually cares about now).
+    -- readout (the number the user actually cares about now) plus,
+    -- if the ledger is non-empty at loop end, a mail-check nudge --
+    -- the next auto pass will be gated until those items arrive.
     local daily = ""
     if self.state.mode == "auto" and ADDON.DB and ADDON.DB.GetDailyAutoBudgetLeft then
         local left = ADDON.DB:GetDailyAutoBudgetLeft()
@@ -470,18 +572,25 @@ function Loop:Stop(reason)
             daily = (" %s left today."):format(GetCoinTextureString(left))
         end
     end
+    local mailNudge = ""
+    if self.state.mode == "auto" then
+        local ledger = self:_Ledger()
+        if ledger and next(ledger) then
+            mailNudge = " |cffff8888Check mail before next auto pass.|r"
+        end
+    end
     local msg
     if reason == "done" then
-        msg = ("|cff4ade80Loop done. Bought %d, spent %s.%s|r"):format(
-            touched, GetCoinTextureString(spent), daily)
+        msg = ("|cff4ade80Loop done. Bought %d, spent %s.%s|r%s"):format(
+            touched, GetCoinTextureString(spent), daily, mailNudge)
     elseif reason == "budget exhausted" then
-        msg = ("|cffffaa00Daily budget exhausted. Bought %d, %d still short until reset.|r"):format(
-            touched, stillShort)
+        msg = ("|cffffaa00Daily budget exhausted. Bought %d, %d still short until reset.|r%s"):format(
+            touched, stillShort, mailNudge)
     elseif reason == "user_esc" then
-        msg = ("Loop stopped (Escape). Bought %d, spent %s.%s"):format(
-            touched, GetCoinTextureString(spent), daily)
+        msg = ("Loop stopped (Escape). Bought %d, spent %s.%s%s"):format(
+            touched, GetCoinTextureString(spent), daily, mailNudge)
     else
-        msg = ("Loop stopped (%s)."):format(reason)
+        msg = ("Loop stopped (%s).%s"):format(reason, mailNudge)
     end
     Status(msg)
 end

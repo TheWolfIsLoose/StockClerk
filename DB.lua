@@ -52,6 +52,17 @@ DB.defaults = {
         -- established lazily because C_DateAndTime isn't guaranteed at
         -- PLAYER_LOGIN for every client build.
         autoSpend = { copper = 0, resetAt = nil },
+        -- Mail-delivery ledger (PT-4). Persisted per-character because
+        -- auction mail is delivered to the buying character, not the
+        -- warband. Keys are itemID (as number, keyed by lua so beware
+        -- SavedVariables stringifies these on write -- see the load
+        -- migration in Initialize). Entries look like:
+        --   { qty = N, baseHave = M, boughtAt = serverTimeSeconds }
+        -- The ledger empties when either (a) the bag count catches up
+        -- to baseHave + qty in Loop:_EffectiveHave, or (b) an inbox
+        -- reconciliation observes that the mail no longer holds those
+        -- items. Gate on Loop:Start refuses auto passes while non-empty.
+        pendingBuys = {},
     },
     global = {
         templates = {},
@@ -108,6 +119,30 @@ function DB:Initialize()
             self.char.items[itemID].sortOrder = i * 10
         end
     end
+
+    -- PT-4: pendingBuys hygiene. Two responsibilities:
+    --   1. Normalize keys back to numbers. SavedVariables preserves
+    --      the lua type of table keys inside a table serialized as-is,
+    --      but a defaults-migration path or a hand-edit can leave
+    --      stringified keys around. We accept both and normalize to
+    --      number so downstream code (GetInboxItem returns numeric
+    --      itemIDs) doesn't miss matches.
+    --   2. Garbage-collect entries older than 30 days. Auction house
+    --      mail expires server-side at 30 days; a ledger entry with
+    --      boughtAt older than that is guaranteed stale (the mail is
+    --      gone whether we reconciled or not).
+    self.char.pendingBuys = self.char.pendingBuys or {}
+    local now      = GetServerTime and GetServerTime() or time()
+    local expiry   = now - (30 * 86400)
+    local normal   = {}
+    for k, v in pairs(self.char.pendingBuys) do
+        local id = tonumber(k)
+        if id and type(v) == "table" and v.qty and v.qty > 0
+           and v.boughtAt and v.boughtAt >= expiry then
+            normal[id] = { qty = v.qty, baseHave = v.baseHave or 0, boughtAt = v.boughtAt }
+        end
+    end
+    self.char.pendingBuys = normal
 end
 
 -- ---------------------------------------------------------------------------

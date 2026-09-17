@@ -34,3 +34,4 @@ L.HELP_SEED              = "  /clerk seed |cff888888— apply dev recommended li
 L.HELP_RESET             = "  /clerk reset |cffff8888— wipe this character's list|r"
 L.HELP_DUMP              = "  /clerk dump |cff888888— print current list to chat|r"
 L.HELP_BUDGET            = "  /clerk budget [reset] |cff888888— show daily auto budget; 'reset' zeroes today's counter|r"
+L.HELP_PENDING           = "  /clerk pending [clear] |cff888888— show items awaiting mail delivery; 'clear' opens the auto-pass gate|r"
