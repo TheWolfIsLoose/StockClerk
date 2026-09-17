@@ -3,34 +3,42 @@
     Walks the shortlist and drives per-item buy prompts.
 
     Loop lifecycle:
-      Start()  - snapshot the current shortfall list, allocate a per-
-                 item budget slice (QA-10a two-pass proportional), open
-                 the AH search for the first item, hand off to either
-                 the buy dialog (manual) or ExecutePurchase (auto).
+      Start()  - snapshot the current shortfall list IN USER-ARRANGED
+                 LIST ORDER (the list is the priority), draw the auto
+                 mode's allowance from the daily budget, open the AH
+                 search for the first item, hand off to either the buy
+                 dialog (manual) or ExecutePurchase (auto).
       Advance()- pop the current item, jump to the next. Called after
                  the user confirms, skips, or a search yields nothing.
       Stop()   - abort, close any open dialog, clear state, log outcome.
 
-    Two run modes (v0.3):
-      "manual" - existing v0.2 behavior. Every buy waits for a BuyDialog
-                 confirmation. Budget field is ignored.
-      "auto"   - QA-10. Sanity checks pass -> ExecutePurchase directly,
-                 no per-item confirmation. Requires:
+    Two run modes:
+      "manual" - every buy waits for a BuyDialog confirmation. Budget is
+                 neither enforced nor tracked here: manual buys are full
+                 user discretion (user decision 2026-09-17 -- budgets
+                 guard against inadvertent autopilot spend only).
+      "auto"   - sanity checks pass -> ExecutePurchase directly, no
+                 per-item confirmation. Requires:
                    * settings.autoPurchase == true
                    * settings.autoBudgetGold not nil
                  Each item MUST have a maxPrice set; uncapped items are
                  skipped and logged (buy_skip, reason "no cap set").
 
-    Budget allocation (QA-10a):
-      Two-pass proportional + spillover, per NOTES.md.
-      Pass 1: for each short item, budgetSlice = (need-have)*est_unit_price,
-              scaled to fit total budget. est_unit_price comes from
-              lastPrice (QA-11) with "equal share" fallback for items
-              with no recorded lastPrice.
-      Pass 2: after each purchase, any budget slack redistributes to
-              still-short items biggest-shortfall first (implicit -
-              we simply track running budgetLeft and allow subsequent
-              items to overflow their initial slice if budget allows).
+    Budget semantics (v0.4):
+      The budget is a DAILY allowance aligned to the realm daily reset
+      (C_DateAndTime.GetSecondsUntilDailyReset), persisted in
+      char.autoSpend -- see DB.lua. The loop draws from
+      DB:GetDailyAutoBudgetLeft(), not a fresh per-run amount: pressing
+      Restock twice in one day spends from the same allowance.
+      Priority is the list's own order (sortOrder): the queue walks the
+      shopping list top-down and the daily allowance runs out wherever
+      it runs out. The old two-pass proportional allocator
+      (AllocateBudget / budgetSlice) was deleted -- it computed slices
+      nothing consumed, and tacit list-order priority replaced it.
+
+    Corollary for repeated presses: with the session purchase ledger
+    (pendingBuys) + daily budget, hammering "Restock at AH" is safe --
+    items already bought are skipped, and the allowance persists.
 
     Contract:
       * Only runs while the AH is open. If the user closes the AH we
@@ -119,9 +127,11 @@ function Loop:_EffectiveHave(itemID)
 end
 
 -- ---------------------------------------------------------------------------
--- Build the shortfall queue. Sorted by biggest shortfall first so
--- raid-critical stuff comes up before nice-to-haves. Each entry carries
--- lastPrice for the budget allocator.
+-- Build the shortfall queue in LIST ORDER. The user-arranged shopping
+-- list IS the priority (tacit): top of the list gets restocked first,
+-- and when the daily budget runs out the bottom of the list waits for
+-- tomorrow. No re-sorting here -- the old biggest-shortfall-first
+-- ordering would contradict the user's explicit arrangement.
 -- ---------------------------------------------------------------------------
 local function BuildQueue()
     local q = {}
@@ -143,61 +153,13 @@ local function BuildQueue()
             }
         end
     end
-    table.sort(q, function(a, b) return a.short > b.short end)
     return q
 end
 
--- ---------------------------------------------------------------------------
--- QA-10a: two-pass proportional budget allocator.
---
---   Pass 1: estimate demand-value = short * est_unit for each item.
---           est_unit prefers lastPrice.copper; falls back to a
---           per-item "equal share" placeholder when no price is known.
---           Scale each slice so the sum fits under `budgetCopper`.
---
---   Pass 2 (spillover) is implicit -- we don't reduce budgetLeft when
---   an item comes in under its slice; the next items simply see more
---   headroom. When an item exceeds its slice we still allow it as
---   long as budgetLeft covers it, because the whole point of a
---   proportional plan is guidance, not a hard per-item cap. The hard
---   cap is the ITEM's maxPrice, enforced by AH:BuyUpTo directly.
---
--- Mutates q in place: adds `budgetSlice` (copper) to each entry.
--- Returns the total planned spend so the caller can log it.
--- ---------------------------------------------------------------------------
-local function AllocateBudget(q, budgetCopper)
-    if not budgetCopper or budgetCopper <= 0 then
-        for _, it in ipairs(q) do it.budgetSlice = math.huge end
-        return 0
-    end
-
-    -- Compute raw demand values. Items without lastPrice get a placeholder
-    -- of 1 gold per unit so they still get a proportional slice; the real
-    -- cap enforcement lives in AH:BuyUpTo via item.maxPrice.
-    local totalDemand = 0
-    for _, it in ipairs(q) do
-        local est = (it.lastPrice and it.lastPrice.copper) or 10000
-        it._rawDemand = it.short * est
-        totalDemand = totalDemand + it._rawDemand
-    end
-
-    if totalDemand == 0 then
-        -- Degenerate case: give everyone equal share.
-        local per = math.floor(budgetCopper / math.max(1, #q))
-        for _, it in ipairs(q) do it.budgetSlice = per end
-        return budgetCopper
-    end
-
-    -- Scale each demand to fit the budget. If total demand fits under
-    -- budget, no scaling needed (slice = raw demand).
-    local scale = math.min(1, budgetCopper / totalDemand)
-    local allocated = 0
-    for _, it in ipairs(q) do
-        it.budgetSlice = math.floor(it._rawDemand * scale)
-        allocated = allocated + it.budgetSlice
-    end
-    return allocated
-end
+-- DELETED: AllocateBudget. The two-pass proportional allocator computed
+-- a per-item budgetSlice that nothing ever consumed (flagged in the
+-- v0.2.0..HEAD code review) and its model -- divide the pot up front --
+-- was replaced by: daily running-total budget + list-order priority.
 
 -- ---------------------------------------------------------------------------
 -- Start
@@ -218,28 +180,30 @@ function Loop:Start()
         return
     end
 
-    -- Determine run mode from settings.
+    -- Determine run mode from settings. Auto draws from the DAILY
+    -- allowance: remaining = configured budget minus auto spend since the
+    -- last realm daily reset. Manual runs have no budget plumbing at all.
     local s = ADDON.DB:Settings()
     local mode = "manual"
     local budgetCopper = nil
     if s.autoPurchase and s.autoBudgetGold and s.autoBudgetGold > 0 then
         mode = "auto"
         budgetCopper = s.autoBudgetGold * 10000
-        AllocateBudget(q, budgetCopper)
     end
+    local dailyLeft = (mode == "auto") and ADDON.DB:GetDailyAutoBudgetLeft() or nil
 
     self.state.active       = true
     self.state.mode         = mode
     self.state.queue        = q
     self.state.index        = 0
     self.state.budgetCopper = budgetCopper
-    self.state.budgetLeft   = budgetCopper
+    self.state.budgetLeft   = dailyLeft   -- auto only; nil = unlimited
     self.state.spentCopper  = 0
     self.state.touched      = 0
     self.state.stillShort   = 0
 
-    DebugPrint(("started mode=%s items=%d budget=%s"):format(
-        mode, #q, tostring(budgetCopper)))
+    DebugPrint(("started mode=%s items=%d dailyLeft=%s"):format(
+        mode, #q, tostring(dailyLeft)))
 
     -- QA-13: log the loop start with mode + budget context.
     if ADDON.Log then
@@ -293,10 +257,10 @@ function Loop:Advance()
         return
     end
 
-    -- Auto-mode budget fast-fail: no budget left at all means nothing
-    -- more can happen this loop. Stop cleanly.
+    -- Auto-mode budget fast-fail: no DAILY budget left means nothing
+    -- more can happen before the next realm daily reset. Stop cleanly.
     if self.state.mode == "auto" and self.state.budgetLeft and self.state.budgetLeft <= 0 then
-        DebugPrint("auto stop: budget exhausted")
+        DebugPrint("auto stop: daily budget exhausted")
         -- Count this and every remaining item as stillShort for the
         -- loop-stop summary.
         self.state.stillShort = self.state.stillShort + (#self.state.queue - self.state.index + 1)
@@ -346,13 +310,14 @@ function Loop:Advance()
                 return
             end
 
-            -- Budget: refuse if this plan exceeds remaining budget.
+            -- Budget: refuse if this plan exceeds remaining DAILY
+            -- budget (auto only; manual never reaches this branch).
             if self.state.budgetLeft and plan.plannedSpend > self.state.budgetLeft then
                 DebugPrint(("auto refuse id=%d spend=%d > left=%d"):format(
                     item.itemID, plan.plannedSpend, self.state.budgetLeft))
                 if ADDON.Log then
                     ADDON.Log:Emit("auto_refuse", item.itemID, {
-                        reason             = "over budget",
+                        reason             = "over daily budget",
                         qty                = plan.planQuantity,
                         plannedSpendCopper = plan.plannedSpend,
                     })
@@ -408,6 +373,12 @@ function Loop:_OnConfirm(plan)
             self.state.touched     = self.state.touched + 1
             if self.state.budgetLeft then
                 self.state.budgetLeft = math.max(0, self.state.budgetLeft - spent)
+            end
+            -- Persist against the DAILY allowance. AUTO ONLY: manual buys
+            -- are outside the budget ledger entirely (see DB.lua
+            -- semantics block).
+            if self.state.mode == "auto" then
+                ADDON.DB:AddDailyAutoSpend(spent)
             end
             -- Record in the session ledger BEFORE logging/status so the
             -- very next shortfall computation (next Advance, or the next
@@ -490,17 +461,25 @@ function Loop:Stop(reason)
     end
 
     -- One human-readable statusbar summary. Kept short; the sidecar
-    -- has the full breakdown.
+    -- has the full breakdown. Auto runs append the daily allowance
+    -- readout (the number the user actually cares about now).
+    local daily = ""
+    if self.state.mode == "auto" and ADDON.DB and ADDON.DB.GetDailyAutoBudgetLeft then
+        local left = ADDON.DB:GetDailyAutoBudgetLeft()
+        if left then
+            daily = (" %s left today."):format(GetCoinTextureString(left))
+        end
+    end
     local msg
     if reason == "done" then
-        msg = ("|cff4ade80Loop done. Bought %d, spent %s.|r"):format(
-            touched, GetCoinTextureString(spent))
+        msg = ("|cff4ade80Loop done. Bought %d, spent %s.%s|r"):format(
+            touched, GetCoinTextureString(spent), daily)
     elseif reason == "budget exhausted" then
-        msg = ("|cffffaa00Budget exhausted. Bought %d, %d still short.|r"):format(
+        msg = ("|cffffaa00Daily budget exhausted. Bought %d, %d still short until reset.|r"):format(
             touched, stillShort)
     elseif reason == "user_esc" then
-        msg = ("Loop stopped (Escape). Bought %d, spent %s."):format(
-            touched, GetCoinTextureString(spent))
+        msg = ("Loop stopped (Escape). Bought %d, spent %s.%s"):format(
+            touched, GetCoinTextureString(spent), daily)
     else
         msg = ("Loop stopped (%s)."):format(reason)
     end
