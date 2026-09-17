@@ -31,11 +31,19 @@
       }
       global.templates = { [name] = { [itemID] = need, ... } }
       global.settings  = {
-        autoOpenAtAH   = bool,
-        autoPurchase   = bool,      -- QA-10 opt-in auto-purchase master switch
-        autoBudgetGold = number|nil, -- daily auto-buy budget (gold); manual
-                                     -- buys are never budget-gated
-        lastPriceTTL   = number,     -- QA-11 seconds before "Last Seen" dims
+        autoOpenAtAH     = bool,
+        autoPurchase     = bool,      -- QA-10 opt-in auto-purchase master switch
+        autoBudgetGold   = number|nil, -- daily auto-buy budget (gold); manual
+                                       -- buys are never budget-gated
+        lastPriceTTL     = number,     -- QA-11 seconds before "Last Seen" dims
+        defaultMaxCopper = number|nil, -- PT-1 v0.5 Batch 2 (global default cap).
+                                       -- When set, auto-mode treats items
+                                       -- without their own maxPrice as
+                                       -- having this cap. Nil = no default,
+                                       -- and uncapped items are still
+                                       -- skipped by auto (v0.4 contract).
+                                       -- Never applied to manual mode --
+                                       -- manual is full user discretion.
       }
       global.log      = array of entries (see Log.lua)
 
@@ -76,11 +84,13 @@ DB.defaults = {
     global = {
         templates = {},
         settings  = {
-            autoOpenAtAH   = true,
-            debugSeeded    = false,     -- so /clerk seed only runs once by default
-            autoPurchase   = false,     -- QA-10; user must opt in explicitly
-            autoBudgetGold = nil,       -- QA-10a; required to be set before auto runs
-            lastPriceTTL   = 24 * 3600, -- QA-11; 24h before Last Seen dims
+            autoOpenAtAH     = true,
+            debugSeeded      = false,     -- so /clerk seed only runs once by default
+            autoPurchase     = false,     -- QA-10; user must opt in explicitly
+            autoBudgetGold   = nil,       -- QA-10a; required to be set before auto runs
+            lastPriceTTL     = 24 * 3600, -- QA-11; 24h before Last Seen dims
+            defaultMaxCopper = nil,       -- PT-1 v0.5 Batch 2; nil preserves
+                                          -- the v0.4 "uncapped => auto skip" contract
         },
     },
 }

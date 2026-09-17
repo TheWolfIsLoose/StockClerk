@@ -345,9 +345,23 @@ function Loop:Advance()
         return
     end
 
-    -- Auto-mode fast-fail: no cap set means the item is not eligible
-    -- for auto-purchase. Log the skip and move on.
-    if self.state.mode == "auto" and not item.maxPrice then
+    -- Auto-mode: resolve the effective cap. Per-item maxPrice wins;
+    -- if the item is uncapped, fall back to the global defaultMaxCopper
+    -- (PT-1 v0.5 Batch 2). Only if neither is set do we skip.
+    --
+    -- Manual mode is intentionally never affected -- users retain full
+    -- discretion, so the effective-cap fallback is auto-only.
+    local effectiveCap = item.maxPrice
+    local capSource = "item"
+    if not effectiveCap and self.state.mode == "auto" then
+        local s = ADDON.DB and ADDON.DB.Settings and ADDON.DB:Settings()
+        if s and s.defaultMaxCopper and s.defaultMaxCopper > 0 then
+            effectiveCap = s.defaultMaxCopper
+            capSource = "default"
+        end
+    end
+
+    if self.state.mode == "auto" and not effectiveCap then
         DebugPrint(("auto skip id=%d, no cap set"):format(item.itemID))
         if ADDON.Log then
             ADDON.Log:Emit("buy_skip", item.itemID, { reason = "no cap set" })
@@ -368,10 +382,10 @@ function Loop:Advance()
         return
     end
 
-    DebugPrint(("processing id=%d need=%d have=%d short=%d cap=%s"):format(
-        item.itemID, item.need, have, short, tostring(item.maxPrice)))
+    DebugPrint(("processing id=%d need=%d have=%d short=%d cap=%s (%s)"):format(
+        item.itemID, item.need, have, short, tostring(effectiveCap), capSource))
 
-    ADDON.AH:BuyUpTo(item.itemID, short, item.maxPrice, function(ok, plan)
+    ADDON.AH:BuyUpTo(item.itemID, short, effectiveCap, function(ok, plan)
         if not self.state.active then return end -- user stopped mid-flight
         if not ok then
             DebugPrint("search/plan failed: " .. tostring(plan))
@@ -390,7 +404,9 @@ function Loop:Advance()
         plan.name = item.name
         plan.have = have
         plan.need = item.need
-        plan.maxPrice = item.maxPrice
+        plan.maxPrice   = effectiveCap
+        plan.capSource  = capSource -- "item" or "default" -- BuyDialog can
+                                    -- surface which cap the plan used
 
         -- ------ Auto-mode sanity checks (QA-10) --------------------------
         if self.state.mode == "auto" then

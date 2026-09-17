@@ -1077,8 +1077,20 @@ local function InitializeRow(row, data)
         row.cap:SetText(("|cff%s%s|r"):format(capColor, capText))
     elseif autoOn then
         -- Dim gray so it doesn't compete with the mint capped values
-        -- in the same column.
-        row.cap:SetText("|cff555555skip|r")
+        -- in the same column. PT-1 v0.5 Batch 2: when a global default
+        -- cap is set, uncapped items no longer skip -- they inherit
+        -- the default. Show "(default)" instead so the user can tell
+        -- which rows an auto run will touch at what cap.
+        local settings = ADDON.DB:Settings()
+        local defC = settings and settings.defaultMaxCopper
+        if defC and defC > 0 then
+            local shortText = (ADDON.DB and ADDON.DB.FormatCopperShort)
+                and ADDON.DB.FormatCopperShort(defC)
+                or (("%dg"):format(math.floor(defC / 10000)))
+            row.cap:SetText(("|cff888888(%s)|r"):format(shortText))
+        else
+            row.cap:SetText("|cff555555skip|r")
+        end
     else
         row.cap:SetText("|cff555555\226\128\148|r") -- em-dash for a real "unset" glyph
     end

@@ -239,8 +239,13 @@ function StockClerk:OnSlashCommand(msg)
             self:Print("Auto-purchase: |cffff8888OFF|r")
         else
             local budget = s.autoBudgetGold and (s.autoBudgetGold .. "g") or "not set"
-            self:Print(("Auto-purchase: %s  ·  budget: %s"):format(
-                s.autoPurchase and "|cff4ade80ON|r" or "|cffff8888OFF|r", budget))
+            local defCapText = "none"
+            if s.defaultMaxCopper and s.defaultMaxCopper > 0 then
+                defCapText = (ADDON.DB.FormatCopperShort and ADDON.DB.FormatCopperShort(s.defaultMaxCopper))
+                    or (("%dg"):format(math.floor(s.defaultMaxCopper / 10000)))
+            end
+            self:Print(("Auto-purchase: %s  \194\183  budget: %s  \194\183  default cap: %s"):format(
+                s.autoPurchase and "|cff4ade80ON|r" or "|cffff8888OFF|r", budget, defCapText))
         end
         if ADDON.SettingsDropdown and ADDON.SettingsDropdown.Refresh then
             ADDON.SettingsDropdown:Refresh()
