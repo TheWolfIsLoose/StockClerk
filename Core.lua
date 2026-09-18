@@ -162,6 +162,28 @@ function StockClerk:OnAuctionHouseShow()
     if ADDON.MainFrame then
         ADDON.MainFrame.openedByAH = true
         ADDON.MainFrame:Show()
+
+        -- v0.7: dock the main frame to the right edge of the AH so the
+        -- two windows sit side-by-side instead of overlapping. Stash the
+        -- pre-dock position so AH close restores exactly where the user
+        -- last placed the floating window. The dock is transient (frame
+        -- state only, not persisted) -- only the floating anchor is
+        -- saved, so a /reload during an AH session doesn't overwrite it.
+        local f  = ADDON.MainFrame.frame
+        local ah = _G.AuctionHouseFrame
+        if f and ah and ah:IsShown() then
+            local point, _, _, x, y = f:GetPoint()
+            ADDON.MainFrame._preDockPos = { point = point, x = x, y = y }
+            f:ClearAllPoints()
+            f:SetPoint("TOPLEFT", ah, "TOPRIGHT", 1, 0)
+            ADDON.MainFrame._docked = true
+            -- Re-anchor the sidecar if it's open so it hangs off the
+            -- newly docked main frame instead of a stale UIParent anchor.
+            if ADDON.Sidecar and ADDON.Sidecar:IsShown() then
+                ADDON.Sidecar:Toggle()  -- hide
+                ADDON.Sidecar:Toggle()  -- show at new anchor
+            end
+        end
     end
 end
 
@@ -170,6 +192,30 @@ function StockClerk:OnAuctionHouseClosed()
     if ADDON.AH        then ADDON.AH:OnAuctionHouseClosed() end
     if ADDON.RestockLoop and ADDON.RestockLoop.IsActive and ADDON.RestockLoop:IsActive() then
         ADDON.RestockLoop:Stop("AH closed, restock loop stopped.")
+    end
+
+    -- Restore the floating position if we docked to the AH. Do this
+    -- BEFORE the Hide() below so if the user re-opens the main frame
+    -- later it comes up where they left it, not glued to a hidden AH.
+    if ADDON.MainFrame and ADDON.MainFrame._docked then
+        local f = ADDON.MainFrame.frame
+        local pre = ADDON.MainFrame._preDockPos
+        if f and pre and pre.point then
+            f:ClearAllPoints()
+            f:SetPoint(pre.point, UIParent, pre.point, pre.x or 0, pre.y or 0)
+        elseif f then
+            -- Fall back to the saved uiPos if we lost the pre-dock snapshot
+            -- (shouldn't happen, but a re-anchor beats an orphaned frame).
+            local pos = ADDON.DB.char.uiPos
+            f:ClearAllPoints()
+            if pos and pos.point then
+                f:SetPoint(pos.point, UIParent, pos.point, pos.x or 0, pos.y or 0)
+            else
+                f:SetPoint("CENTER")
+            end
+        end
+        ADDON.MainFrame._docked = false
+        ADDON.MainFrame._preDockPos = nil
     end
 
     -- Close on AH close only when WE opened it. If the user has since
