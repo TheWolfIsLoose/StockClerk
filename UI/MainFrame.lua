@@ -432,14 +432,15 @@ local function BuildRow(row)
     row.icon:SetTexCoord(0.08, 0.92, 0.08, 0.92)   -- trim default 5% border
 
     -- Name (fills leftmost region up to the Have column). The right edge
-    -- stops at -330 to leave room for four right-aligned columns (Have,
-    -- Need, Price Cap, Status) plus trash, with each column properly
-    -- centered under its header.
+    -- stops at -220 to leave room for four right-aligned columns (Have,
+    -- Need, Cap, Last Seen) plus trash. Status column dropped in v0.7 --
+    -- short/ok state is now signaled by coloring row.have (see below).
     row.name = row:CreateFontString(nil, "OVERLAY", "GameFontNormal")
     row.name:SetPoint("LEFT", row.icon, "RIGHT", 8, 0)
-    -- Widened right inset (-330 -> -400) to make room for the new
-    -- Last Seen column between Cap and Status.
-    row.name:SetPoint("RIGHT", row, "RIGHT", -400, 0)
+    -- v0.7 tightened right inset (-400 -> -220) so item names get enough
+    -- room at the new 420px main-frame width. Long names ellipsize; no
+    -- word wrap (SetWordWrap(false) below).
+    row.name:SetPoint("RIGHT", row, "RIGHT", -220, 0)
     row.name:SetJustifyH("LEFT")
     row.name:SetWordWrap(false)
 
@@ -448,23 +449,27 @@ local function BuildRow(row)
     -- cell chrome and no click affordance — this value only comes from
     -- inventory, the user never edits it here.
     --
-    -- Column layout (v0.3, post QA-11 Last Seen insert):
-    --   Have   right edge -340
-    --   Need   right edge -270, width 56 -> left -326, center -298
-    --   Cap    right edge -180, width 72 -> left -252, center -216
-    --   LastSeen right edge -104, width 60 -> left -164, center -134  (new)
-    --   Status right edge -36,  width 52 -> left  -88, center  -62
-    --   trash  right edge -6,   width 18
+    -- v0.7 status-via-color: row.have text is colored red when have<need
+    -- ("you're short") and mint when have>=need ("stocked"). This
+    -- replaces the dedicated Status pill from earlier versions. See
+    -- InitializeRow further down for the coloring logic.
+    --
+    -- Column layout (v0.7, Status dropped, all offsets tightened):
+    --   Have   right edge -178, width ~40
+    --   Need   right edge -128, width 42
+    --   Cap    right edge  -72, width 50
+    --   LastSeen right edge -30, width 38 (was 60)
+    --   trash  right edge  -6,  width 18
     row.have = row:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
-    row.have:SetPoint("RIGHT", row, "RIGHT", -340, 0)
+    row.have:SetPoint("RIGHT", row, "RIGHT", -178, 0)
     row.have:SetJustifyH("RIGHT")
 
     -- Need column: dedicated editable cell for the target count. Styled
     -- exactly like the Price Cap cell — transparent at rest, dark fill +
     -- brand border fade in on hover, click opens an inline editor in place.
     row.needCell = CreateFrame("Button", nil, row)
-    row.needCell:SetSize(56, 20)
-    row.needCell:SetPoint("RIGHT", row, "RIGHT", -270, 0)
+    row.needCell:SetSize(42, 20)  -- v0.7: 56 -> 42 for compressed layout
+    row.needCell:SetPoint("RIGHT", row, "RIGHT", -128, 0)
     row.needCell:RegisterForClicks("LeftButtonUp", "RightButtonUp")
     row.needCell:SetFrameLevel(row:GetFrameLevel() + 2)
 
@@ -495,8 +500,8 @@ local function BuildRow(row)
     -- hunting for it inside the count string. Wider than the Need cell (72
     -- vs 56) to comfortably hold 4-digit gold values like "9999g".
     row.capCell = CreateFrame("Button", nil, row)
-    row.capCell:SetSize(72, 20)
-    row.capCell:SetPoint("RIGHT", row, "RIGHT", -180, 0)
+    row.capCell:SetSize(50, 20)  -- v0.7: 72 -> 50 for compressed layout
+    row.capCell:SetPoint("RIGHT", row, "RIGHT", -72, 0)
     row.capCell:RegisterForClicks("LeftButtonUp", "RightButtonUp")
     row.capCell:SetFrameLevel(row:GetFrameLevel() + 2)
 
@@ -538,7 +543,7 @@ local function BuildRow(row)
     row.needEdit:SetNumeric(true)
     row.needEdit:SetMaxLetters(5)
     row.needEdit:SetJustifyH("CENTER")
-    row.needEdit:SetSize(56, 20)
+    row.needEdit:SetSize(42, 20)  -- v0.7: matches compressed needCell
     row.needEdit:SetPoint("CENTER", row.needCell, "CENTER")
     -- Explicitly single-line so Enter routes to OnEnterPressed rather
     -- than being consumed as a newline. Do NOT call EnableKeyboard(true)
@@ -575,7 +580,7 @@ local function BuildRow(row)
     row.priceEdit:SetMultiLine(false)
     row.priceEdit:SetMaxLetters(7)  -- 9,999,999g cap on the input field
     row.priceEdit:SetJustifyH("CENTER")
-    row.priceEdit:SetSize(72, 20)
+    row.priceEdit:SetSize(50, 20)  -- v0.7: matches compressed capCell
     row.priceEdit:SetPoint("CENTER", row.capCell, "CENTER")
     row.priceEditBg:SetPoint("TOPLEFT",     row.priceEdit, "TOPLEFT",     -4, 2)
     row.priceEditBg:SetPoint("BOTTOMRIGHT", row.priceEdit, "BOTTOMRIGHT",  4, -2)
@@ -587,13 +592,13 @@ local function BuildRow(row)
     -- the value updates automatically on every AH search (row-click or
     -- restock loop). Tooltip on hover: "1250g -- 2h ago via loop".
     row.lastSeen = row:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-    row.lastSeen:SetPoint("RIGHT", row, "RIGHT", -104, 0)
-    row.lastSeen:SetWidth(60)
+    row.lastSeen:SetPoint("RIGHT", row, "RIGHT", -30, 0)  -- v0.7: shifted right of trash
+    row.lastSeen:SetWidth(38)  -- v0.7: 60 -> 38 for compressed layout
     row.lastSeen:SetJustifyH("RIGHT")
     -- Invisible mouse target sized to the column so tooltips still work.
     row.lastSeenHit = CreateFrame("Frame", nil, row)
-    row.lastSeenHit:SetSize(60, 20)
-    row.lastSeenHit:SetPoint("RIGHT", row, "RIGHT", -104, 0)
+    row.lastSeenHit:SetSize(38, 20)  -- v0.7: 60 -> 38
+    row.lastSeenHit:SetPoint("RIGHT", row, "RIGHT", -30, 0)
     row.lastSeenHit:EnableMouse(true)
     row.lastSeenHit:SetScript("OnEnter", function(self)
         local r = self:GetParent()
@@ -619,16 +624,17 @@ local function BuildRow(row)
     end)
     row.lastSeenHit:SetScript("OnLeave", function() GameTooltip:Hide() end)
 
-    -- Status pill (ok / -N) - Status column.
-    -- Flat, 1px black border, subtle fill. The COLORED TEXT (green ok /
-    -- red -N) carries the semantic; the pill itself stays neutral so the
-    -- overall aesthetic reads as one palette instead of a traffic-light
-    -- panel.
+    -- v0.7: Status pill removed. Short/ok state now signaled by coloring
+    -- row.have text red when short (have < need) or mint when stocked.
+    -- See InitializeRow further down for the coloring logic. The pill
+    -- frame stub below is kept as a hidden no-op so downstream code that
+    -- still calls row.pill:Show()/row.pill.text:SetText() during the
+    -- phased rollout doesn't nil-error; it can be deleted in a follow-up
+    -- pass once every caller is scrubbed.
     row.pill = CreateFrame("Frame", nil, row)
-    row.pill:SetSize(52, 20)
-    row.pill:SetPoint("RIGHT", row, "RIGHT", -36, 0)
-    ApplyFill(row.pill, Palette.bgMedium)
-    AddBlackBorder(row.pill)
+    row.pill:SetSize(1, 1)
+    row.pill:SetPoint("RIGHT", row, "RIGHT", 0, 0)
+    row.pill:Hide()
     row.pill.text = row.pill:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
     row.pill.text:SetPoint("CENTER")
 
@@ -996,10 +1002,29 @@ local function InitializeRow(row, data)
     row._have      = have
     row._breakdown = bd
 
-    -- Have column: bags-only count (white) with optional dim suffix that
-    -- names where any stashed copies live. Bags stays the primary metric;
-    -- the suffix is context, not a total.
-    local haveText = tostring(have)
+    -- Have column: bags-only count with optional dim suffix that names
+    -- where any stashed copies live. Bags stays the primary metric; the
+    -- suffix is context, not a total.
+    --
+    -- v0.7 status-via-color: the primary bags-count gets a semantic
+    -- color prefix based on have-vs-need (red when short, mint when
+    -- stocked, default when no target). This replaces the dedicated
+    -- Status pill from earlier versions. The (+N stash: bank/reagent)
+    -- suffix stays gray -- it's ancillary info that shouldn't compete
+    -- with the short/stocked signal.
+    local haveColor = ""
+    local haveColorEnd = ""
+    if data.need and data.need > 0 then
+        local short = data.need - have
+        if short > 0 then
+            haveColor    = "|cffe5624a"  -- muted red, was Status pill's short color
+            haveColorEnd = "|r"
+        else
+            haveColor    = "|cff98FF98"  -- brand mint, "stocked"
+            haveColorEnd = "|r"
+        end
+    end
+    local haveText = haveColor .. tostring(have) .. haveColorEnd
     if stashed > 0 then
         local parts = {}
         if bd.bank    > 0 then parts[#parts+1] = bd.bank    .. " bank"    end
@@ -1101,11 +1126,13 @@ local function InitializeRow(row, data)
             data.itemID, have, stashed, data.need))
     end
 
-    -- Status pill: neutral flat cell; color lives in the text only.
+    -- v0.7: Status pill retired. Short/ok state is now signaled by the
+    -- Have column color (see the row.have:SetText block above). The pill
+    -- frame is a hidden no-op stub, but we still set its .text as a
+    -- backup so any legacy reader inspecting it during the phased
+    -- rollout gets a sensible value rather than nil.
     local short = data.need - have
     if short > 0 then
-        -- Red short text (#e5624a — muted red, tuned to sit with the dark bg
-        -- and the brand mint without shouting).
         row.pill.text:SetText(("|cffe5624a-%d|r"):format(short))
     else
         row.pill.text:SetText("|cff4ade80ok|r")
@@ -1219,29 +1246,24 @@ function MF:Build()
     -- black bottom borders, not stacked backdrops. All of this is the
     -- ElvUI/atrocityEssentials aesthetic verbatim.
     local f = CreateFrame("Frame", "StockClerkFrame", UIParent, "BackdropTemplate")
-    f:SetSize(680, 500)
+    f:SetSize(420, 400)  -- v0.7: shopping-list shape, down from 680x500
     f:SetFrameStrata("HIGH")
     f:SetToplevel(true)
     f:SetClampedToScreen(true)
     f:SetMovable(true)
     f:SetResizable(true)
-    -- Min width is driven by the toolbar row (widest fixed thing in the
-    -- window): 12 pad + 240 (Item) + 12 + 100 (Target) + 12 + 120 (Price
-    -- Cap) + 12 + 96 (Add) + 12 pad = 616. Rounded up to 640 for a bit
-    -- of visual breathing room; QA-1 was pinned at 560 which clipped
-    -- Add Item off the right edge and wrapped the hint text.
-    -- Min height keeps enough room for the toolbar + hint + column
-    -- headers + a couple of rows + footer.
-    -- Max: enough vertical room for very long lists on a 4K display,
-    -- plus horizontal slack for very-long item names.
+    -- v0.7 resize bounds: hard floor at 420x400 (the default), no ceiling.
+    -- Rationale: the compressed layout was designed at exactly 420x400 so
+    -- shrinking below that would clip columns; growing above it just
+    -- gives the item list more headroom, which is always fine. Removing
+    -- the ceiling (previously 1200x1200) lets 4K users pull the window
+    -- as tall as they want without hitting an arbitrary cap.
     if f.SetResizeBounds then
-        -- Min width bumped 640 -> 720 to accommodate the new Last Seen
-        -- column (QA-11). The column adds ~74px of chrome between Cap
-        -- and Status.
-        f:SetResizeBounds(720, 320, 1200, 1200)
+        f:SetResizeBounds(420, 400)  -- min-only; no max args = unbounded
     else
-        f:SetMinResize(720, 320)
-        f:SetMaxResize(1200, 1200)
+        f:SetMinResize(420, 400)
+        -- SetMaxResize on legacy clients: pass huge values as a soft cap
+        f:SetMaxResize(4096, 4096)
     end
     f:EnableMouse(true)
     -- Re-enable keyboard on the root frame. Removing this broke
@@ -1582,9 +1604,14 @@ function MF:Build()
     -- itemIDs (rank 1/2/3 craft variants, event duplicates), and there's
     -- no addon-facing enumerate-by-name endpoint to disambiguate.
     -- Numeric-only input avoids the ambiguity entirely.
-    local addEB   = MakeEditBox(toolbar, "Item ID",         240, true,  8,     "e.g. 212283")
-    local countEB = MakeEditBox(toolbar, "Target",          100, true,  5,     "20")
-    local priceEB = MakeEditBox(toolbar, "Price Cap / Unit", 120, true,  7,     "none")
+    -- v0.7: compact widths for the 420px main-frame layout. Item ID box
+    -- shrunk 240 -> 130 (item IDs are 5-7 digits; 130 comfortably fits
+    -- 8-digit input and the placeholder "e.g. 212283"). Target 100 -> 60,
+    -- Price Cap 120 -> 80. "Price Cap / Unit" label shortened to "Cap"
+    -- (the /unit context is documented in the tooltip and the CHANGELOG).
+    local addEB   = MakeEditBox(toolbar, "Item ID", 130, true, 8, "e.g. 212283")
+    local countEB = MakeEditBox(toolbar, "Target",   60, true, 5, "20")
+    local priceEB = MakeEditBox(toolbar, "Cap",      80, true, 7, "none")
     local addBox   = addEB.editBox
     local countBox = countEB.editBox
     local priceBox = priceEB.editBox
@@ -1594,8 +1621,8 @@ function MF:Build()
     priceEB:SetPoint("LEFT", countEB, "RIGHT", 12, 0)
 
     local addBtn = CreateFrame("Button", nil, toolbar)
-    addBtn:SetSize(96, 22)
-    addBtn:SetPoint("LEFT", priceEB, "RIGHT", 12, -6)
+    addBtn:SetSize(72, 22)  -- v0.7: 96 -> 72 for compressed toolbar
+    addBtn:SetPoint("LEFT", priceEB, "RIGHT", 10, -6)
     StyleButton(addBtn)
     local addBtnText = addBtn:CreateFontString(nil, "OVERLAY", "GameFontNormal")
     addBtnText:SetPoint("CENTER")
@@ -1993,7 +2020,10 @@ function MF:Build()
     hint:SetJustifyH("LEFT")
     -- Dimmer than the toolbar band so this recedes visually — it's help text,
     -- not primary content. Alpha via a slightly darker grey than before.
-    hint:SetText("|cff6a6a6aShift+Click to link \194\183 Click 'x' to remove \194\183 Click a value to edit it \194\183 Left-click a row (AH open) to search|r")
+    -- v0.7: shortened for the 420px layout. "Click 'x' to remove" dropped
+    -- since trash-on-hover is a discovered affordance, not something the
+    -- hint needs to spell out. "Click a value to edit" tightened.
+    hint:SetText("|cff6a6a6aShift+Click to link \194\183 Click a value to edit \194\183 Row-click (AH open) to search|r")
 
     -- ---- Column headers -----------------------------------------------
     -- Sits under the hint; no fill (matches atrocity's headerless section
@@ -2051,86 +2081,61 @@ function MF:Build()
         end
         return fs
     end
-    -- Column pixel positions. Cells in BuildRow anchor their RIGHT edge to
-    -- row.RIGHT (SetPoint("RIGHT", row, "RIGHT", -N, 0)). To sit each
-    -- header LABEL over the visual CENTER of its cell, subtract half the
-    -- cell's width from that RIGHT-edge offset:
-    --   needCell: right at -200, width 56 -> center at -200 - 28 = -228
-    --   capCell:  right at -110, width 72 -> center at -110 - 36 = -146
-    --   pill:     right at  -36, width 52 -> center at  -36 - 26 =  -62
-    -- Have is a right-justified FontString whose right edge sits at -270,
-    -- so its header is right-anchored to the same -270 for edge-alignment.
-    -- Header offsets track the row cell offsets updated for the new
-    -- Last Seen column (see BuildRow's layout table).
-    --   needCell: right at -270, width 56 -> center at -270 - 28 = -298
-    --   capCell:  right at -180, width 72 -> center at -180 - 36 = -216
-    --   lastSeen: right at -104, width 60 -> center at -104 - 30 = -134
-    --   pill:     right at  -36, width 52 -> center at  -36 - 26 =  -62
-    MakeHeader("Item",      "left",    52)      -- left edge + 40 (icon + 12 pad)
-    MakeHeader("Have",      "right",   -340)    -- right-edge-aligned bags value
-    MakeHeader("Need",      "center",  -298)    -- centered over needCell
-    MakeHeader("Price Cap", "center",  -216)    -- centered over capCell
-    MakeHeader("Last Seen", "center",  -134)    -- centered over lastSeen (QA-11)
-    MakeHeader("Status",    "center",  -62)     -- centered over pill
+    -- v0.7 column pixel positions. Cells in BuildRow anchor their RIGHT
+    -- edge to row.RIGHT (SetPoint("RIGHT", row, "RIGHT", -N, 0)). Header
+    -- LABEL sits over the CENTER of its cell: subtract half cell width
+    -- from the right-edge offset.
+    --   Have text:  right at -178                    -> right-anchor -178
+    --   needCell:   right at -128, width 42 -> center -128 - 21 = -149
+    --   capCell:    right at  -72, width 50 -> center  -72 - 25 =  -97
+    --   lastSeen:   right at  -30, width 38 -> center  -30 - 19 =  -49
+    -- Status column removed in v0.7 (short/ok state signaled by Have color).
+    -- "Price Cap" shortened to "Cap" and "Last Seen" to "Seen" to fit the
+    -- compressed column widths without clipping their labels.
+    MakeHeader("Item", "left",    36)     -- left edge + 24 (icon + 12 pad)
+    MakeHeader("Have", "right",   -178)   -- right-edge-aligned bags value
+    MakeHeader("Need", "center",  -149)   -- centered over needCell
+    MakeHeader("Cap",  "center",  -97)    -- centered over capCell
+    MakeHeader("Seen", "center",  -49)    -- centered over lastSeen
 
-    -- v0.6 (PT-3): "stuck above cap" filter chip. Sits on the LEFT edge
-    -- of the headers strip -- specifically tucked to the right of the Item
-    -- header label so it doesn't collide with any column header. Small
-    -- rounded pill: OFF is a dim outline ("filter available"), ON is
-    -- filled mint ("filter active"). One state to reason about; matches
-    -- the flat aesthetic (see Dev/NOTES 3.4a for the design checkpoint).
+    -- v0.7: "stuck above cap" filter chip — now ICON-ONLY (was a 150w text
+    -- pill in v0.6). At the compressed 420 width there isn't room for a
+    -- 150-pixel text chip in the headers strip; the funnel glyph is a
+    -- universal filter affordance and hover-tooltip carries the meaning.
     --
-    -- Position rationale: Item header sits at LEFT + 52, and the Have
-    -- column starts around row.RIGHT - 340. That gives us a wide dead
-    -- zone across the middle-left of the headers frame with nothing to
-    -- collide with. Anchor to headers.RIGHT so the chip stays put when
-    -- the window resizes -- placing it just to the LEFT of the Have
-    -- header (at -360 offset) keeps a clean single-line row.
+    -- Icon: three thin mint bars stacked in a funnel shape (top widest,
+    -- bottom narrowest). Same construction pattern as the hamburger button
+    -- above -- WoW's stock fonts don't reliably ship a funnel glyph, and
+    -- drawn rectangles tint cleanly on hover / ON state.
+    --
+    -- Position: tucked to the right of the "Item" header label on the
+    -- LEFT side of the headers strip. Anchored to headers.LEFT + 62 so
+    -- the icon stays put regardless of window width.
     local filterChip = CreateFrame("Button", nil, headers)
-    filterChip:SetSize(150, 18)
-    filterChip:SetPoint("RIGHT", headers, "RIGHT", -360 - ROW_RIGHT_INSET, 0)
+    filterChip:SetSize(18, 16)
+    filterChip:SetPoint("LEFT", headers, "LEFT", 62, 0)
     filterChip:EnableMouse(true)
 
-    -- Pill body -- 4 edges + solid fill, toggled together.
-    local chipFill = filterChip:CreateTexture(nil, "BACKGROUND")
-    chipFill:SetAllPoints(filterChip)
-    -- OFF state: nearly transparent so the header band shows through.
-    chipFill:SetColorTexture(0.10, 0.14, 0.10, 0.35)
-
     local chipMint = { 0x98/255, 0xFF/255, 0x98/255 }
-    local function chipEdge(a)
-        local t = filterChip:CreateTexture(nil, "OVERLAY")
-        t:SetColorTexture(chipMint[1], chipMint[2], chipMint[3], a or 1)
-        return t
+
+    -- Funnel glyph: three horizontal bars, widths 12/8/4, stacked vertically.
+    local chipBars = {}
+    local barWidths = { 12, 8, 4 }
+    for i = 1, 3 do
+        local bar = filterChip:CreateTexture(nil, "OVERLAY")
+        bar:SetColorTexture(chipMint[1], chipMint[2], chipMint[3], 0.55)
+        bar:SetSize(barWidths[i], 2)
+        bar:SetPoint("CENTER", 0, 4 - (i - 1) * 4)
+        chipBars[i] = bar
     end
-    local ceT, ceB = chipEdge(0.6), chipEdge(0.6)
-    local ceL, ceR = chipEdge(0.6), chipEdge(0.6)
-    ceT:SetPoint("TOPLEFT", 0, 0);      ceT:SetPoint("TOPRIGHT", 0, 0);      ceT:SetHeight(1)
-    ceB:SetPoint("BOTTOMLEFT", 0, 0);   ceB:SetPoint("BOTTOMRIGHT", 0, 0);   ceB:SetHeight(1)
-    ceL:SetPoint("TOPLEFT", 0, 0);      ceL:SetPoint("BOTTOMLEFT", 0, 0);    ceL:SetWidth(1)
-    ceR:SetPoint("TOPRIGHT", 0, 0);     ceR:SetPoint("BOTTOMRIGHT", 0, 0);   ceR:SetWidth(1)
 
-    local chipLabel = filterChip:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-    chipLabel:SetPoint("CENTER")
-    chipLabel:SetText(L.FILTER_STUCK_ONLY or "Show only: stuck above cap")
-
-    -- Applies the current DB state to the chip's visuals (fill + text color).
+    -- Applies the current DB state to the chip's visuals: OFF = dim mint
+    -- outline ("filter available"), ON = solid bright mint ("filter active").
     local function paintChip()
         local on = ADDON.DB:GetStuckOnly()
-        if on then
-            -- ON: mint fill + dark text for contrast.
-            chipFill:SetColorTexture(chipMint[1], chipMint[2], chipMint[3], 0.85)
-            chipLabel:SetTextColor(0.06, 0.10, 0.06, 1)
-            for _, e in ipairs({ ceT, ceB, ceL, ceR }) do
-                e:SetColorTexture(chipMint[1], chipMint[2], chipMint[3], 1)
-            end
-        else
-            -- OFF: hollow with mint outline + mint text.
-            chipFill:SetColorTexture(0.10, 0.14, 0.10, 0.35)
-            chipLabel:SetTextColor(chipMint[1], chipMint[2], chipMint[3], 0.85)
-            for _, e in ipairs({ ceT, ceB, ceL, ceR }) do
-                e:SetColorTexture(chipMint[1], chipMint[2], chipMint[3], 0.55)
-            end
+        local alpha = on and 1.0 or 0.55
+        for _, b in ipairs(chipBars) do
+            b:SetColorTexture(chipMint[1], chipMint[2], chipMint[3], alpha)
         end
     end
 
@@ -2140,13 +2145,24 @@ function MF:Build()
         MF:Refresh()
     end)
     filterChip:SetScript("OnEnter", function(self)
+        -- Brighten to full mint on hover regardless of ON/OFF state so
+        -- the icon reads as "clickable".
+        for _, b in ipairs(chipBars) do
+            b:SetColorTexture(chipMint[1], chipMint[2], chipMint[3], 1)
+        end
         GameTooltip:SetOwner(self, "ANCHOR_BOTTOM")
-        GameTooltip:SetText(L.FILTER_STUCK_TOOLTIP or
+        local on = ADDON.DB:GetStuckOnly()
+        GameTooltip:SetText((on and "|cff98FF98Filter ON|r  " or "") ..
+            (L.FILTER_STUCK_ONLY or "Show only: stuck above cap"), 1, 1, 1)
+        GameTooltip:AddLine(L.FILTER_STUCK_TOOLTIP or
             "Hide items whose most recent seen price is at or under your cap.",
-            1, 1, 1, 1, true)
+            0.7, 0.7, 0.7, true)
         GameTooltip:Show()
     end)
-    filterChip:SetScript("OnLeave", function() GameTooltip:Hide() end)
+    filterChip:SetScript("OnLeave", function()
+        paintChip()  -- return to persisted ON/OFF alpha
+        GameTooltip:Hide()
+    end)
 
     self.filterChip     = filterChip
     self._paintFilterChip = paintChip
