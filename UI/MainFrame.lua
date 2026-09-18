@@ -1029,15 +1029,28 @@ local function InitializeRow(row, data)
     -- brand mint (buy would fire). If lastPrice is missing or stale
     -- (older than TTL), fall back to unconditional brand mint so a stale
     -- 3-day-old price never falsely paints a healthy cap pink.
+    -- v0.6 (PT-3): the Cap column doubles as the price-vs-cap indicator.
+    -- Three visual states based on lastPrice relative to maxPrice:
+    --   pink   ("ff8888") -- last-seen price EXCEEDS the cap: currently stuck
+    --   mint   ("98FF98") -- last-seen price is at/under cap: ready to buy
+    --   muted  ("6a8a6a") -- cap set but no fresh price data yet (nil or
+    --                        older than TTL); reads as "unverified" without
+    --                        implying a healthy state (previously always mint).
     local autoOn = ADDON.DB:Settings().autoPurchase == true
     if data.maxPrice then
-        local capColor = "98FF98" -- brand mint by default
+        local capColor = "6a8a6a" -- muted mint: no fresh price data
         if data.lastPrice and data.lastPrice.copper and data.lastPrice.seenAt then
             local staleCutoff = (ADDON.DB:Settings() and ADDON.DB:Settings().lastPriceTTL) or 86400
             local age = time() - data.lastPrice.seenAt
-            if age <= staleCutoff and data.lastPrice.copper > data.maxPrice then
-                capColor = "ff8888" -- pink: last-seen exceeds our cap
+            if age <= staleCutoff then
+                if data.lastPrice.copper > data.maxPrice then
+                    capColor = "ff8888" -- pink: last-seen exceeds our cap (stuck)
+                else
+                    capColor = "98FF98" -- brand mint: last-seen at/under cap (ready)
+                end
             end
+            -- Stale data leaves capColor at muted mint; the Last Seen
+            -- column's own dimming already communicates staleness.
         end
         -- Whole-gold entry only, so display collapses to "Ng".
         row.cap:SetText(("|cff%s%dg|r"):format(capColor, math.floor(data.maxPrice / 10000)))
@@ -1760,6 +1773,175 @@ function MF:Build()
     priceBox:SetScript("OnEnterPressed", function() DoAdd() addBox:ClearFocus() end)
     priceBox:SetScript("OnEscapePressed", function(self) self:ClearFocus() end)
 
+    -- =====================================================================
+    -- v0.6 PT-2: quick-add via shift-click / drag-and-drop / focused link
+    -- =====================================================================
+    -- Three entry points, all landing on the same "fill the box with the
+    -- item ID and let the user press Enter" path. Zero conflict with
+    -- chat link insertion because each hook is scoped to the addBox
+    -- itself, never global:
+    --
+    --   1. Shift-click ON addBox      : OnMouseUp checks cursor for a held
+    --                                    item, drops its ID in the box.
+    --   2. Drag-and-drop onto addBox  : OnReceiveDrag reads the same cursor,
+    --                                    identical behavior.
+    --   3. Shift-click any item link  : addBox opts into WoW's focused-
+    --      while addBox is focused      editbox link-insertion routing via
+    --                                    :SetHyperlinksEnabled + the hook
+    --                                    below. Chat's own link routing is
+    --                                    unaffected because when addBox is
+    --                                    focused it OWNS the insertion.
+    --
+    -- All three deliberately do NOT commit -- they only fill the field.
+    -- Commit remains the user pressing Enter, matching the addon's
+    -- commit-on-Enter/Tab pattern (see Dev/NOTES 3.4a for the revisit
+    -- checkpoint on this UX choice).
+    -- =====================================================================
+
+    -- Extract an itemID from whatever WoW says the cursor currently holds.
+    -- Returns nil if the cursor holds nothing item-shaped. Item link path
+    -- reuses the resolver's parsing so cursor-provided links and typed
+    -- links go through the same regex.
+    local function CursorItemID()
+        local kind, arg1, arg2 = GetCursorInfo()
+        if kind == "item" then
+            -- Blizzard's cursor API returns ("item", itemID, itemLink).
+            -- On some 11.x betas arg1 was a link string instead of an ID;
+            -- handle both to be robust across builds.
+            local id = tonumber(arg1)
+            if id then return id end
+            if type(arg1) == "string" then
+                id = tonumber(arg1:match("item:(%d+)"))
+                if id then return id end
+            end
+            if type(arg2) == "string" then
+                id = tonumber(arg2:match("item:(%d+)"))
+                if id then return id end
+            end
+        end
+        return nil
+    end
+
+    -- Drop an itemID into addBox and steer focus so the user's next Enter
+    -- commits. Also clears the cursor so a held item doesn't linger
+    -- (mirrors what happens when you drop an item into any Blizzard box).
+    local function StampAddBox(itemID)
+        if not itemID then return end
+        addBox:SetText(tostring(itemID))
+        addBox:SetFocus()
+        -- Defer HighlightText by one frame: SetFocus queues a focus
+        -- transfer, and on some clients calling HighlightText in the
+        -- same tick as SetFocus hits before focus actually lands and
+        -- becomes a no-op. C_Timer.After(0, ...) is the standard
+        -- "next frame" idiom in the WoW client.
+        C_Timer.After(0, function()
+            if addBox:HasFocus() then addBox:HighlightText() end
+        end)
+        if ClearCursor then ClearCursor() end
+        MF:SetStatus(("Quick-add: item %d (press Enter to add)"):format(itemID))
+    end
+
+    -- Entry point 1 + drop-target enablement.
+    -- WoW EditBoxes ignore mouse clicks unless EnableMouse is on. The
+    -- container (addEB.container) already handles the click-to-focus
+    -- interaction; we hook the container's OnMouseUp so a shift-click
+    -- anywhere on the visual box works, not just on the pixel-thin editbox.
+    -- RegisterForDrag/OnReceiveDrag make the same region a drop target.
+    -- IMPORTANT: use HookScript, not SetScript, for OnMouseUp / OnEnter /
+    -- OnLeave / OnReceiveDrag on the container. StyleEditBoxContainer
+    -- (above) already installs HookScripts for OnEnter / OnLeave to drive
+    -- the border hover animation; a SetScript here would blow them away
+    -- and the box would lose its focus-affordance. HookScript is additive.
+    local dropTarget = addEB.container or addBox
+    dropTarget:EnableMouse(true)
+    dropTarget:RegisterForDrag("LeftButton")
+    dropTarget:HookScript("OnMouseUp", function(_, button)
+        if button ~= "LeftButton" then return end
+        if IsShiftKeyDown() then
+            local id = CursorItemID()
+            if id then
+                StampAddBox(id)
+                return
+            end
+        end
+        -- Non-quick-add clicks fall through to the normal focus behavior.
+        addBox:SetFocus()
+    end)
+    dropTarget:HookScript("OnReceiveDrag", function()
+        local id = CursorItemID()
+        if id then StampAddBox(id) end
+    end)
+
+    -- Entry point 3: opt addBox into WoW's focused-editbox link routing.
+    -- Blizzard's ChatEdit_InsertLink walks a list of "link receivers" and
+    -- inserts into whichever one currently owns keyboard focus. Chat has
+    -- one; ItemRefTooltip has one; any addon EditBox can opt in the same
+    -- way. We hook the function so that when addBox is focused, a shift-
+    -- click on any item link fills addBox with the item ID (numeric),
+    -- NOT the raw link text -- users want an ID to add, not a hyperlink
+    -- to display.
+    if ChatEdit_InsertLink then
+        hooksecurefunc("ChatEdit_InsertLink", function(text)
+            if not text or not addBox:HasFocus() then return end
+            local id = tonumber(text:match("item:(%d+)"))
+            if id then
+                -- Cancel the raw text insertion that ChatEdit_InsertLink
+                -- already performed (it always appends to whichever editbox
+                -- is focused). We overwrite with just the numeric ID.
+                StampAddBox(id)
+            end
+        end)
+    end
+
+    -- Drop-zone visual affordance (Option A from grill): 1px mint outline
+    -- that thickens (2px) when the cursor holds an item, signalling
+    -- "you can drop here". Uses CURSOR_UPDATE + CURSOR_CHANGED so we're
+    -- not polling OnUpdate every frame just to watch the cursor.
+    local mint = { 0x98/255, 0xFF/255, 0x98/255 }
+    local function edgeTex(parent)
+        local t = parent:CreateTexture(nil, "OVERLAY")
+        t:SetColorTexture(mint[1], mint[2], mint[3], 1)
+        t:Hide()
+        return t
+    end
+    local dropEdges = {
+        edgeTex(dropTarget), edgeTex(dropTarget),
+        edgeTex(dropTarget), edgeTex(dropTarget),
+    }
+    dropEdges[1]:SetPoint("TOPLEFT",     dropTarget, "TOPLEFT",     -1,  1)
+    dropEdges[1]:SetPoint("TOPRIGHT",    dropTarget, "TOPRIGHT",     1,  1)
+    dropEdges[1]:SetHeight(1)
+    dropEdges[2]:SetPoint("BOTTOMLEFT",  dropTarget, "BOTTOMLEFT",  -1, -1)
+    dropEdges[2]:SetPoint("BOTTOMRIGHT", dropTarget, "BOTTOMRIGHT",  1, -1)
+    dropEdges[2]:SetHeight(1)
+    dropEdges[3]:SetPoint("TOPLEFT",     dropTarget, "TOPLEFT",     -1,  1)
+    dropEdges[3]:SetPoint("BOTTOMLEFT",  dropTarget, "BOTTOMLEFT",  -1, -1)
+    dropEdges[3]:SetWidth(1)
+    dropEdges[4]:SetPoint("TOPRIGHT",    dropTarget, "TOPRIGHT",     1,  1)
+    dropEdges[4]:SetPoint("BOTTOMRIGHT", dropTarget, "BOTTOMRIGHT",  1, -1)
+    dropEdges[4]:SetWidth(1)
+
+    local dropWatcher = CreateFrame("Frame", nil, dropTarget)
+    dropWatcher:RegisterEvent("CURSOR_UPDATE")
+    dropWatcher:RegisterEvent("CURSOR_CHANGED")
+    dropWatcher:SetScript("OnEvent", function()
+        local show = CursorItemID() ~= nil
+        for _, edge in ipairs(dropEdges) do edge:SetShown(show) end
+    end)
+
+    -- Tooltip on the addBox container so first-time users discover the
+    -- shift-click / drag path without a wall of on-screen text.
+    -- HookScript (not SetScript) preserves the border-hover animation
+    -- that StyleEditBoxContainer already installed on OnEnter/OnLeave.
+    dropTarget:HookScript("OnEnter", function(self)
+        GameTooltip:SetOwner(self, "ANCHOR_TOP")
+        GameTooltip:SetText(L.ADDBOX_TOOLTIP or
+            "Type an item ID, drag an item, or shift-click while focused.",
+            1, 1, 1, 1, true)
+        GameTooltip:Show()
+    end)
+    dropTarget:HookScript("OnLeave", function() GameTooltip:Hide() end)
+
     -- Save toolbar boxes on self so BuildRow's inline editors can reach
     -- them for unified Tab navigation across toolbar + row-body cells.
     self.addBox   = addBox
@@ -1889,6 +2071,89 @@ function MF:Build()
     MakeHeader("Price Cap", "center",  -216)    -- centered over capCell
     MakeHeader("Last Seen", "center",  -134)    -- centered over lastSeen (QA-11)
     MakeHeader("Status",    "center",  -62)     -- centered over pill
+
+    -- v0.6 (PT-3): "stuck above cap" filter chip. Sits on the LEFT edge
+    -- of the headers strip -- specifically tucked to the right of the Item
+    -- header label so it doesn't collide with any column header. Small
+    -- rounded pill: OFF is a dim outline ("filter available"), ON is
+    -- filled mint ("filter active"). One state to reason about; matches
+    -- the flat aesthetic (see Dev/NOTES 3.4a for the design checkpoint).
+    --
+    -- Position rationale: Item header sits at LEFT + 52, and the Have
+    -- column starts around row.RIGHT - 340. That gives us a wide dead
+    -- zone across the middle-left of the headers frame with nothing to
+    -- collide with. Anchor to headers.RIGHT so the chip stays put when
+    -- the window resizes -- placing it just to the LEFT of the Have
+    -- header (at -360 offset) keeps a clean single-line row.
+    local filterChip = CreateFrame("Button", nil, headers)
+    filterChip:SetSize(150, 18)
+    filterChip:SetPoint("RIGHT", headers, "RIGHT", -360 - ROW_RIGHT_INSET, 0)
+    filterChip:EnableMouse(true)
+
+    -- Pill body -- 4 edges + solid fill, toggled together.
+    local chipFill = filterChip:CreateTexture(nil, "BACKGROUND")
+    chipFill:SetAllPoints(filterChip)
+    -- OFF state: nearly transparent so the header band shows through.
+    chipFill:SetColorTexture(0.10, 0.14, 0.10, 0.35)
+
+    local chipMint = { 0x98/255, 0xFF/255, 0x98/255 }
+    local function chipEdge(a)
+        local t = filterChip:CreateTexture(nil, "OVERLAY")
+        t:SetColorTexture(chipMint[1], chipMint[2], chipMint[3], a or 1)
+        return t
+    end
+    local ceT, ceB = chipEdge(0.6), chipEdge(0.6)
+    local ceL, ceR = chipEdge(0.6), chipEdge(0.6)
+    ceT:SetPoint("TOPLEFT", 0, 0);      ceT:SetPoint("TOPRIGHT", 0, 0);      ceT:SetHeight(1)
+    ceB:SetPoint("BOTTOMLEFT", 0, 0);   ceB:SetPoint("BOTTOMRIGHT", 0, 0);   ceB:SetHeight(1)
+    ceL:SetPoint("TOPLEFT", 0, 0);      ceL:SetPoint("BOTTOMLEFT", 0, 0);    ceL:SetWidth(1)
+    ceR:SetPoint("TOPRIGHT", 0, 0);     ceR:SetPoint("BOTTOMRIGHT", 0, 0);   ceR:SetWidth(1)
+
+    local chipLabel = filterChip:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+    chipLabel:SetPoint("CENTER")
+    chipLabel:SetText(L.FILTER_STUCK_ONLY or "Show only: stuck above cap")
+
+    -- Applies the current DB state to the chip's visuals (fill + text color).
+    local function paintChip()
+        local on = ADDON.DB:GetStuckOnly()
+        if on then
+            -- ON: mint fill + dark text for contrast.
+            chipFill:SetColorTexture(chipMint[1], chipMint[2], chipMint[3], 0.85)
+            chipLabel:SetTextColor(0.06, 0.10, 0.06, 1)
+            for _, e in ipairs({ ceT, ceB, ceL, ceR }) do
+                e:SetColorTexture(chipMint[1], chipMint[2], chipMint[3], 1)
+            end
+        else
+            -- OFF: hollow with mint outline + mint text.
+            chipFill:SetColorTexture(0.10, 0.14, 0.10, 0.35)
+            chipLabel:SetTextColor(chipMint[1], chipMint[2], chipMint[3], 0.85)
+            for _, e in ipairs({ ceT, ceB, ceL, ceR }) do
+                e:SetColorTexture(chipMint[1], chipMint[2], chipMint[3], 0.55)
+            end
+        end
+    end
+
+    filterChip:SetScript("OnClick", function()
+        ADDON.DB:SetStuckOnly(not ADDON.DB:GetStuckOnly())
+        paintChip()
+        MF:Refresh()
+    end)
+    filterChip:SetScript("OnEnter", function(self)
+        GameTooltip:SetOwner(self, "ANCHOR_BOTTOM")
+        GameTooltip:SetText(L.FILTER_STUCK_TOOLTIP or
+            "Hide items whose most recent seen price is at or under your cap.",
+            1, 1, 1, 1, true)
+        GameTooltip:Show()
+    end)
+    filterChip:SetScript("OnLeave", function() GameTooltip:Hide() end)
+
+    self.filterChip     = filterChip
+    self._paintFilterChip = paintChip
+
+    -- Paint immediately so the chip matches persisted state on first show,
+    -- not just after the first refresh. Safe: DB is initialized in
+    -- Core.lua's OnInitialize which fires strictly before MainFrame:Build.
+    paintChip()
 
     -- ---- Footer / bottom bar ------------------------------------------
     -- Fixed 36px bar; status text on the left, action buttons on the right.
@@ -2045,6 +2310,30 @@ function MF:Refresh()
 
     local items = ADDON.DB:GetSortedItems()
 
+    -- v0.6 (PT-3): apply the "stuck above cap" filter if the chip is on.
+    -- Definition of "stuck": item has a cap AND a fresh (non-stale)
+    -- lastPrice that EXCEEDS the cap. Items without a cap, without any
+    -- lastPrice, or with only stale prices are excluded from the filtered
+    -- view -- the user is explicitly asking "what's currently priced out",
+    -- not "what's unknown or unpriced".
+    local stuckOnly = ADDON.DB.GetStuckOnly and ADDON.DB:GetStuckOnly() or false
+    if stuckOnly then
+        local staleCutoff = (ADDON.DB:Settings() and ADDON.DB:Settings().lastPriceTTL) or 86400
+        local nowT = time()
+        local filtered = {}
+        for _, it in ipairs(items) do
+            if it.maxPrice and it.lastPrice and it.lastPrice.copper
+               and it.lastPrice.seenAt
+               and (nowT - it.lastPrice.seenAt) <= staleCutoff
+               and it.lastPrice.copper > it.maxPrice then
+                filtered[#filtered + 1] = it
+            end
+        end
+        items = filtered
+    end
+    -- Keep the chip visual in sync each refresh (safe idempotent paint).
+    if self._paintFilterChip then self._paintFilterChip() end
+
     if #items == 0 then
         -- Empty provider still needs to be swapped in so any prior rows
         -- are cleared out.
@@ -2057,7 +2346,17 @@ function MF:Refresh()
         -- repaint would flood the activity log's status history with
         -- "N items tracked" lines and bury the buy/expense entries the
         -- log exists to preserve (code-review v0.2.0..HEAD finding 3).
-        self:SetStatus("0 items tracked", true)
+        -- v0.6: friendlier empty-state copy when the list is non-empty
+        -- but the filter has hidden everything.
+        if stuckOnly then
+            self.emptyText:SetText("|cff888888No items currently priced above cap. Click the filter chip to see the full list.|r")
+            self.emptyText:Show()
+            self:SetStatus("0 stuck items (filter active)", true)
+        else
+            self.emptyText:SetText(L.EMPTY_LIST)
+            self.emptyText:Show()
+            self:SetStatus("0 items tracked", true)
+        end
         return
     end
     self.emptyText:Hide()

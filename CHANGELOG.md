@@ -1,5 +1,56 @@
 # Stock Clerk changelog
 
+## v0.6.0
+
+Quick-add gestures on the Add box, and a filter to focus the list on
+items currently priced above your cap.
+
+### Quick-add via drag, shift-click, and item links (PT-2)
+
+- **Drag any item onto the Add box.** Drop an item from your bags
+  or from a Blizzard item slot onto Stock Clerk's Add box and its
+  itemID appears in the field, ready for you to review Target and
+  Price Cap and press Enter to commit.
+- **Shift-click the Add box while holding an item on the cursor.**
+  Same result as drag-and-drop; pick whichever gesture fits your
+  hand.
+- **Shift-click any item link while the Add box has focus.** With
+  the Add box focused, shift-clicking an item in chat, in a
+  tooltip, in the Auction House browse pane, or anywhere else
+  routes the itemID into the Add box instead of into chat. Your
+  chat's own "shift-click to link" behavior is untouched when the
+  Add box isn't focused.
+- **Mint drop-zone hint.** The Add box outline lights up mint
+  whenever you're holding an item on the cursor, so you can see
+  where the drop will land.
+- **The gestures fill the box; they don't commit.** Enter still
+  commits, matching the rest of the addon's edit model. This
+  keeps a stray drag from adding an unwanted item; we'll revisit
+  based on how the gestures actually get used in practice.
+
+### "Stuck above cap" filter (PT-3)
+
+- **New filter chip in the column-header strip.** Toggle it on to
+  hide every item except the ones whose most recent seen AH price
+  exceeds your price cap -- i.e. the items you're currently
+  waiting out. Toggle off to see the full list again.
+- **Filter state is per character** and persists across sessions,
+  so your alt with lots of enchanting mats doesn't inherit your
+  main's filter state.
+- **Cap column tri-state coloring.** The Cap value paints:
+  - Mint when the last seen price is at or under the cap (ready)
+  - Pink when the last seen price exceeds the cap (stuck)
+  - Muted gray-mint when a cap is set but there is no fresh price
+    data yet, so you can tell "unknown" from "known and healthy".
+
+### Under the hood
+
+- New DB getters `GetStuckOnly` / `SetStuckOnly` and a
+  `char.ui.stuckOnly` field, backfilled for existing saves.
+- Refresh path now applies the filter before building the data
+  provider, and paints the filter chip on every refresh so the
+  chip and the visible list stay in sync.
+
 ## v0.5.0
 
 Safer auto mode: mail-delivery gate, price polish, default cap.

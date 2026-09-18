@@ -69,6 +69,15 @@ DB.defaults = {
         -- established lazily because C_DateAndTime isn't guaranteed at
         -- PLAYER_LOGIN for every client build.
         autoSpend = { copper = 0, resetAt = nil },
+        -- v0.6 (PT-3): per-character UI state. Filter toggle for the
+        -- shopping-list view. `stuckOnly = true` means the list hides
+        -- every row except items whose most recent observed unit price
+        -- exceeds their price cap (i.e. "currently priced out"). Per-
+        -- character because different characters carry different lists
+        -- and different market pressures, so persisting the filter
+        -- globally would be surprising.
+        ui = { stuckOnly = false },
+
         -- Mail-delivery ledger (PT-4). Persisted per-character because
         -- auction mail is delivered to the buying character, not the
         -- warband. Keys are itemID (as number, keyed by lua so beware
@@ -162,6 +171,30 @@ function DB:Initialize()
         end
     end
     self.char.pendingBuys = normal
+
+    -- v0.6 UI defaults hygiene: old saves predate `ui`, so backfill it
+    -- without disturbing anything else on disk. This is the same shape
+    -- the defaults table declares; keep them in sync if a new UI flag
+    -- is added later.
+    self.char.ui = self.char.ui or { stuckOnly = false }
+    if self.char.ui.stuckOnly == nil then self.char.ui.stuckOnly = false end
+end
+
+-- ---------------------------------------------------------------------------
+-- v0.6: shopping-list "stuck above cap" filter toggle (PT-3)
+--
+-- Persisted per-character on char.ui.stuckOnly. Getter/setter live here
+-- so MainFrame doesn't touch the raw table shape.
+-- ---------------------------------------------------------------------------
+function DB:GetStuckOnly()
+    if not self.char or not self.char.ui then return false end
+    return self.char.ui.stuckOnly == true
+end
+
+function DB:SetStuckOnly(on)
+    if not self.char then return end
+    self.char.ui = self.char.ui or { stuckOnly = false }
+    self.char.ui.stuckOnly = on and true or false
 end
 
 -- ---------------------------------------------------------------------------

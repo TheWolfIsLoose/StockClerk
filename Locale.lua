@@ -26,6 +26,14 @@ L.PROMPT_ADD_COUNT       = "Target count:"
 L.ITEM_NOT_FOUND         = "Item not found or not yet cached. Try opening its tooltip in-game first, then re-add."
 L.SEED_APPLIED           = "Applied recommended lists: %d items across %d categories."
 
+-- v0.6 (PT-2): item ID input box hints
+L.ADDBOX_TOOLTIP         = "Type an item ID, drag an item from bags, or shift-click while focused."
+L.ADDBOX_DROP_ACCEPTED   = "Drop to fill"
+
+-- v0.6 (PT-3): shopping list filter chip
+L.FILTER_STUCK_ONLY      = "Show only: stuck above cap"
+L.FILTER_STUCK_TOOLTIP   = "Hide items whose most recent seen price is at or under your cap. Only items priced above your cap remain visible."
+
 -- Slash command help
 L.HELP_TITLE             = "|cff88ccffStock Clerk|r commands:"
 L.HELP_OPEN              = "  /clerk  |cff888888— open the main window|r"
