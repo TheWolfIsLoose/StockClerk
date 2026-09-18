@@ -1,0 +1,1064 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Stock Clerk v0.7 GUI Prototype</title>
+<style>
+  /* ============================================================
+     THROWAWAY PROTOTYPE — Stock Clerk v0.7 GUI Overhaul
+     Purpose: visualize compressed main + merged sidecar + header polish
+     BEFORE writing any Lua. Not production, not accurate WoW UI —
+     approximates Blizzard frame style enough to judge proportions
+     and interaction feel.
+     ============================================================ */
+
+  :root {
+    /* Style guide approximations — tuned to Stock Clerk's mint/dark palette */
+    --bg-frame:        #0d0f14;
+    --bg-frame-alt:    #12151b;
+    --bg-row:          #171b23;
+    --bg-row-hover:    #1f2530;
+    --bg-input:        #0a0c11;
+    --border-frame:    #2a2f3a;
+    --border-inner:    #1e2229;
+    --border-divider:  #262b35;
+    --text-primary:    #d9dde5;
+    --text-secondary:  #9098a7;
+    --text-muted:      #6c7383;
+    --text-version:    #7a8090;
+    --mint:            #98ff98;
+    --mint-dim:        #6ec96e;
+    --danger:          #d97b7b;
+    --warn:            #d9c67b;
+    --stuck:           #d97b7b;
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    margin: 0;
+    padding: 40px 20px;
+    background: #05060a;
+    background-image:
+      radial-gradient(circle at 20% 20%, #0a0d15 0%, transparent 40%),
+      radial-gradient(circle at 80% 80%, #0d0a15 0%, transparent 40%);
+    color: var(--text-primary);
+    font-family: -apple-system, "Segoe UI", "Friz Quadrata TT", sans-serif;
+    font-size: 12px;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 24px;
+  }
+
+  .banner {
+    max-width: 720px;
+    padding: 12px 16px;
+    background: #131720;
+    border: 1px solid var(--border-frame);
+    border-radius: 4px;
+    color: var(--text-secondary);
+    font-size: 12px;
+    line-height: 1.5;
+  }
+  .banner b { color: var(--mint); }
+
+  /* ============================================================
+     Workspace — approximates a WoW screen with the AH open
+     ============================================================ */
+  .stage {
+    position: relative;
+    width: 1100px;
+    height: 720px;
+    background:
+      linear-gradient(180deg, #06080d 0%, #0a0d13 100%);
+    border: 1px solid #1a1e26;
+    border-radius: 6px;
+    overflow: hidden;
+  }
+
+  /* Fake AH frame */
+  .ah-frame {
+    position: absolute;
+    left: 40px;
+    top: 60px;
+    width: 480px;
+    height: 580px;
+    background: linear-gradient(180deg, #1a1712 0%, #0f0d0a 100%);
+    border: 1px solid #3a3226;
+    border-radius: 3px;
+    padding: 12px;
+    color: #b8a88a;
+    font-size: 11px;
+    transition: opacity 0.15s;
+  }
+  .ah-frame.hidden { display: none; }
+  .ah-frame h3 {
+    margin: 0 0 8px 0;
+    color: #d4c090;
+    font-size: 14px;
+    letter-spacing: 0.5px;
+  }
+  .ah-frame .ah-body {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    opacity: 0.5;
+  }
+  .ah-frame .ah-body div {
+    padding: 6px 8px;
+    background: rgba(0,0,0,0.3);
+    border-radius: 2px;
+  }
+
+  /* ============================================================
+     Stock Clerk Main Frame
+     ============================================================ */
+  .sc-container {
+    position: absolute;
+    display: flex;
+    align-items: flex-start;
+    gap: 1px; /* the "0px gap" between main and sidecar */
+    transition: left 0.2s ease-out, top 0.2s ease-out;
+  }
+
+  .sc-main {
+    width: 420px;
+    height: 400px;
+    background: var(--bg-frame);
+    border: 1px solid var(--border-frame);
+    border-radius: 3px;
+    display: flex;
+    flex-direction: column;
+    box-shadow: 0 4px 16px rgba(0,0,0,0.5);
+  }
+
+  /* Header */
+  .sc-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    height: 32px;
+    padding: 0 6px 0 12px;
+    background: linear-gradient(180deg, #1a1e28 0%, #14171f 100%);
+    border-bottom: 1px solid var(--border-inner);
+    cursor: move;
+    user-select: none;
+  }
+  .sc-title {
+    display: flex;
+    align-items: baseline;
+    gap: 8px;
+    color: var(--mint);
+    font-weight: 600;
+    font-size: 13px;
+    letter-spacing: 0.3px;
+  }
+  .sc-version {
+    color: var(--text-version);
+    font-size: 10px;
+    font-weight: 400;
+  }
+  .sc-header-buttons {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+  }
+
+  .btn-icon {
+    width: 24px;
+    height: 22px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    background: transparent;
+    border: 1px solid transparent;
+    border-radius: 2px;
+    color: var(--text-secondary);
+    cursor: pointer;
+    transition: all 0.1s;
+    padding: 0;
+  }
+  .btn-icon:hover {
+    background: var(--bg-row-hover);
+    border-color: var(--border-inner);
+    color: var(--text-primary);
+  }
+  .btn-icon.active {
+    background: rgba(152, 255, 152, 0.15);
+    border-color: rgba(152, 255, 152, 0.4);
+    color: var(--mint);
+  }
+
+  /* Hamburger icon */
+  .icon-hamburger {
+    display: inline-flex;
+    flex-direction: column;
+    gap: 3px;
+  }
+  .icon-hamburger span {
+    display: block;
+    width: 14px;
+    height: 2px;
+    background: currentColor;
+    border-radius: 1px;
+  }
+
+  /* Close X — enlarged for v0.7 */
+  .btn-close {
+    width: 36px;
+    height: 28px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    background: transparent;
+    border: 1px solid transparent;
+    border-radius: 2px;
+    color: var(--text-secondary);
+    cursor: pointer;
+    font-size: 18px;
+    font-weight: 300;
+    line-height: 1;
+    padding: 0;
+    transition: all 0.1s;
+  }
+  .btn-close:hover {
+    background: rgba(217, 123, 123, 0.15);
+    border-color: rgba(217, 123, 123, 0.4);
+    color: var(--danger);
+  }
+
+  /* Filter icon */
+  .icon-filter {
+    display: inline-block;
+    width: 14px;
+    height: 14px;
+  }
+  .icon-filter svg { display: block; }
+
+  /* Toolbar */
+  .sc-toolbar {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 8px 10px;
+    background: var(--bg-frame-alt);
+    border-bottom: 1px solid var(--border-inner);
+  }
+  .sc-add-input {
+    flex: 1;
+    height: 26px;
+    padding: 0 8px;
+    background: var(--bg-input);
+    border: 1px solid var(--border-inner);
+    border-radius: 2px;
+    color: var(--text-primary);
+    font-size: 12px;
+    font-family: inherit;
+    outline: none;
+  }
+  .sc-add-input:focus {
+    border-color: var(--mint-dim);
+  }
+  .sc-add-input::placeholder {
+    color: var(--text-muted);
+    font-style: italic;
+  }
+  .sc-add-btn {
+    height: 26px;
+    padding: 0 14px;
+    background: linear-gradient(180deg, #1e2a1e 0%, #152015 100%);
+    border: 1px solid var(--mint-dim);
+    border-radius: 2px;
+    color: var(--mint);
+    font-family: inherit;
+    font-size: 11px;
+    font-weight: 600;
+    cursor: pointer;
+    letter-spacing: 0.3px;
+  }
+  .sc-add-btn:hover {
+    background: linear-gradient(180deg, #253425 0%, #1a291a 100%);
+  }
+  .sc-refresh-btn {
+    height: 26px;
+    padding: 0 10px;
+    background: transparent;
+    border: 1px solid var(--border-inner);
+    border-radius: 2px;
+    color: var(--text-secondary);
+    font-family: inherit;
+    font-size: 11px;
+    cursor: pointer;
+  }
+  .sc-refresh-btn:hover {
+    background: var(--bg-row-hover);
+    color: var(--text-primary);
+  }
+
+  /* Column headers */
+  .sc-col-headers {
+    display: grid;
+    grid-template-columns: 22px 1fr 42px 54px 54px 42px 20px;
+    align-items: center;
+    gap: 4px;
+    padding: 6px 8px;
+    background: var(--bg-frame-alt);
+    border-bottom: 1px solid var(--border-inner);
+    color: var(--text-muted);
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    font-weight: 600;
+  }
+  .sc-col-headers > div { text-align: right; }
+  .sc-col-headers > div:nth-child(2) { text-align: left; }
+
+  /* Rows */
+  .sc-rows {
+    flex: 1;
+    overflow-y: auto;
+    padding: 2px 0;
+    background: var(--bg-frame);
+  }
+  .sc-row {
+    display: grid;
+    grid-template-columns: 22px 1fr 42px 54px 54px 42px 20px;
+    align-items: center;
+    gap: 4px;
+    padding: 5px 8px;
+    background: var(--bg-row);
+    border-bottom: 1px solid var(--border-inner);
+    cursor: pointer;
+    transition: background 0.05s;
+    font-size: 11px;
+  }
+  .sc-row:hover { background: var(--bg-row-hover); }
+  .sc-row > div { text-align: right; }
+  .sc-row > div.sc-item { text-align: left; }
+
+  .sc-row .sc-icon {
+    width: 20px;
+    height: 20px;
+    background: linear-gradient(135deg, #3a2a1a, #1a0f05);
+    border: 1px solid #4a3a2a;
+    border-radius: 2px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 10px;
+    color: #a89070;
+  }
+  .sc-row .sc-item {
+    color: var(--text-primary);
+    font-weight: 500;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .sc-row .sc-item.stuck { color: var(--stuck); }
+  .sc-row .sc-count { color: var(--text-secondary); font-variant-numeric: tabular-nums; }
+  .sc-row .sc-cap,
+  .sc-row .sc-last { color: var(--text-secondary); font-variant-numeric: tabular-nums; font-size: 10px; }
+  .sc-row .sc-need { color: var(--mint); font-weight: 600; font-variant-numeric: tabular-nums; }
+  .sc-row .sc-need.zero { color: var(--text-muted); font-weight: 400; }
+
+  .sc-trash {
+    visibility: hidden;
+    width: 20px;
+    height: 20px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--text-muted);
+    cursor: pointer;
+    border-radius: 2px;
+  }
+  .sc-row:hover .sc-trash { visibility: visible; }
+  .sc-trash:hover { color: var(--danger); background: rgba(217, 123, 123, 0.15); }
+
+  /* Footer */
+  .sc-footer {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 6px 10px;
+    background: var(--bg-frame-alt);
+    border-top: 1px solid var(--border-inner);
+    color: var(--text-muted);
+    font-size: 10px;
+  }
+  .sc-footer .budget {
+    color: var(--text-secondary);
+  }
+  .sc-footer .budget b {
+    color: var(--mint);
+    font-weight: 600;
+  }
+  .sc-grip {
+    width: 12px;
+    height: 12px;
+    display: inline-block;
+    background: linear-gradient(135deg, transparent 40%, var(--text-muted) 40%, var(--text-muted) 50%, transparent 50%, transparent 70%, var(--text-muted) 70%, var(--text-muted) 80%, transparent 80%);
+    cursor: nwse-resize;
+  }
+
+  /* ============================================================
+     Sidecar
+     ============================================================ */
+  .sc-sidecar {
+    width: 260px;
+    height: 400px;
+    background: var(--bg-frame);
+    border: 1px solid var(--border-frame);
+    border-left: none;
+    border-radius: 0 3px 3px 0;
+    display: flex;
+    flex-direction: column;
+    box-shadow: 0 4px 16px rgba(0,0,0,0.5);
+    transition: opacity 0.15s, transform 0.15s;
+  }
+  .sc-sidecar.hidden {
+    display: none;
+  }
+
+  /* Section headers */
+  .sidecar-section-label {
+    padding: 6px 12px 4px;
+    color: var(--text-muted);
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.8px;
+    font-weight: 600;
+    background: var(--bg-frame-alt);
+  }
+  .sidecar-section-label.top {
+    border-bottom: none;
+  }
+
+  /* Settings section */
+  .sidecar-settings {
+    padding: 10px 12px 14px;
+    background: var(--bg-frame-alt);
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    flex-shrink: 0; /* fixed height */
+  }
+  .setting-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    font-size: 11px;
+  }
+  .setting-row label {
+    color: var(--text-secondary);
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    cursor: pointer;
+    flex: 1;
+  }
+  .setting-row input[type="checkbox"] {
+    width: 14px;
+    height: 14px;
+    accent-color: var(--mint-dim);
+    cursor: pointer;
+  }
+  .setting-row input[type="text"] {
+    width: 80px;
+    height: 22px;
+    padding: 0 6px;
+    background: var(--bg-input);
+    border: 1px solid var(--border-inner);
+    border-radius: 2px;
+    color: var(--text-primary);
+    font-size: 11px;
+    font-family: inherit;
+    font-variant-numeric: tabular-nums;
+    text-align: right;
+    outline: none;
+  }
+  .setting-row input[type="text"]:focus {
+    border-color: var(--mint-dim);
+  }
+
+  /* Divider between settings and activity */
+  .sidecar-divider {
+    height: 1px;
+    background: var(--border-divider);
+    margin: 0;
+  }
+
+  /* Activity section */
+  .sidecar-activity {
+    flex: 1;
+    overflow-y: auto;
+    padding: 4px 0;
+    background: var(--bg-frame);
+  }
+  .feed-entry {
+    padding: 5px 12px;
+    border-bottom: 1px solid rgba(30, 34, 41, 0.5);
+    font-size: 11px;
+    line-height: 1.4;
+    color: var(--text-secondary);
+  }
+  .feed-entry:last-child { border-bottom: none; }
+  .feed-entry .ts {
+    color: var(--text-muted);
+    font-size: 10px;
+    font-variant-numeric: tabular-nums;
+    margin-right: 4px;
+  }
+  .feed-entry.buy { color: var(--text-primary); }
+  .feed-entry.buy .verb { color: var(--mint); font-weight: 600; }
+  .feed-entry.skip .verb { color: var(--warn); font-weight: 600; }
+  .feed-entry.cap .verb { color: var(--text-secondary); font-weight: 600; }
+  .feed-entry .money {
+    color: var(--mint-dim);
+    font-variant-numeric: tabular-nums;
+    font-weight: 500;
+  }
+
+  /* ============================================================
+     /clerk log popup
+     ============================================================ */
+  .log-popup {
+    position: fixed;
+    left: 50%;
+    top: 50%;
+    transform: translate(-50%, -50%);
+    width: 500px;
+    height: 400px;
+    background: var(--bg-frame);
+    border: 1px solid var(--border-frame);
+    border-radius: 3px;
+    display: none;
+    flex-direction: column;
+    box-shadow: 0 10px 40px rgba(0,0,0,0.7);
+    z-index: 100;
+  }
+  .log-popup.show { display: flex; }
+  .log-popup-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 8px 12px;
+    background: linear-gradient(180deg, #1a1e28 0%, #14171f 100%);
+    border-bottom: 1px solid var(--border-inner);
+  }
+  .log-popup-title {
+    color: var(--mint);
+    font-weight: 600;
+    font-size: 12px;
+    letter-spacing: 0.3px;
+  }
+  .log-popup textarea {
+    flex: 1;
+    padding: 10px 12px;
+    background: var(--bg-input);
+    border: none;
+    color: var(--text-primary);
+    font-family: "SF Mono", Consolas, monospace;
+    font-size: 11px;
+    line-height: 1.5;
+    resize: none;
+    outline: none;
+  }
+  .log-popup-hint {
+    padding: 6px 12px;
+    background: var(--bg-frame-alt);
+    border-top: 1px solid var(--border-inner);
+    color: var(--text-muted);
+    font-size: 10px;
+    text-align: center;
+    font-style: italic;
+  }
+
+  /* ============================================================
+     Prototype controls (NOT part of the addon)
+     ============================================================ */
+  .proto-controls {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    max-width: 720px;
+    justify-content: center;
+    padding: 12px;
+    background: #10131a;
+    border: 1px dashed #2a2f3a;
+    border-radius: 4px;
+  }
+  .proto-controls span {
+    color: var(--text-muted);
+    font-size: 11px;
+    align-self: center;
+    margin-right: 8px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+  .proto-btn {
+    padding: 6px 12px;
+    background: #1a1e28;
+    border: 1px solid #2a2f3a;
+    border-radius: 3px;
+    color: var(--text-primary);
+    font-family: inherit;
+    font-size: 11px;
+    cursor: pointer;
+  }
+  .proto-btn:hover {
+    background: #252a35;
+    border-color: var(--mint-dim);
+  }
+  .proto-btn.active {
+    background: rgba(152, 255, 152, 0.15);
+    border-color: var(--mint);
+    color: var(--mint);
+  }
+
+  /* State display */
+  .state-display {
+    max-width: 720px;
+    padding: 8px 12px;
+    background: #0d1017;
+    border: 1px solid var(--border-frame);
+    border-radius: 3px;
+    color: var(--text-muted);
+    font-family: "SF Mono", Consolas, monospace;
+    font-size: 10px;
+    line-height: 1.6;
+  }
+  .state-display b { color: var(--mint); }
+
+  /* Tooltip */
+  .tooltip {
+    position: fixed;
+    padding: 6px 10px;
+    background: #05060a;
+    border: 1px solid var(--mint-dim);
+    border-radius: 2px;
+    color: var(--text-primary);
+    font-size: 11px;
+    pointer-events: none;
+    z-index: 1000;
+    display: none;
+  }
+  .tooltip.show { display: block; }
+</style>
+</head>
+<body>
+
+<div class="banner">
+  <b>Stock Clerk v0.7 — GUI Prototype.</b> Throwaway HTML mockup, not the real
+  addon. Use the controls below to toggle AH visibility, sidecar, filter, and
+  the /clerk log popup. Hover rows to see the trash icon. Everything else is
+  visual — proportions matter, exact pixels don't.
+</div>
+
+<div class="stage" id="stage">
+
+  <!-- Fake Auction House frame -->
+  <div class="ah-frame" id="ahFrame">
+    <h3>Auction House</h3>
+    <div class="ah-body">
+      <div>Browse</div>
+      <div>Buy</div>
+      <div>Sell</div>
+      <div>Auctions</div>
+      <div>(scan results…)</div>
+      <div>(scan results…)</div>
+      <div>(scan results…)</div>
+      <div>(scan results…)</div>
+    </div>
+  </div>
+
+  <!-- Stock Clerk main + sidecar -->
+  <div class="sc-container" id="scContainer" style="left: 540px; top: 60px;">
+
+    <div class="sc-main" id="scMain">
+
+      <!-- Header -->
+      <div class="sc-header">
+        <div class="sc-title">
+          Stock Clerk
+          <span class="sc-version">v0.7.0</span>
+        </div>
+        <div class="sc-header-buttons">
+          <button class="btn-icon" id="btnSidecar" title="Sidecar"
+                  data-tt="Show / hide sidecar">
+            <span class="icon-hamburger">
+              <span></span><span></span><span></span>
+            </span>
+          </button>
+          <button class="btn-close" id="btnClose">✕</button>
+        </div>
+      </div>
+
+      <!-- Toolbar -->
+      <div class="sc-toolbar">
+        <input type="text" class="sc-add-input" placeholder="Add item name or link…">
+        <button class="sc-add-btn">ADD</button>
+        <button class="btn-icon" id="btnFilter" data-tt="Show all items">
+          <span class="icon-filter">
+            <svg viewBox="0 0 14 14" width="14" height="14">
+              <path d="M1 2 L13 2 L8 8 L8 13 L6 13 L6 8 Z"
+                    fill="currentColor" stroke="none"/>
+            </svg>
+          </span>
+        </button>
+        <button class="sc-refresh-btn">↻</button>
+      </div>
+
+      <!-- Column headers -->
+      <div class="sc-col-headers">
+        <div></div>
+        <div>Item</div>
+        <div>Have</div>
+        <div>Cap</div>
+        <div>Last</div>
+        <div>Need</div>
+        <div></div>
+      </div>
+
+      <!-- Rows -->
+      <div class="sc-rows" id="scRows">
+        <!-- Populated by JS -->
+      </div>
+
+      <!-- Footer -->
+      <div class="sc-footer">
+        <span class="budget">Budget today: <b>245g 40s</b> / 500g</span>
+        <span class="sc-grip"></span>
+      </div>
+
+    </div><!-- /sc-main -->
+
+    <!-- Sidecar -->
+    <div class="sc-sidecar hidden" id="scSidecar">
+
+      <div class="sidecar-section-label top">Settings</div>
+      <div class="sidecar-settings">
+        <div class="setting-row">
+          <label>
+            <input type="checkbox" checked>
+            Auto-purchase
+          </label>
+        </div>
+        <div class="setting-row">
+          <label>Cap default</label>
+          <input type="text" value="2g 50s">
+        </div>
+        <div class="setting-row">
+          <label>Daily budget</label>
+          <input type="text" value="500g">
+        </div>
+        <div class="setting-row">
+          <label>
+            <input type="checkbox" checked>
+            Open at AH
+          </label>
+        </div>
+      </div>
+
+      <div class="sidecar-divider"></div>
+      <div class="sidecar-section-label">Activity</div>
+
+      <div class="sidecar-activity" id="feedBody">
+        <!-- Populated by JS -->
+      </div>
+
+    </div><!-- /sc-sidecar -->
+
+  </div><!-- /sc-container -->
+
+  <!-- /clerk log popup -->
+  <div class="log-popup" id="logPopup">
+    <div class="log-popup-header">
+      <span class="log-popup-title">Stock Clerk Log</span>
+      <button class="btn-close" id="btnLogClose" style="width:28px;height:22px;font-size:14px;">✕</button>
+    </div>
+    <textarea id="logText" readonly></textarea>
+    <div class="log-popup-hint">Text is preselected — press Ctrl-C (or Cmd-C) to copy, Esc to close.</div>
+  </div>
+
+</div><!-- /stage -->
+
+<div class="proto-controls">
+  <span>Prototype controls:</span>
+  <button class="proto-btn active" id="ctlAH" onclick="toggleAH()">AH open</button>
+  <button class="proto-btn" id="ctlAutoOpen">autoOpenAtAH: ON</button>
+  <button class="proto-btn" onclick="simBuy()">Simulate purchase</button>
+  <button class="proto-btn" onclick="simSkip()">Simulate auto-block</button>
+  <button class="proto-btn" onclick="simCap()">Simulate cap change</button>
+  <button class="proto-btn" onclick="openLog()">/clerk log</button>
+</div>
+
+<div class="state-display" id="stateDisplay">
+  <b>State:</b> AH=<span id="stAH">open</span> ·
+  sidecar=<span id="stSC">closed</span> ·
+  filter=<span id="stFilter">all</span> ·
+  position=<span id="stPos">docked</span>
+</div>
+
+<div class="tooltip" id="tooltip"></div>
+
+<script>
+/* ============================================================
+   Prototype state — mirrors what would be in DB.lua char.ui
+   ============================================================ */
+const STATE = {
+  ahOpen: true,
+  autoOpenAtAH: true,
+  sidecarOpen: false,
+  stuckOnly: false,
+  floatPos: { left: 700, top: 60 }, // where SC sits when AH is closed
+};
+
+/* Sample item data */
+const ITEMS = [
+  { icon: 'S',  name: 'Silk Cloth',           have: 45, cap: '1g 50s', last: '1g 80s', need: 100, stuck: true },
+  { icon: 'M',  name: 'Mageweave Cloth',      have: 12, cap: '3g',     last: '2g 40s', need: 100, stuck: false },
+  { icon: 'R',  name: 'Runecloth',            have: 200, cap: '2g',    last: '1g 90s', need: 150, stuck: false },
+  { icon: 'N',  name: 'Netherweave Cloth',    have: 34, cap: '4g 50s', last: '4g 20s', need: 100, stuck: false },
+  { icon: 'F',  name: 'Frostweave Cloth',     have: 8,  cap: '5g',     last: '6g 10s', need: 50,  stuck: true },
+  { icon: 'E',  name: 'Embersilk Cloth',      have: 55, cap: '6g',     last: '5g 80s', need: 100, stuck: false },
+  { icon: 'W',  name: 'Windwool Cloth',       have: 0,  cap: '3g',     last: '2g 90s', need: 100, stuck: false },
+  { icon: 'H',  name: 'Hexweave Cloth',       have: 22, cap: '4g',     last: '4g 50s', need: 0,   stuck: true },
+  { icon: 'S',  name: 'Sumptuous Fur',        have: 40, cap: '1g',     last: '80s',    need: 100, stuck: false },
+  { icon: 'L',  name: 'Lightweave Cloth',     have: 15, cap: '2g',     last: '1g 60s', need: 100, stuck: false },
+];
+
+/* Sample activity feed data */
+const FEED = [
+  { time: '11:42', kind: 'buy',  text: 'Bought 20× Silk Cloth', money: '15g 30s' },
+  { time: '11:41', kind: 'skip', text: 'Skipped Frostweave Cloth — price 6g 10s exceeds your cap 5g' },
+  { time: '11:38', kind: 'buy',  text: 'Bought 12× Runecloth', money: '22g 80s' },
+  { time: '11:36', kind: 'cap',  text: 'Silk Cloth cap: 1g 20s → 1g 50s' },
+  { time: '11:33', kind: 'skip', text: 'Skipped Hexweave Cloth — price 4g 50s exceeds your cap 4g' },
+  { time: '11:30', kind: 'buy',  text: 'Bought 8× Netherweave Cloth', money: '33g 60s' },
+  { time: '11:28', kind: 'cap',  text: 'Default cap: 2g → 2g 50s' },
+];
+
+/* Verbose log content for /clerk log popup */
+const VERBOSE_LOG = `[2026-09-18 11:42:14] [BUY] Purchased 20× Silk Cloth @ 76c/ea = 15g 30s (auto)
+[2026-09-18 11:42:11] [SCAN] Auction browse returned 47 results for "Silk Cloth" (matched 3 auctions ≤ cap)
+[2026-09-18 11:42:10] [AUTO] Auto-purchase tick — 3 items with need>0 and price≤cap
+[2026-09-18 11:41:58] [AUTO-BLOCK] Frostweave Cloth: last price 6g 10s > cap 5g (skip)
+[2026-09-18 11:41:58] [SCAN] Auction browse returned 12 results for "Frostweave Cloth"
+[2026-09-18 11:41:55] [REFRESH] Prices refresh cycle start (7 items due)
+[2026-09-18 11:38:22] [BUY] Purchased 12× Runecloth @ 1g 90s/ea = 22g 80s (auto)
+[2026-09-18 11:38:20] [SCAN] Auction browse returned 24 results for "Runecloth"
+[2026-09-18 11:36:04] [CAP] Silk Cloth cap changed 1g 20s → 1g 50s (debounced, 10s stability)
+[2026-09-18 11:35:54] [CAP-EDIT] Silk Cloth cap edit → 1g 50s (debounce timer started)
+[2026-09-18 11:35:49] [CAP-EDIT] Silk Cloth cap edit → 1g 40s (debounce timer reset)
+[2026-09-18 11:35:44] [CAP-EDIT] Silk Cloth cap edit → 1g 30s (debounce timer reset)
+[2026-09-18 11:33:11] [AUTO-BLOCK] Hexweave Cloth: last price 4g 50s > cap 4g (skip)
+[2026-09-18 11:30:47] [BUY] Purchased 8× Netherweave Cloth @ 4g 20s/ea = 33g 60s (auto)
+[2026-09-18 11:28:03] [CAP] Default cap changed 2g → 2g 50s (debounced, 10s stability)
+[2026-09-18 11:27:53] [CAP-EDIT] Default cap edit → 2g 50s (debounce timer started)
+[2026-09-18 11:25:00] [AH-DOCK] AUCTION_HOUSE_SHOW → snap to dock (TOPLEFT ← AH:TOPRIGHT + 1px)
+[2026-09-18 11:24:58] [SESSION] Login: character=Bloodfangs realm=Area-52
+[2026-09-18 11:24:58] [INIT] Stock Clerk v0.7.0 loaded
+[2026-09-18 11:24:58] [DB] Loaded 10 tracked items, 12 log entries retained (session)`;
+
+/* ============================================================
+   Rendering
+   ============================================================ */
+function renderRows() {
+  const container = document.getElementById('scRows');
+  const shown = STATE.stuckOnly ? ITEMS.filter(i => i.stuck) : ITEMS;
+  container.innerHTML = shown.map(item => `
+    <div class="sc-row">
+      <div><div class="sc-icon">${item.icon}</div></div>
+      <div class="sc-item ${item.stuck ? 'stuck' : ''}">${item.name}</div>
+      <div class="sc-count">${item.have}</div>
+      <div class="sc-cap">${item.cap}</div>
+      <div class="sc-last">${item.last}</div>
+      <div class="sc-need ${item.need === 0 ? 'zero' : ''}">${item.need || '—'}</div>
+      <div><span class="sc-trash">🗑</span></div>
+    </div>
+  `).join('');
+}
+
+function renderFeed() {
+  const container = document.getElementById('feedBody');
+  container.innerHTML = FEED.map(entry => {
+    const money = entry.money ? ` <span class="money">${entry.money}</span>` : '';
+    const verbClass = entry.kind === 'buy' ? 'buy' : entry.kind === 'skip' ? 'skip' : 'cap';
+    return `
+      <div class="feed-entry ${verbClass}">
+        <span class="ts">[${entry.time}]</span>${entry.text}${money}
+      </div>
+    `;
+  }).join('');
+}
+
+function renderState() {
+  document.getElementById('stAH').textContent = STATE.ahOpen ? 'open' : 'closed';
+  document.getElementById('stSC').textContent = STATE.sidecarOpen ? 'open' : 'closed';
+  document.getElementById('stFilter').textContent = STATE.stuckOnly ? 'stuck only' : 'all';
+  document.getElementById('stPos').textContent = STATE.ahOpen ? 'docked' : 'float';
+}
+
+/* ============================================================
+   Position management — AH dock vs float
+   ============================================================ */
+function positionSC() {
+  const container = document.getElementById('scContainer');
+  if (STATE.ahOpen) {
+    // Dock: 1px right of AH (AH is at left=40, width=480, so its right edge is at 520)
+    container.style.left = '521px';
+    container.style.top = '60px';
+  } else {
+    // Float position (remembered)
+    container.style.left = STATE.floatPos.left + 'px';
+    container.style.top = STATE.floatPos.top + 'px';
+  }
+}
+
+/* ============================================================
+   Interactions
+   ============================================================ */
+function toggleAH() {
+  STATE.ahOpen = !STATE.ahOpen;
+  const ah = document.getElementById('ahFrame');
+  const btn = document.getElementById('ctlAH');
+  if (STATE.ahOpen) {
+    ah.classList.remove('hidden');
+    btn.textContent = 'AH open';
+    btn.classList.add('active');
+  } else {
+    ah.classList.add('hidden');
+    btn.textContent = 'AH closed';
+    btn.classList.remove('active');
+  }
+  positionSC();
+  renderState();
+}
+
+document.getElementById('ctlAutoOpen').onclick = function() {
+  STATE.autoOpenAtAH = !STATE.autoOpenAtAH;
+  this.textContent = 'autoOpenAtAH: ' + (STATE.autoOpenAtAH ? 'ON' : 'OFF');
+};
+
+document.getElementById('btnSidecar').onclick = function() {
+  STATE.sidecarOpen = !STATE.sidecarOpen;
+  const sidecar = document.getElementById('scSidecar');
+  if (STATE.sidecarOpen) {
+    sidecar.classList.remove('hidden');
+    this.classList.add('active');
+  } else {
+    sidecar.classList.add('hidden');
+    this.classList.remove('active');
+  }
+  renderState();
+};
+
+document.getElementById('btnClose').onclick = function() {
+  alert('(would hide the main frame — persist char.ui.hidden=true)');
+};
+
+document.getElementById('btnFilter').onclick = function() {
+  STATE.stuckOnly = !STATE.stuckOnly;
+  if (STATE.stuckOnly) {
+    this.classList.add('active');
+    this.dataset.tt = 'Show all items';
+  } else {
+    this.classList.remove('active');
+    this.dataset.tt = 'Show only: stuck above cap';
+  }
+  renderRows();
+  renderState();
+};
+
+function simBuy() {
+  const items = ['Silk Cloth', 'Runecloth', 'Netherweave Cloth', 'Embersilk Cloth'];
+  const item = items[Math.floor(Math.random() * items.length)];
+  const qty = 5 + Math.floor(Math.random() * 20);
+  const gold = Math.floor(Math.random() * 30) + 5;
+  const now = new Date();
+  FEED.unshift({
+    time: `${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}`,
+    kind: 'buy',
+    text: `Bought ${qty}× ${item}`,
+    money: `${gold}g ${Math.floor(Math.random()*99)}s`
+  });
+  if (FEED.length > 12) FEED.pop();
+  renderFeed();
+}
+
+function simSkip() {
+  const items = ['Frostweave Cloth', 'Hexweave Cloth', 'Silk Cloth'];
+  const item = items[Math.floor(Math.random() * items.length)];
+  const now = new Date();
+  FEED.unshift({
+    time: `${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}`,
+    kind: 'skip',
+    text: `Skipped ${item} — price 6g 10s exceeds your cap 5g`
+  });
+  if (FEED.length > 12) FEED.pop();
+  renderFeed();
+}
+
+function simCap() {
+  const items = ['Silk Cloth', 'Runecloth', 'Netherweave Cloth'];
+  const item = items[Math.floor(Math.random() * items.length)];
+  const now = new Date();
+  FEED.unshift({
+    time: `${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}`,
+    kind: 'cap',
+    text: `${item} cap: 1g 50s → 1g 80s`
+  });
+  if (FEED.length > 12) FEED.pop();
+  renderFeed();
+}
+
+function openLog() {
+  const popup = document.getElementById('logPopup');
+  const textarea = document.getElementById('logText');
+  textarea.value = VERBOSE_LOG;
+  popup.classList.add('show');
+  // Focus + select all on show
+  setTimeout(() => {
+    textarea.focus();
+    textarea.select();
+  }, 50);
+}
+document.getElementById('btnLogClose').onclick = function() {
+  document.getElementById('logPopup').classList.remove('show');
+};
+
+document.addEventListener('keydown', function(e) {
+  if (e.key === 'Escape') {
+    document.getElementById('logPopup').classList.remove('show');
+  }
+});
+
+/* Tooltip on data-tt elements */
+const tooltip = document.getElementById('tooltip');
+document.addEventListener('mousemove', function(e) {
+  const el = e.target.closest('[data-tt]');
+  if (el) {
+    tooltip.textContent = el.dataset.tt;
+    tooltip.style.left = (e.clientX + 14) + 'px';
+    tooltip.style.top = (e.clientY + 14) + 'px';
+    tooltip.classList.add('show');
+  } else {
+    tooltip.classList.remove('show');
+  }
+});
+
+/* Init */
+renderRows();
+renderFeed();
+positionSC();
+renderState();
+</script>
+
+</body>
+</html>

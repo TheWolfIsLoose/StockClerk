@@ -299,6 +299,130 @@ price data / Ready to buy, pick one). User doesn't have strong
 feelings either way today (2026-09-17); revisit after real usage
 shapes the intuition.
 
+**Sidecar unification model (v0.7).** Shipping in v0.7 as a **single
+merged sidecar panel** containing BOTH a compact activity feed AND
+the settings controls, stacked in one view. Not tabs, not two panels
+sharing a slot -- one panel, one purpose ("the sidecar"). One
+toolbar button toggles it; the cog and log buttons collapse into
+that single button.
+
+Design principle: **function drives form.** The sidecar's size is an
+output of its content, not a fixed input. Ship a reasonable initial
+size based on what's inside; expect it to change as content changes.
+
+Content scope for v0.7:
+- **Settings** (TOP of panel, always visible): the current
+  SettingsDropdown controls -- auto-purchase, default cap, daily
+  budget, auto-open-at-AH. Same shape, just relocated. Anchored to
+  the top because rare-use controls must not get buried when the
+  sidecar grows.
+- **Activity feed** (BOTTOM of panel, growable region): bounded
+  "last few outcomes" feed. When the sidecar gains a resize handle,
+  activity is what expands.
+
+**Two-tier activity model (critical distinction).**
+- **Underlying log** (saved-vars, comprehensive): every internal
+  addon event, same as today. Not directly visible in-game;
+  developer-focused; the source of truth for diagnosis.
+- **Sidecar feed view** (user-facing, opinionated filter): shows
+  only user-meaningful outcomes derived from the underlying log.
+  Purpose: let the user self-diagnose "what did the addon just do,
+  and why isn't it doing what I expected." Cadence-based, not
+  event-based -- the user sees the last N outcomes that mattered
+  to them, not the last N things the addon did.
+
+Sidecar feed inclusion rules (v0.7):
+- INCLUDE: purchases (manual and auto), cap changes (row-level
+  and global-default), auto-purchase blocks ("skipped Silk Cloth:
+  last price 1g 80s over cap", "auto blocked: mail pending").
+- EXCLUDE: mail-arrival events (not addon-initiated), session
+  boundaries, config-changes-other-than-cap, refresh cycles,
+  every-tick internal state, any external-world event the addon
+  merely observed. If the addon didn't cause it, it doesn't
+  belong in the feed.
+
+Sidecar feed entry shape: `[HH:MM] <verb> <qty>x <item> -- <gold>`
+(action-first, absolute HH:MM timestamp, plain English, single line).
+
+Sidecar feed grouping axes (future scope, decision-recorded):
+v0.7 ships **session-only** (no selector) to avoid shipping tiny
+chips nobody clicks before we know which axes matter. Add a
+time-horizon selector (session / today / all-time, or whatever
+subset proves useful) once real usage tells us what users
+reach for. Data tier already supports arbitrary time filters --
+this is UI-only when we're ready. Revisit trigger: user
+explicitly wants historical activity, or reports "I lost context
+after relogging."
+
+**LogFrame deprecation:** the standalone Activity window
+(UI/LogFrame.lua) is retired in v0.7. `/clerk log` is repurposed:
+instead of opening LogFrame, it opens a **new dedicated copy-paste
+popup** that dumps the VERBOSE underlying log (user outcomes AND
+developer events) into a selectable, scrollable text box the user
+can copy from. Purpose: shareable diagnostics for bug reports. This
+popup is NOT the sidecar feed; the two views serve different
+purposes and different audiences.
+
+The `/clerk log` dump popup must NEVER print to the default chat
+frame. Chat is precious real estate and a verbose dump would
+spam it into unusability.
+
+Cap-change entries in feed use a **10-second debounce**: rapid
+edits to the same item's cap coalesce into a single "final value"
+entry, logged once the cap has been stable for 10 seconds. Prevents
+noise while the user is dialing in a price.
+
+Header polish (v0.7):
+- **Version string in title bar.** Read from TOC's `## Version:`
+  metadata via `C_AddOns.GetAddOnMetadata`. Format: `Stock Clerk  v0.7.0`
+  baseline-aligned, two-space gap, version in a smaller darker-gray
+  font. One-line header, not stacked.
+- **Bigger close X.** Current close is 28x22; needs to be larger and
+  easier to hit. Target ~36x28 or thereabouts, tuned in prototype.
+- **Sidecar toggle** (single hamburger button, replaces cog + log)
+  sits in the top-right corner alongside the close X. Same slot the
+  log button occupies today.
+
+Compression scope (v0.7):
+- **Main frame default size**: shopping-list feel, taller than wide,
+  ~50% of current area. Prototype starting point ~420x400. Row model
+  and column layout unchanged.
+- **Resize behavior**: keep the bottom-right resize grip, but enforce
+  a hard minimum size at the new compact default. User can grow beyond
+  the default freely; can never shrink below it. This is the "floor,
+  no ceiling" model.
+- **Trash icon on row hover only** -- removes visual noise from rows
+  the user isn't actively touching.
+- **Filter chip becomes icon-only** -- a small filter glyph in the
+  headers strip, tooltip on hover explains "Show only: stuck above
+  cap." Frees ~100px of horizontal space in a now-tighter header row.
+  Same click behavior, same persistence.
+- **Sidecar resize handle deferred to v0.8+.** Sidecar height tracks
+  main-frame height (existing behavior); width TBD in prototype but
+  fixed for v0.7. Revisit once we know if users actually want to
+  expand the activity feed area beyond the default.
+
+AH-dock behavior (v0.7):
+- **Dock position**: right of AH, 1px gap between AH's right edge
+  and Stock Clerk's left edge. Anchor TOPLEFT of Stock Clerk to
+  TOPRIGHT of `AuctionHouseFrame`.
+- **Float position**: when AH is closed, Stock Clerk uses its
+  remembered per-character float position. AH-open snaps to dock;
+  AH-close snaps back to float. `char.ui.floatPos = { x, y }`.
+- **`autoOpenAtAH` governs opening only, not docking.** Once Stock
+  Clerk is open, it always docks while AH is up regardless of the
+  auto-open setting. Different concerns.
+- **Overflow at small screen widths** (dock would push sidecar
+  off-screen) is not handled in v0.7. User is on 4K; deferred until
+  a real report from a low-res tester surfaces.
+
+**Revisit trigger:** if the sidecar accumulates enough content types
+that the stacked layout becomes hard to scan (e.g. we add an item
+detail pane, prices-over-time, warband view), reshape as **tabs**.
+At that point the sidecar has enough content to justify tab UI --
+today it doesn't. User approved single-merged-sidecar 2026-09-18
+replacing the earlier A+future-C plan.
+
 ### 3.4 — Watchlist (real-world reports only)
 
 **QA-12: Post-release AH edge cases.** Do not preemptively harden.
