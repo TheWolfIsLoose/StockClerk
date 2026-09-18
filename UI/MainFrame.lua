@@ -355,6 +355,22 @@ local function BuildRow(row)
 
     -- Row hover wash is created lazily by ApplyRowHover on first RowEnter.
 
+    -- v0.7.0-alpha4 STATUS-ACCENT: 2px vertical accent bar on the row's
+    -- left edge that encodes short/ok/unknown state. Replaces the
+    -- dedicated Status column (dropped in v0.7 but the old row.pill
+    -- FontString was still leaking 'ok'/'-N' text at the row's right
+    -- edge because InitializeRow was force-showing the stub). This bar
+    -- is a robust position-anchored signal that works alongside the
+    -- red/mint coloring of the Have text (dual-channel encoding for
+    -- colorblind resilience). Sits BEFORE the grip in the mouse-hit
+    -- stack; grip stays clickable because the accent is a texture, not
+    -- a mouse-enabled frame.
+    row.accent = row:CreateTexture(nil, "OVERLAY")
+    row.accent:SetWidth(2)
+    row.accent:SetPoint("TOPLEFT",    row, "TOPLEFT",     0, -1)
+    row.accent:SetPoint("BOTTOMLEFT", row, "BOTTOMLEFT",  0,  1)
+    row.accent:Hide()  -- shown only when we have a definite short/ok call
+
     -- Grip handle (v0.4). Three dim horizontal lines, EnableMouse'd for
     -- the drag-to-reorder path. Sits at the far left; icon & name shift
     -- right by GRIP_W to make room. Rendered with three FontString
@@ -635,19 +651,19 @@ local function BuildRow(row)
     end)
     row.lastSeenHit:SetScript("OnLeave", function() GameTooltip:Hide() end)
 
-    -- v0.7: Status pill removed. Short/ok state now signaled by coloring
-    -- row.have text red when short (have < need) or mint when stocked.
-    -- See InitializeRow further down for the coloring logic. The pill
-    -- frame stub below is kept as a hidden no-op so downstream code that
-    -- still calls row.pill:Show()/row.pill.text:SetText() during the
-    -- phased rollout doesn't nil-error; it can be deleted in a follow-up
-    -- pass once every caller is scrubbed.
-    row.pill = CreateFrame("Frame", nil, row)
-    row.pill:SetSize(1, 1)
-    row.pill:SetPoint("RIGHT", row, "RIGHT", 0, 0)
-    row.pill:Hide()
-    row.pill.text = row.pill:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-    row.pill.text:SetPoint("CENTER")
+    -- v0.7.0-alpha4 PILL-KILL: the row.pill stub was intended to be a
+    -- hidden 1x1 no-op after v0.7 dropped the Status column, but
+    -- InitializeRow unconditionally called row.pill:Show() on every
+    -- row init, and its FontString's text was still being SetText'd
+    -- with 'ok' / '-N' -- so the pill's centered text (anchored at
+    -- the row's right edge) was leaking through as the visible 'o' /
+    -- 'o!' the screenshot showed. Keep the stub table so any lingering
+    -- caller doesn't nil-error, but back it with no-op methods that
+    -- can't paint anything. The full status signal now lives in
+    -- row.accent (left-edge bar) + row.have color.
+    row.pill = { text = { SetText = function() end } }
+    row.pill.Show = function() end
+    row.pill.Hide = function() end
 
     -- Trash button (visible on hover only).
     --
@@ -884,6 +900,27 @@ local function BuildRow(row)
             MF:TabFromCell(r, "need", 1)
         end
     end)
+    -- v0.7.0-alpha4 ROW-FOCUS: mirror hover-wash behavior for keyboard
+    -- Tab navigation. Without this the row that owns the focused cell
+    -- looks visually inactive except when the mouse is over it, and
+    -- Tab-driven users can lose their place in the list. HookScript is
+    -- additive so the border-brand animation on the cell fill still
+    -- runs; this just adds the row-wide wash on top.
+    row.needEdit:HookScript("OnEditFocusGained", function(self)
+        ApplyRowHover(self:GetParent(), true)
+    end)
+    row.needEdit:HookScript("OnEditFocusLost", function(self)
+        local r = self:GetParent()
+        -- Defer one frame so a Tab-to-adjacent-cell doesn't visibly
+        -- flicker: the next cell's OnEditFocusGained fires on the
+        -- same frame, so if we clear immediately the wash blinks off
+        -- and on. Deferring lets the mouse-over check settle.
+        C_Timer.After(0, function()
+            if r:IsMouseOver() then return end
+            if r.needEdit:HasFocus() or r.priceEdit:HasFocus() then return end
+            ApplyRowHover(r, false)
+        end)
+    end)
 
     -- Price editor: Escape aborts; Enter, Tab, or blur commit
     -- (blank = clear cap).
@@ -944,6 +981,19 @@ local function BuildRow(row)
     row.priceEdit:SetScript("OnEnterPressed", function(self)
         CommitPriceEdit(self:GetParent())
     end)
+    -- v0.7.0-alpha4 ROW-FOCUS: mirror hover-wash for the price cell.
+    row.priceEdit:HookScript("OnEditFocusGained", function(self)
+        ApplyRowHover(self:GetParent(), true)
+    end)
+    row.priceEdit:HookScript("OnEditFocusLost", function(self)
+        local r = self:GetParent()
+        C_Timer.After(0, function()
+            if r:IsMouseOver() then return end
+            if r.needEdit:HasFocus() or r.priceEdit:HasFocus() then return end
+            ApplyRowHover(r, false)
+        end)
+    end)
+
     -- QA-8: commit on blur (see row.needEdit's OnEditFocusLost).
     row.priceEdit:SetScript("OnEditFocusLost", function(self)
         if self._escaping then return end
@@ -1162,17 +1212,20 @@ local function InitializeRow(row, data)
             data.itemID, have, stashed, data.need))
     end
 
-    -- v0.7: Status pill retired. Short/ok state is now signaled by the
-    -- Have column color (see the row.have:SetText block above). The pill
-    -- frame is a hidden no-op stub, but we still set its .text as a
-    -- backup so any legacy reader inspecting it during the phased
-    -- rollout gets a sensible value rather than nil.
+    -- v0.7.0-alpha4 STATUS-ACCENT: short/ok state encoded on the left-
+    -- edge accent bar. row.pill is a no-op stub (see PILL-KILL in
+    -- BuildRow) so SetText calls here are harmless but skipped for
+    -- clarity. Colors match the semantic palette: muted-red for short,
+    -- mint-green for stocked.
     local short = data.need - have
     if short > 0 then
-        row.pill.text:SetText(("|cffe5624a-%d|r"):format(short))
+        -- Palette.short (muted red used throughout the v0.7 palette)
+        row.accent:SetColorTexture(0xe5/255, 0x62/255, 0x4a/255, 1)
     else
-        row.pill.text:SetText("|cff4ade80ok|r")
+        -- Mint green -- matches the Have-column stocked color
+        row.accent:SetColorTexture(0x4a/255, 0xde/255, 0x80/255, 1)
     end
+    row.accent:Show()
 
     -- Row background: NONE. Atrocity's aesthetic is one window fill; rows
     -- are separated by the 1px black bottom border from the header/list and
@@ -1203,6 +1256,8 @@ local function InitializeRow(row, data)
     row.priceEdit:Hide()
     row.priceEditBg:Hide()
     row.cap:Show()
+    -- v0.7.0-alpha4 PILL-KILL: no-op Show on the stub; kept for parity
+    -- with the surrounding cell-visibility resets.
     row.pill:Show()
 end
 
@@ -1549,13 +1604,28 @@ function MF:Build()
     -- Version comes from the .toc "Version:" line via GetAddOnMetadata so
     -- it auto-updates on every version bump. Falls back to empty string
     -- if metadata is missing (never should happen -- addon can't load).
-    local versionText = C_AddOns and C_AddOns.GetAddOnMetadata
-                        and C_AddOns.GetAddOnMetadata("StockClerk", "Version") or ""
-    local isPrerelease = versionText:match("%-alpha") or versionText:match("%-beta")
-    local versionColor = isPrerelease and "|cffFFAA00" or "|cff888888"
+    -- v0.7.0-alpha4 VERSION-FIX: guard against unsubstituted packager
+    -- keywords. If the addon is installed from raw source (git clone,
+    -- GitHub "Download ZIP") instead of a packaged CurseForge release,
+    -- the .toc still contains the literal string "@project-version@"
+    -- because only the BigWigsMods packager substitutes it at build
+    -- time. Detect the raw keyword and show "dev" in muted grey rather
+    -- than leaking packager syntax to the header.
+    local rawVersion = C_AddOns and C_AddOns.GetAddOnMetadata
+                       and C_AddOns.GetAddOnMetadata("StockClerk", "Version") or ""
+    local isUnsubstituted = rawVersion == "" or rawVersion:sub(1, 1) == "@"
+    local versionText, versionColor
+    if isUnsubstituted then
+        versionText = "dev"
+        versionColor = "|cff888888"
+    else
+        versionText = "v" .. rawVersion
+        local isPrerelease = rawVersion:match("%-alpha") or rawVersion:match("%-beta")
+        versionColor = isPrerelease and "|cffFFAA00" or "|cff888888"
+    end
     local versionLabel = header:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
     versionLabel:SetPoint("LEFT", title, "RIGHT", 6, -1)  -- -1 to baseline-align vs the Large title
-    versionLabel:SetText(versionColor .. "v" .. versionText .. "|r")
+    versionLabel:SetText(versionColor .. versionText .. "|r")
     versionLabel:SetShadowOffset(0, 0)
 
     -- Close X button in the header (atrocity's aesClose recipe, WoW-adapted).
@@ -1967,6 +2037,23 @@ function MF:Build()
         addBox:SetFocus()
     end)
     dropTarget:HookScript("OnReceiveDrag", function()
+        local id = CursorItemID()
+        if id then StampAddBox(id) end
+    end)
+
+    -- v0.7.0-alpha4 DROP-FIX: the container's OnReceiveDrag never fires
+    -- because the EditBox itself sits on top of the container in the
+    -- mouse-hit stack; when the user drops an item on the visual box,
+    -- WoW routes OnReceiveDrag to the topmost mouse-enabled frame
+    -- (addBox, the EditBox), NOT the container underneath. StyleEditBox-
+    -- Container calls container:EnableMouse(true), but the EditBox is
+    -- always mouse-enabled by default and paints in front. Register the
+    -- drop handler directly on the EditBox so drops actually stamp.
+    --
+    -- Keep the container handler too so drops on the 1-2px border ring
+    -- outside the EditBox's hitbox still work.
+    addBox:RegisterForDrag("LeftButton")
+    addBox:HookScript("OnReceiveDrag", function()
         local id = CursorItemID()
         if id then StampAddBox(id) end
     end)
@@ -2968,6 +3055,15 @@ function MF:Hide()
     -- user makes in the game world (code-review finding 4).
     if ADDON.SettingsDropdown and ADDON.SettingsDropdown.Hide then
         ADDON.SettingsDropdown:Hide()
+    end
+    -- v0.7.0-alpha4 SIDECAR-FIX: same lifecycle bug for the Sidecar
+    -- (Settings + Recent Activity panel). Sidecar is UIParent-parented
+    -- (not a child of StockClerkFrame) so it doesn't inherit our Hide.
+    -- Without this, closing the main window via X, Close button, or
+    -- Escape leaves the sidecar orphaned on-screen anchored to where
+    -- the (now hidden) main window used to be.
+    if ADDON.Sidecar and ADDON.Sidecar.Hide then
+        ADDON.Sidecar:Hide()
     end
 end
 

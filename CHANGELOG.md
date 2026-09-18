@@ -1,5 +1,88 @@
 # Stock Clerk changelog
 
+## v0.7.0-alpha4
+
+Alpha3 field-testing feedback pass. Five bug fixes plus a status-
+column redesign.
+
+### Fixed: drag-and-drop into the Item ID field silently no-op'd
+
+The drop-target had its `OnReceiveDrag` handler on the container
+frame wrapping the EditBox, but the EditBox always paints on top of
+the container in the mouse-hit stack -- WoW routes drop events to
+the topmost mouse-enabled frame, which was the EditBox with no drop
+handler. Result: the mint drop-zone outline lit up on cursor-hold
+(that lives on the container border and worked fine), but releasing
+the item did nothing.
+
+Registered `OnReceiveDrag` directly on the EditBox in addition to
+the container. Container handler stays so drops on the 1-2px border
+ring outside the EditBox hitbox still work.
+
+### Fixed: header showed literal `v@project-version@`
+
+`## Version: @project-version@` is a BigWigsMods packager keyword
+that only gets substituted with the git tag at CurseForge packaging
+time. If the addon is installed from raw source (git clone, or
+GitHub's "Download ZIP" button which bundles source not the packaged
+release), the literal survives and leaks to the header.
+
+Added a runtime guard: if the version string starts with `@`, the
+header shows a muted grey `dev` instead of the raw keyword. Packaged
+releases still show `v0.7.0-alpha4` (amber) as before.
+
+### Fixed: Sidecar orphaned when main window closed
+
+Sidecar (the Settings + Recent Activity right-docked panel) was
+parented to `UIParent` rather than to `StockClerkFrame`, so hiding
+the main window via X, Close, or Escape left it floating alone.
+`MF:Hide()` already cascaded to hide the old settings dropdown for
+the same reason -- extended it to also hide the Sidecar.
+
+### Fixed: status column leaked `o`/`o!` text at the row's right edge
+
+v0.7 was supposed to drop the Status column entirely (short/ok
+state signaled by Have-color), but the pill FontString stub was
+still being force-shown and populated with `ok` / `-N` text each
+InitializeRow, leaving a stray `o` ("ok") or `o!` visible at the
+right edge of every row.
+
+Replaced the stub with true no-op tables so nothing paints. The
+full status signal now lives in the new left-edge accent bar (see
+below) plus the Have text color.
+
+### Changed: status-column redesign -- left-edge accent bar
+
+Instead of a text pill, each row now shows a 2px vertical accent
+bar on its left edge:
+
+- **Mint green** = stocked (Have >= Need)
+- **Muted red**  = short (Have < Need)
+
+Dual-channel encoding (bar position + Have text color) means
+colorblind users get a reliable signal from the bar's absence/
+presence at a fixed position, and everyone else gets the redundancy
+of matching color across two spots on the row.
+
+Have/Need column order preserved (matches the game's `X/Y` progress
+convention).
+
+Future: tooltip on the Have column showing bag / bank / warbank
+breakdown -- deferred to alpha5+ (needs per-location count queries
+and the warbank lazy-load quirk needs its own handling).
+
+### Changed: Tab-focused row now highlights
+
+Tabbing between row cells (Need <-> Cap <-> next row's Need) now
+triggers the same hover-wash on the containing row that a mouse-
+over would. Without it, keyboard-driven users lost their place in
+the list because the focused cell got a border-brand fade but the
+row around it stayed visually inert.
+
+Hooked via `OnEditFocusGained`/`OnEditFocusLost` on both cell
+editors, with a one-frame defer on Lost so a Tab-to-adjacent-cell
+doesn't visibly flicker the wash off and on.
+
 ## v0.7.0-alpha3
 
 Republish of v0.7 alpha with the v0.6.2 `CURSOR_UPDATE` Lua error
