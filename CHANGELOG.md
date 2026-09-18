@@ -1,15 +1,30 @@
 # Stock Clerk changelog
 
+## v0.7.0-alpha2
+
+Republish of the v0.7 redesign with the v0.6.1 keyboard-capture
+hotfixes back-merged in. No new v0.7 features vs alpha1 -- this
+release exists so alpha subscribers can pick up the hotfixes and so
+CurseForge's Alpha channel shows a v0.7 build newer than the current
+Stable (v0.6.1).
+
+### Included from v0.6.1 hotfix
+
+- Row-editor pool reset on rebind (primary cause of the
+  keyboard-eating bug).
+- Single-exit-point + pcall discipline on both keyboard handlers.
+- Force `SetPropagateKeyboardInput(true)` on window close.
+- Add-button focus-flag desync recovery.
+- New KeyboardWatchdog module that logs `[KBD]` entries to
+  `/clerk log` if it detects a suspicious keyboard state.
+
+See v0.6.1 entry below for the full write-up.
+
 ## v0.7.0-alpha1
 
 First preview of the v0.7 redesign. Marked **alpha** in CurseForge so
 normal Stable subscribers keep running v0.6.x; testers who opt into
 Alpha in the CurseForge app's Release Type filter pick this up.
-
-NOTE: v0.6.1 (see entry below) shipped as a Stable hotfix AFTER this
-alpha was published, and has been back-merged onto this branch. If
-you installed alpha1 before that merge, update to the next alpha to
-pick up the keyboard-capture fixes.
 
 ### Compact main window
 
