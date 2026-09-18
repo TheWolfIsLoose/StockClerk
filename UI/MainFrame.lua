@@ -1458,11 +1458,29 @@ function MF:Build()
     title:SetText("|cff98FF98Stock|r|cffFFFFFFClerk|r")
     title:SetShadowOffset(0, 0)
 
+    -- Version string (v0.7). Sits immediately to the right of the title,
+    -- baseline-aligned, in a smaller/muted font so it reads as metadata
+    -- rather than part of the wordmark. Pre-release builds (-alpha, -beta)
+    -- get an amber tint so the tester can see at a glance they're not on
+    -- a stable build.
+    --
+    -- Version comes from the .toc "Version:" line via GetAddOnMetadata so
+    -- it auto-updates on every version bump. Falls back to empty string
+    -- if metadata is missing (never should happen -- addon can't load).
+    local versionText = C_AddOns and C_AddOns.GetAddOnMetadata
+                        and C_AddOns.GetAddOnMetadata("StockClerk", "Version") or ""
+    local isPrerelease = versionText:match("%-alpha") or versionText:match("%-beta")
+    local versionColor = isPrerelease and "|cffFFAA00" or "|cff888888"
+    local versionLabel = header:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+    versionLabel:SetPoint("LEFT", title, "RIGHT", 6, -1)  -- -1 to baseline-align vs the Large title
+    versionLabel:SetText(versionColor .. "v" .. versionText .. "|r")
+    versionLabel:SetShadowOffset(0, 0)
+
     -- Close X button in the header (atrocity's aesClose recipe, WoW-adapted).
     -- Uses a font-string "×" since we don't have the atrocity texture; the
     -- shape is functionally the same and it snaps to pixels cleanly.
     local closeX = CreateFrame("Button", nil, header)
-    closeX:SetSize(28, 22)
+    closeX:SetSize(36, 28)  -- v0.7: enlarged from 28x22 for easier click targeting
     closeX:SetPoint("RIGHT", header, "RIGHT", -4, 0)
     local closeXText = closeX:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
     closeXText:SetPoint("CENTER")
@@ -1480,73 +1498,56 @@ function MF:Build()
     end)
     closeX:SetScript("OnClick", function() MF:Hide() end)
 
-    -- Settings cog button (QA-10). Sits immediately left of the close X.
-    -- Uses the game's built-in Options-icon texture rather than a Unicode
-    -- cog glyph. Reason: WoW's default game fonts don't include U+2699
-    -- (GEAR), so the earlier text-based glyph rendered as a tiny "0"
-    -- fallback. UI-OptionsButton is a stock retail texture and always
-    -- resolves; we tint it by SetVertexColor so it can share the mint
-    -- hover treatment used elsewhere in the header.
-    local cogBtn = CreateFrame("Button", nil, header)
-    cogBtn:SetSize(22, 22)
-    cogBtn:SetPoint("RIGHT", closeX, "LEFT", -2, 0)
-    local cogTex = cogBtn:CreateTexture(nil, "ARTWORK")
-    cogTex:SetTexture("Interface\\Buttons\\UI-OptionsButton")
-    cogTex:SetSize(16, 16)
-    cogTex:SetPoint("CENTER")
-    cogTex:SetVertexColor(0.85, 0.85, 0.85, 1)
-    cogBtn:SetScript("OnEnter", function(self)
-        cogTex:SetVertexColor(Palette.brand[1], Palette.brand[2], Palette.brand[3], 1)
-        GameTooltip:SetOwner(self, "ANCHOR_BOTTOM")
-        GameTooltip:SetText("Settings")
-        GameTooltip:Show()
-    end)
-    cogBtn:SetScript("OnLeave", function()
-        cogTex:SetVertexColor(0.85, 0.85, 0.85, 1)
-        GameTooltip:Hide()
-    end)
-    cogBtn:SetScript("OnClick", function(self)
-        if ADDON.SettingsDropdown then
-            ADDON.SettingsDropdown:Toggle(self)
-        end
-    end)
-    MF._cogBtn = cogBtn
-
-    -- Activity-log toggle (QA-13). Sits left of the cog in the header.
-    -- Uses three drawn mint bars for the "hamburger" glyph -- WoW's stock
-    -- fonts don't include U+2261, and SetColorTexture rectangles are
-    -- always available and tint cleanly on hover.
-    local logBtn = CreateFrame("Button", nil, header)
-    logBtn:SetSize(22, 22)
-    logBtn:SetPoint("RIGHT", cogBtn, "LEFT", -2, 0)
-    local logGlyph = {}
+    -- v0.7: single hamburger button replaces the previous cog + log button
+    -- pair. It toggles the merged Sidecar (Settings + Activity in one
+    -- flyout panel; see UI/Sidecar.lua, Phase C). Until Sidecar lands the
+    -- click is a no-op stub -- the button is still drawn so header
+    -- proportions are already correct when Sidecar wiring goes in.
+    --
+    -- Sizing bumped 22 -> 26 for parity with the enlarged close X target.
+    -- Glyph is three drawn mint bars (WoW's stock fonts don't include
+    -- U+2261, and SetColorTexture rectangles tint cleanly on hover).
+    local hamburgerBtn = CreateFrame("Button", nil, header)
+    hamburgerBtn:SetSize(26, 24)
+    hamburgerBtn:SetPoint("RIGHT", closeX, "LEFT", -2, 0)
+    local hamburgerGlyph = {}
     for i = 1, 3 do
-        local bar = logBtn:CreateTexture(nil, "OVERLAY")
+        local bar = hamburgerBtn:CreateTexture(nil, "OVERLAY")
         bar:SetColorTexture(0.85, 0.85, 0.85, 1)
-        bar:SetSize(12, 2)
+        bar:SetSize(14, 2)
         bar:SetPoint("CENTER", 0, 4 - (i - 1) * 4)
-        logGlyph[i] = bar
+        hamburgerGlyph[i] = bar
     end
-    logBtn:SetScript("OnEnter", function(self)
-        for _, b in ipairs(logGlyph) do
+    hamburgerBtn:SetScript("OnEnter", function(self)
+        for _, b in ipairs(hamburgerGlyph) do
             b:SetColorTexture(Palette.brand[1], Palette.brand[2], Palette.brand[3], 1)
         end
         GameTooltip:SetOwner(self, "ANCHOR_BOTTOM")
-        GameTooltip:SetText("Activity log")
+        GameTooltip:SetText("Settings & Activity")
         GameTooltip:Show()
     end)
-    logBtn:SetScript("OnLeave", function()
-        for _, b in ipairs(logGlyph) do
+    hamburgerBtn:SetScript("OnLeave", function()
+        for _, b in ipairs(hamburgerGlyph) do
             b:SetColorTexture(0.85, 0.85, 0.85, 1)
         end
         GameTooltip:Hide()
     end)
-    logBtn:SetScript("OnClick", function()
-        if ADDON.LogFrame and ADDON.LogFrame.Toggle then
-            ADDON.LogFrame:Toggle()
+    hamburgerBtn:SetScript("OnClick", function(self)
+        -- Phase A stub: log to chat so the tester can confirm the button
+        -- wires. Phase C replaces with ADDON.Sidecar:Toggle(self).
+        if ADDON.Sidecar and ADDON.Sidecar.Toggle then
+            ADDON.Sidecar:Toggle(self)
+        elseif ADDON.SettingsDropdown and ADDON.SettingsDropdown.Toggle then
+            -- Fallback during phased build: hamburger opens the old
+            -- Settings dropdown until Sidecar (Phase C) is in place.
+            ADDON.SettingsDropdown:Toggle(self)
         end
     end)
-    MF._logBtn = logBtn
+    MF._hamburgerBtn = hamburgerBtn
+    -- Back-compat aliases so existing code that pokes at _cogBtn / _logBtn
+    -- still finds a real frame during the phased v0.7 rollout.
+    MF._cogBtn = hamburgerBtn
+    MF._logBtn = hamburgerBtn
 
     -- ---- Toolbar (add item + controls) ---------------------------------
     -- Sits directly under the header. No fill; the labels + editboxes
