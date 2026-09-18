@@ -1,5 +1,24 @@
 # Stock Clerk changelog
 
+## v0.6.2
+
+Hotfix for a Lua error thrown on `/clerk` open.
+
+### Fixed: `Frame:RegisterEvent(): Attempt to register unknown event "CURSOR_UPDATE"`
+
+The drop-zone code (shipped in v0.6.0) registered two cursor events
+for the mint-outline affordance around the Add box: `CURSOR_UPDATE`
+and `CURSOR_CHANGED`. `CURSOR_UPDATE` isn't a real event on retail
+Midnight 12.1 -- it either never existed or was removed in a recent
+client build. Some users saw a silent script error (default
+scriptErrors setting hides Lua errors); a tester with
+`/console scriptErrors 1` on caught it on window open.
+
+`CURSOR_CHANGED` fires on every cursor state transition (pickup,
+drop, hover-target change), so removing the invalid registration
+doesn't cost us any detection coverage -- the drop-zone highlight
+still works exactly as before.
+
 ## v0.6.1
 
 Critical hotfix for a keyboard-capture bug that could leave the game
