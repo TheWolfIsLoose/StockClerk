@@ -3,8 +3,13 @@
 ## v0.7.0-alpha1
 
 First preview of the v0.7 redesign. Marked **alpha** in CurseForge so
-normal Stable subscribers keep running v0.6.0; testers who opt into
+normal Stable subscribers keep running v0.6.x; testers who opt into
 Alpha in the CurseForge app's Release Type filter pick this up.
+
+NOTE: v0.6.1 (see entry below) shipped as a Stable hotfix AFTER this
+alpha was published, and has been back-merged onto this branch. If
+you installed alpha1 before that merge, update to the next alpha to
+pick up the keyboard-capture fixes.
 
 ### Compact main window
 
@@ -67,6 +72,52 @@ Alpha in the CurseForge app's Release Type filter pick this up.
 - Old `UI/LogFrame.lua` still ships as a fallback and is unloaded
   by the alpha wiring but still occupies a few KB. It'll be removed
   once we're confident the popup covers every callsite.
+
+## v0.6.1
+
+Critical hotfix for a keyboard-capture bug that could leave the game
+unresponsive to input.
+
+### Fixed: addon capturing keyboard input under some conditions
+
+Tester reported that under various conditions -- editing target counts,
+using filter chips, or after inventory refreshes -- Stock Clerk could
+end up silently swallowing every keystroke game-wide: chat, movement,
+hotbars, even Escape were dead until an alt-tab out of the game and
+back in. Four separate defensive fixes:
+
+- **Row-editor pool reset.** The main cause: the list's row frames are
+  pooled and recycled by WoW's ScrollView when the underlying data
+  changes (bag update, filter toggle, scroll). If you had an inline
+  Need or Price editor open with focus when the pool re-bound that row
+  to a different item, the editor stayed alive and focused -- often
+  scrolled offscreen -- and captured every keystroke silently. Row
+  initialization now force-closes any open editor before binding new
+  data, and every EditBox in the addon clears focus on Hide as a
+  belt-and-suspenders defense.
+- **Single-exit keyboard handlers.** The main-window and Add-button
+  keyboard handlers previously had early `return` statements after
+  telling WoW to stop propagating a key. If any code inside those
+  branches errored, propagation stayed off -- swallowing every
+  subsequent key. Both handlers now run their actions inside a
+  protected call and restore propagation exactly once at the end.
+- **Force propagation restore on window close.** Explicit safety net
+  on the main window's OnHide to guarantee keyboard propagation is
+  restored across every close path (X button, `/clerk` toggle,
+  Escape, addon reload).
+- **Add-button focus recovery.** If the Add button's internal focused
+  flag ever drifts from its actual keyboard-capture state, the next
+  keypress now force-clears the state instead of silently eating
+  keys forever.
+
+### Added: keyboard-capture watchdog
+
+A diagnostic sampler runs once per second while the Stock Clerk window
+is open and logs a red `[KBD]` entry to `/clerk log` if it detects a
+Stock Clerk EditBox holding focus while invisible, or the Add button's
+focus state stuck on after the window closes. The v0.6.1 fixes should
+make this a no-op, but if the bug recurs the tester can `/clerk log`
+and share the [KBD] lines as a timestamped incident report.
 
 ## v0.6.0
 

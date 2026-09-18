@@ -555,6 +555,13 @@ local function BuildRow(row)
     row.needEditBg:SetPoint("TOPLEFT",     row.needEdit, "TOPLEFT",     -4, 2)
     row.needEditBg:SetPoint("BOTTOMRIGHT", row.needEdit, "BOTTOMRIGHT",  4, -2)
     row.needEdit:SetFrameLevel(row.needCell:GetFrameLevel() + 1)
+    -- v0.6.1 KBD-FIX (H4): belt-and-suspenders. Any Hide of a focused
+    -- EditBox must ClearFocus first, or WoW keeps routing keystrokes to
+    -- the now-invisible field. Guards the case where the row itself is
+    -- Hidden (row pool release, parent Hide) while this editor was open.
+    row.needEdit:HookScript("OnHide", function(self)
+        if self:HasFocus() then self:ClearFocus() end
+    end)
     row.needEdit:Hide()
 
     -- Price cap inline editor (hidden until the cap cell is clicked).
@@ -585,6 +592,10 @@ local function BuildRow(row)
     row.priceEditBg:SetPoint("TOPLEFT",     row.priceEdit, "TOPLEFT",     -4, 2)
     row.priceEditBg:SetPoint("BOTTOMRIGHT", row.priceEdit, "BOTTOMRIGHT",  4, -2)
     row.priceEdit:SetFrameLevel(row.capCell:GetFrameLevel() + 1)
+    -- v0.6.1 KBD-FIX (H4): see needEdit OnHide above.
+    row.priceEdit:HookScript("OnHide", function(self)
+        if self:HasFocus() then self:ClearFocus() end
+    end)
     row.priceEdit:Hide()
 
     -- Last Seen column (QA-11): dim display of the most recently observed
@@ -958,6 +969,31 @@ local function InitializeRow(row, data)
         row._built = true
     end
 
+    -- v0.6.1 KBD-FIX (H4): CRITICAL keyboard-capture defense. ScrollView
+    -- recycles the pooled row Button when the underlying DataProvider
+    -- changes (BAG_UPDATE refresh, scroll, filter chip toggle, etc.).
+    -- If a row had its inline needEdit/priceEdit open with focus when the
+    -- pool rebound this frame to a different item, the EditBox stayed
+    -- Shown() and Focused() -- often scrolled offscreen -- and silently
+    -- captured every keystroke game-wide until /reload. This is the
+    -- "addon ate my keyboard" class of bug. Force-reset editor state
+    -- BEFORE binding the new data so we never inherit stale focus into a
+    -- frame the user can no longer see.
+    if row.needEdit and row.needEdit:IsShown() then
+        if row.needEdit:HasFocus() then row.needEdit:ClearFocus() end
+        row.needEdit:Hide()
+        if row.needEditBg then row.needEditBg:Hide() end
+        if row.need then row.need:Show() end
+        if row.needCell then row.needCell._needEditActive = false end
+    end
+    if row.priceEdit and row.priceEdit:IsShown() then
+        if row.priceEdit:HasFocus() then row.priceEdit:ClearFocus() end
+        row.priceEdit:Hide()
+        if row.priceEditBg then row.priceEditBg:Hide() end
+        if row.cap then row.cap:Show() end
+        if row.capCell then row.capCell._priceEditActive = false end
+    end
+
     row._itemID   = data.itemID
     row._need     = data.need
     row._maxPrice = data.maxPrice
@@ -1231,6 +1267,12 @@ local function MakeEditBox(parent, labelText, width, isNumeric, maxLetters, plac
     end
 
     StyleEditBoxContainer(container, eb)
+    -- v0.6.1 KBD-FIX (H4): every EditBox in the addon ClearsFocus on Hide
+    -- so a hidden focused field never captures game-wide keys. Applies to
+    -- the toolbar's addBox/countBox/priceBox equally.
+    eb:HookScript("OnHide", function(self)
+        if self:HasFocus() then self:ClearFocus() end
+    end)
     row.editBox = eb
     row.container = container
     row.label = label
@@ -1266,14 +1308,14 @@ function MF:Build()
         f:SetMaxResize(4096, 4096)
     end
     f:EnableMouse(true)
-    -- Re-enable keyboard on the root frame. Removing this broke
-    -- typing into the toolbar EditBoxes entirely -- turns out the
-    -- previous 'keyboard stuck after Escape' issue wasn't from
-    -- EnableKeyboard(true) itself but from the OnKeyDown handler
-    -- below leaving SetPropagateKeyboardInput(false) sticky after an
-    -- Escape. We keep EnableKeyboard(true) so child EditBoxes can
-    -- receive keystrokes, and we harden the OnKeyDown to explicitly
-    -- restore propagate=true after handling Escape.
+    -- Re-enable keyboard on the root frame. VERIFIED NEEDED, do not remove:
+    -- (a) previous experiment (v0.3) broke typing into toolbar EditBoxes
+    --     entirely when this was removed;
+    -- (b) the OnKeyDown handler below (soft-select nav) needs the root
+    --     frame to receive raw keystrokes when no editbox has focus.
+    -- The known-bad interaction was the OnKeyDown handler leaving
+    -- SetPropagateKeyboardInput(false) sticky on error paths, which
+    -- v0.6.1 fixes at the OnKeyDown level (single exit point + pcall).
     f:EnableKeyboard(true)
 
     -- Window fill + border. Border sits on a dedicated child frame at
@@ -1295,64 +1337,46 @@ function MF:Build()
     -- steady-state after any Escape-close so the next keystroke
     -- doesn't feel 'stuck'.
     tinsert(UISpecialFrames, "StockClerkFrame")
+    -- v0.6.1 KBD-FIX (H1): SetPropagateKeyboardInput is sticky per-frame,
+    -- so every OnKeyDown MUST end with an explicit propagate call in
+    -- BOTH branches. The previous shape used early `return`s after
+    -- SetPropagateKeyboardInput(false), which meant any Lua error in the
+    -- handled action (Stop, MoveSelectedItem, FocusRowCell) would leave
+    -- propagate=false stuck -- swallowing every subsequent key game-wide.
+    -- New shape: decide (consumed / not consumed), do the action inside a
+    -- pcall, then set propagate exactly ONCE at the end via a single exit
+    -- path. No `return` allowed inside this handler before the final line.
     f:SetScript("OnKeyDown", function(self, key)
+        local consumed = false
+
         -- QA-10 kill-switch: Escape stops an active auto-purchase loop.
-        -- We consume the keystroke here (SetPropagateKeyboardInput(false))
-        -- so the game's default Escape behavior (close last opened frame,
-        -- open game menu) doesn't also fire on the same key press. We only
-        -- swallow when we actually acted; otherwise fall through.
         if key == "ESCAPE" and ADDON.RestockLoop and ADDON.RestockLoop:IsActive() then
-            self:SetPropagateKeyboardInput(false)
-            ADDON.RestockLoop:Stop("user_esc")
-            return
-        end
+            consumed = true
+            pcall(function() ADDON.RestockLoop:Stop("user_esc") end)
 
         -- v0.4 soft-select navigation. Only reachable when no editbox
         -- has focus (editboxes eat keys before this handler), so an
         -- inline Need/Price edit is never disrupted -- the editor's
         -- own OnEnterPressed/OnEscape/OnTab handle those cases first.
-        if MF._selectedItemID then
+        elseif MF._selectedItemID then
             if key == "UP" then
-                self:SetPropagateKeyboardInput(false)
-                MF:MoveSelectedItem(-1)
-                return
+                consumed = true
+                pcall(function() MF:MoveSelectedItem(-1) end)
             elseif key == "DOWN" then
-                self:SetPropagateKeyboardInput(false)
-                MF:MoveSelectedItem(1)
-                return
+                consumed = true
+                pcall(function() MF:MoveSelectedItem(1) end)
             elseif key == "ESCAPE" then
                 -- First Escape drops the selection; UISpecialFrames'
                 -- close-window happens only on a SECOND Escape after
                 -- the ring is gone.
-                self:SetPropagateKeyboardInput(false)
-                MF:ClearRowSelection()
-                return
+                consumed = true
+                pcall(function() MF:ClearRowSelection() end)
             elseif key == "ENTER" then
                 -- Drop into Need cell of the selected row.
-                self:SetPropagateKeyboardInput(false)
-                local id = MF._selectedItemID
-                MF:ClearRowSelection()
-                if MF.dataProvider then
-                    for i = 1, MF.dataProvider:GetSize() do
-                        local d = MF.dataProvider:Find(i)
-                        if d and d.itemID == id then
-                            MF:FocusRowCell(i, "need")
-                            break
-                        end
-                    end
-                end
-                return
-            elseif key == "TAB" then
-                -- Forward Tab from soft-select drops into that row's
-                -- Need cell (same as Enter). Shift+Tab climbs back to
-                -- the Add button.
-                self:SetPropagateKeyboardInput(false)
-                local id = MF._selectedItemID
-                local shift = IsShiftKeyDown and IsShiftKeyDown()
-                MF:ClearRowSelection()
-                if shift then
-                    if MF.FocusAddButton then MF:FocusAddButton() end
-                else
+                consumed = true
+                pcall(function()
+                    local id = MF._selectedItemID
+                    MF:ClearRowSelection()
                     if MF.dataProvider then
                         for i = 1, MF.dataProvider:GetSize() do
                             local d = MF.dataProvider:Find(i)
@@ -1362,18 +1386,38 @@ function MF:Build()
                             end
                         end
                     end
-                end
-                return
+                end)
+            elseif key == "TAB" then
+                -- Forward Tab from soft-select drops into that row's
+                -- Need cell (same as Enter). Shift+Tab climbs back to
+                -- the Add button.
+                consumed = true
+                pcall(function()
+                    local id = MF._selectedItemID
+                    local shift = IsShiftKeyDown and IsShiftKeyDown()
+                    MF:ClearRowSelection()
+                    if shift then
+                        if MF.FocusAddButton then MF:FocusAddButton() end
+                    else
+                        if MF.dataProvider then
+                            for i = 1, MF.dataProvider:GetSize() do
+                                local d = MF.dataProvider:Find(i)
+                                if d and d.itemID == id then
+                                    MF:FocusRowCell(i, "need")
+                                    break
+                                end
+                            end
+                        end
+                    end
+                end)
             end
         end
 
-        -- Always let keys propagate to game bindings by default. Editboxes
-        -- swallow keys BEFORE this handler when they have focus, so this
-        -- only runs for keystrokes that hit the raw window (no editbox
-        -- focused, no addBtn focused). Letting everything propagate is
-        -- the right default -- users expect B to open bags, Enter to open
-        -- chat, macro keys to fire, etc.
-        self:SetPropagateKeyboardInput(true)
+        -- SINGLE exit point. propagate=false if we handled the key (so the
+        -- game's default binding for that key doesn't ALSO fire), else
+        -- propagate=true so B opens bags, Enter opens chat, macros fire,
+        -- etc. Never leaves the frame in a stuck-false state.
+        self:SetPropagateKeyboardInput(not consumed)
     end)
 
     -- Keyboard hygiene on close. Two capture leaks exist if the window
@@ -1391,9 +1435,25 @@ function MF:Build()
     -- NOTE: MF:BlurAddButton is defined later in Build(); the closure
     -- resolves at call time, after Build has completed.
     f:SetScript("OnHide", function()
+        -- v0.6.1 KBD-FIX (H1): force propagate back to true on close. The
+        -- root frame keeps EnableKeyboard(true) even while hidden; if any
+        -- OnKeyDown left propagate=false and the window was closed before
+        -- the next keystroke could restore it, the frame becomes a silent
+        -- keyboard sink for the whole game session. Explicit reset here
+        -- guarantees the steady-state is propagate=true across every
+        -- close path (X button, /clerk toggle, Escape via UISpecialFrames,
+        -- addon reload). Idempotent -- safe on every OnHide.
+        f:SetPropagateKeyboardInput(true)
+
         local focused = GetCurrentKeyBoardFocus and GetCurrentKeyBoardFocus()
         if focused and focused.ClearFocus then focused:ClearFocus() end
-        if MF._addBtnFocused and MF.BlurAddButton then MF:BlurAddButton() end
+        -- v0.6.1 KBD-FIX (H2): call BlurAddButton UNCONDITIONALLY, not just
+        -- when the focused flag is set. If the flag ever desynced from the
+        -- actual EnableKeyboard/PropagateKeyboardInput state (Lua error in
+        -- FocusAddButton, taint interruption, etc.), a guarded call would
+        -- leak the sticky-false propagate state past close. BlurAddButton
+        -- is idempotent -- safe to call when already blurred.
+        if MF.BlurAddButton then MF:BlurAddButton() end
 
         -- v0.4: soft-select and drag must not survive across window
         -- close. Selection would repaint the wrong pooled row when
@@ -1739,46 +1799,57 @@ function MF:Build()
         self._addBtnFocused = false
     end
 
+    -- v0.6.1 KBD-FIX (H2): same single-exit shape as the root frame's
+    -- OnKeyDown. Previous shape had early `return`s that could leave
+    -- SetPropagateKeyboardInput(false) sticky if DoAdd() or the deferred
+    -- Tab callback threw. Wrap all actions in pcall and set propagate
+    -- exactly once at the end. If the focused-flag ever desyncs from
+    -- the real EnableKeyboard state, force-blur so we recover cleanly
+    -- instead of silently eating keystrokes.
     addBtn:SetScript("OnKeyDown", function(self, key)
-        if not MF._addBtnFocused then return end
-        -- CRITICAL: re-assert propagation on EVERY key, like the root
-        -- frame's OnKeyDown does. SetPropagateKeyboardInput is sticky
-        -- per-frame across keypresses: FocusAddButton set it false, so
-        -- any key this handler doesn't explicitly own would otherwise
-        -- be eaten for as long as the Add button holds focus -- game
-        -- bindings, movement, chat, Esc-out, everything. That's the
-        -- "addon ate my keyboard" class. Consume only what we handle.
-        if key ~= "TAB" and key ~= "ENTER" and key ~= "SPACE" and key ~= "ESCAPE" then
+        if not MF._addBtnFocused then
+            -- Desync recovery: the flag is off but we're still receiving
+            -- key events, which means EnableKeyboard(true) is stuck on.
+            -- Force-blur to restore steady state, then let this key
+            -- propagate to game bindings normally.
+            pcall(function() MF:BlurAddButton() end)
             self:SetPropagateKeyboardInput(true)
             return
         end
-        self:SetPropagateKeyboardInput(false)
+
+        local consumed = (key == "TAB" or key == "ENTER" or key == "SPACE" or key == "ESCAPE")
+
         if key == "TAB" then
             -- Defer BOTH the blur and the focus transfer by one frame
             -- so the current Tab keystroke is fully consumed by this
-            -- OnKeyDown (propagate stays false) and doesn't double-hop
-            -- into the newly-focused control.
+            -- OnKeyDown and doesn't double-hop into the newly-focused
+            -- control.
             local shift = IsShiftKeyDown()
             C_Timer.After(0, function()
-                MF:BlurAddButton()
-                if shift then
-                    if priceBox then priceBox:SetFocus() end
-                else
-                    -- Forward from Add button goes into the list; wrap
-                    -- back to addBox if the list is empty.
-                    if not MF:TabToFirstRowCell() then
-                        if addBox then addBox:SetFocus() end
+                pcall(function()
+                    MF:BlurAddButton()
+                    if shift then
+                        if priceBox then priceBox:SetFocus() end
+                    else
+                        -- Forward from Add button goes into the list;
+                        -- wrap back to addBox if the list is empty.
+                        if not MF:TabToFirstRowCell() then
+                            if addBox then addBox:SetFocus() end
+                        end
                     end
-                end
+                end)
             end)
         elseif key == "ENTER" or key == "SPACE" then
-            DoAdd()
+            pcall(function() DoAdd() end)
             -- DoAdd clears the editbox focuses on success. Keyboard
             -- focus stays on the Add button (so Shift+Tab back to Price
             -- Cap works) -- safe now that unhandled keys propagate.
         elseif key == "ESCAPE" then
-            MF:BlurAddButton()
+            pcall(function() MF:BlurAddButton() end)
         end
+
+        -- SINGLE exit point. Same discipline as the root OnKeyDown.
+        self:SetPropagateKeyboardInput(not consumed)
     end)
     -- Clicking the button (mouse) should also clear the keyboard-focus
     -- state so we don't leave a stale ring behind.

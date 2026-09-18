@@ -173,6 +173,14 @@ local function FormatEntry(e)
         -- as a persistent history of the footer status stream.
         line = tostring(p.text or "")
 
+    elseif e.kind == "kbd_stuck" then
+        -- v0.6.1 keyboard-capture watchdog. Rendered in red so it stands
+        -- out in a /clerk log dump the tester pastes into an issue.
+        line = ("|cffff6666[KBD] %s|r"):format(tostring(p.reason or "unknown"))
+        if p.detail then
+            line = line .. (" |cff888888%s|r"):format(tostring(p.detail))
+        end
+
     else
         line = ("|cff888888%s|r"):format(tostring(e.kind))
     end
