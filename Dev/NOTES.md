@@ -268,6 +268,37 @@ present (`Syndicator.API.GetInventoryInfoByItemID`). Falls back to
 `C_Item.GetItemCount` when not present. Soft dependency — no TOC
 change, no OptionalDeps entry.
 
+### 3.4a — UX review checkpoints (revisit with usage data)
+
+**PT-2 quick-add commit model.** Shipped in v0.6 as **review-and-commit**:
+shift-click, drag, or focused-editbox link insertion all just fill the
+Add Item box with the item ID; the user still reviews target/cap and
+presses Enter to actually add the item. This matches the rest of the
+addon's commit-on-Enter/Tab pattern (inline row edits work the same
+way) and prevents an unwanted item from landing with no undo path.
+
+**Revisit trigger:** if real-world usage shows the review step is
+pure friction (i.e. we’re always defaulting target=1, always keeping
+the suggested cap, always mashing Enter without changing anything),
+switch to **immediate-add-with-defaults** and rely on a per-row
+delete affordance as the safety net. Do NOT flip this preemptively.
+Wait for at least a couple of weeks of daily usage to build a
+reliable read on how the gesture is actually being used. User-approved
+2026-09-17.
+
+**PT-3 filter chip design.** Shipped in v0.6 as a **single toggle
+chip** labeled "Show only: stuck above cap". Matches the flat,
+out-of-the-way UI aesthetic and keeps the top-of-window surface
+quiet.
+
+**Revisit trigger:** if usage shows a real appetite for slicing the
+list by other states (e.g. wanting a "no price data yet" pass to go
+hit the AH for pricing, or a "ready to buy" preview before pressing
+Restock), expand to a **multi-chip row** (All / Stuck above cap / No
+price data / Ready to buy, pick one). User doesn't have strong
+feelings either way today (2026-09-17); revisit after real usage
+shapes the intuition.
+
 ### 3.4 — Watchlist (real-world reports only)
 
 **QA-12: Post-release AH edge cases.** Do not preemptively harden.
