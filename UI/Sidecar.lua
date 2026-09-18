@@ -294,15 +294,15 @@ local function FormatEntry(entry)
 
     if kind == "buy_success" then
         local g = math.floor((pay.spentCopper or 0) / 10000)
-        return ("|cff98FF98[%s]|r bought %sx%s (%dg)"):format(when, itemLink or "?", pay.qty or "?", g)
+        return ("|cff98FF98[%s] [BUY]|r %sx%s (%dg)"):format(when, itemLink or "?", pay.qty or "?", g)
     elseif kind == "cap_change" then
         local from = pay.fromCopper and math.floor(pay.fromCopper / 10000) .. "g" or "unset"
         local to   = pay.toCopper   and math.floor(pay.toCopper   / 10000) .. "g" or "unset"
-        return ("|cffe5e0a5[%s]|r cap %s -> %s on %s"):format(when, from, to, itemLink or "?")
+        return ("|cffe5e0a5[%s] [CAP]|r %s -> %s on %s"):format(when, from, to, itemLink or "?")
     elseif kind == "auto_refuse" then
-        return ("|cffe5624a[%s]|r auto skipped: %s"):format(when, pay.reason or "?")
+        return ("|cffe5624a[%s] [AUTO-BLOCK]|r %s"):format(when, pay.reason or "?")
     elseif kind == "buy_fail" then
-        return ("|cffe5624a[%s]|r buy failed on %s (%s)"):format(when, itemLink or "?", pay.reason or "?")
+        return ("|cffe5624a[%s] [BUY-FAIL]|r %s (%s)"):format(when, itemLink or "?", pay.reason or "?")
     elseif kind == "target_change" then
         return ("|cffcccccc[%s]|r target %s -> %s on %s"):format(when, pay.from or "?", pay.to or "?", itemLink or "?")
     elseif kind == "add" then
@@ -361,14 +361,48 @@ function Sidecar:Refresh()
         f._spentLabel:SetText(("auto spent today: %dg%s (no budget set)"):format(autoSpendG, resetH))
     end
 
-    -- Activity feed. Rebuild the visible rows from scratch each Refresh
-    -- since the ceiling is small (~30 entries) and correctness beats
-    -- fancy incremental diffing for a v0.7 initial implementation.
+    -- Activity feed. Two-tier model per v0.7 spec:
+    -- * BASIC (this sidecar): curated action-focused entries only.
+    --   Buys, cap changes (debounced 10s per item), and auto-blocks.
+    --   Cap-change debouncing collapses rapid retyping of the cap edit
+    --   box so the feed doesn't churn on every keystroke.
+    -- * VERBOSE (LogPopup / `/clerk log`): everything, unfiltered.
     for _, r in ipairs(f._feedRows) do r:Hide() end
 
-    local entries = {}
+    local raw = {}
     if ADDON.Log and ADDON.Log.Query then
-        entries = ADDON.Log:Query()  -- returns newest-first
+        raw = ADDON.Log:Query()  -- newest-first
+    end
+
+    local BASIC_KINDS = {
+        buy_success = true,
+        buy_fail    = true,
+        cap_change  = true,
+        auto_refuse = true,
+        loop_start  = true,
+        loop_stop   = true,
+    }
+    local CAP_DEBOUNCE_SEC = 10
+
+    local entries = {}
+    local lastCapByItem = {}  -- itemID -> ts of last kept cap_change
+    for i = 1, #raw do
+        local e = raw[i]
+        if BASIC_KINDS[e.kind] then
+            if e.kind == "cap_change" and e.itemID then
+                local prev = lastCapByItem[e.itemID]
+                -- raw is newest-first, so "prev" is a NEWER kept entry;
+                -- we drop this one if it's within 10s of that newer one.
+                if prev and (prev - (e.ts or 0)) < CAP_DEBOUNCE_SEC then
+                    -- swallow
+                else
+                    lastCapByItem[e.itemID] = e.ts or 0
+                    entries[#entries + 1] = e
+                end
+            else
+                entries[#entries + 1] = e
+            end
+        end
     end
 
     local MAX = 30

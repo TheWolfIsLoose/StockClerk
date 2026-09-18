@@ -28,6 +28,7 @@ UI\BuyDialog.lua
 UI\LogFrame.lua
 UI\SettingsDropdown.lua
 UI\Sidecar.lua
+UI\LogPopup.lua
 
 #@debug@
 Dev\RecommendedLists.lua

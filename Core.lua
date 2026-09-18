@@ -198,20 +198,32 @@ function StockClerk:OnSlashCommand(msg)
         return
     end
 
-    -- QA-13: `/clerk log` toggles the activity log sidecar. Also accepts
-    -- `/clerk log clear` as a quick shortcut for the header "Clear" button.
+    -- QA-13: `/clerk log` opens the log popup (v0.7). `/clerk log clear`
+    -- is a quick shortcut for the popup's Clear Log button.
+    -- The popup replaces the v0.6 LogFrame; the old surface remains
+    -- loaded for external callers but is no longer bound to a slash
+    -- command. Retired fully in v0.8.
     if cmd == "log" then
         local sub = (rest or ""):match("^(%S+)") or ""
         if sub:lower() == "clear" then
             if ADDON.Log and ADDON.Log.Clear then
                 ADDON.Log:Clear()
                 self:Print("Activity log cleared.")
-                if ADDON.LogFrame and ADDON.LogFrame:IsShown() then
-                    ADDON.LogFrame:Refresh()
+                if ADDON.LogPopup and ADDON.LogPopup.Refresh and ADDON.LogPopup.frame
+                        and ADDON.LogPopup.frame:IsShown() then
+                    ADDON.LogPopup:Refresh()
+                end
+                if ADDON.Sidecar and ADDON.Sidecar:IsShown() then
+                    ADDON.Sidecar:Refresh()
                 end
             end
         else
-            if ADDON.LogFrame and ADDON.LogFrame.Toggle then
+            if ADDON.LogPopup and ADDON.LogPopup.Toggle then
+                ADDON.LogPopup:Toggle()
+            elseif ADDON.LogFrame and ADDON.LogFrame.Toggle then
+                -- Fallback for any transitional state where LogPopup
+                -- didn't load (e.g. .toc not yet updated). Should never
+                -- trigger in a normal v0.7 install.
                 ADDON.LogFrame:Toggle()
             end
         end
