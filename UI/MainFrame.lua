@@ -1994,8 +1994,12 @@ function MF:Build()
 
     -- Drop-zone visual affordance (Option A from grill): 1px mint outline
     -- that thickens (2px) when the cursor holds an item, signalling
-    -- "you can drop here". Uses CURSOR_UPDATE + CURSOR_CHANGED so we're
-    -- not polling OnUpdate every frame just to watch the cursor.
+    -- "you can drop here". CURSOR_CHANGED fires on every cursor state
+    -- transition (pickup, drop, hover-target change) so it covers what
+    -- we need without polling OnUpdate every frame.
+    -- NOTE: CURSOR_UPDATE is NOT a real WoW event on retail Midnight.
+    -- Early alpha builds registered it defensively and threw at Show()
+    -- time; only CURSOR_CHANGED exists.
     local mint = { 0x98/255, 0xFF/255, 0x98/255 }
     local function edgeTex(parent)
         local t = parent:CreateTexture(nil, "OVERLAY")
@@ -2021,7 +2025,6 @@ function MF:Build()
     dropEdges[4]:SetWidth(1)
 
     local dropWatcher = CreateFrame("Frame", nil, dropTarget)
-    dropWatcher:RegisterEvent("CURSOR_UPDATE")
     dropWatcher:RegisterEvent("CURSOR_CHANGED")
     dropWatcher:SetScript("OnEvent", function()
         local show = CursorItemID() ~= nil

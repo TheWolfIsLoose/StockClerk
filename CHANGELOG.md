@@ -1,5 +1,14 @@
 # Stock Clerk changelog
 
+## v0.7.0-alpha3
+
+Republish of v0.7 alpha with the v0.6.2 `CURSOR_UPDATE` Lua error
+fix back-merged. No new v0.7 features vs alpha2. Bumped to alpha3
+so CurseForge's Alpha channel shows a v0.7 build newer than the
+current Stable (v0.6.2) and remains visible to alpha subscribers.
+
+See v0.6.2 entry below for the full fix write-up.
+
 ## v0.7.0-alpha2
 
 Republish of the v0.7 redesign with the v0.6.1 keyboard-capture
@@ -87,6 +96,25 @@ Alpha in the CurseForge app's Release Type filter pick this up.
 - Old `UI/LogFrame.lua` still ships as a fallback and is unloaded
   by the alpha wiring but still occupies a few KB. It'll be removed
   once we're confident the popup covers every callsite.
+
+## v0.6.2
+
+Hotfix for a Lua error thrown on `/clerk` open.
+
+### Fixed: `Frame:RegisterEvent(): Attempt to register unknown event "CURSOR_UPDATE"`
+
+The drop-zone code (shipped in v0.6.0) registered two cursor events
+for the mint-outline affordance around the Add box: `CURSOR_UPDATE`
+and `CURSOR_CHANGED`. `CURSOR_UPDATE` isn't a real event on retail
+Midnight 12.1 -- it either never existed or was removed in a recent
+client build. Some users saw a silent script error (default
+scriptErrors setting hides Lua errors); a tester with
+`/console scriptErrors 1` on caught it on window open.
+
+`CURSOR_CHANGED` fires on every cursor state transition (pickup,
+drop, hover-target change), so removing the invalid registration
+doesn't cost us any detection coverage -- the drop-zone highlight
+still works exactly as before.
 
 ## v0.6.1
 
