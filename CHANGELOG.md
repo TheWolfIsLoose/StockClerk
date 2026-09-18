@@ -1,5 +1,73 @@
 # Stock Clerk changelog
 
+## v0.7.0-alpha1
+
+First preview of the v0.7 redesign. Marked **alpha** in CurseForge so
+normal Stable subscribers keep running v0.6.0; testers who opt into
+Alpha in the CurseForge app's Release Type filter pick this up.
+
+### Compact main window
+
+- **Main frame slimmed from 680x500 to 420x400.** The list now sizes
+  itself to what it holds instead of forcing you to reshape a big
+  empty rectangle. Resize handles stay on so you can still stretch
+  it if you prefer more headroom.
+- **Row layout tightened** so the Item column keeps room for long
+  names while Need, Cap, and Seen columns compress to their actual
+  content.
+- **Status pill retired**; the Have column now colors itself red
+  when you're short of Need and mint when you're stocked, so state
+  reads at a glance without the extra widget.
+- **Filter chip is icon-only** (3-bar funnel) and lives in the
+  column-header strip. Same behavior, less chrome.
+- **Version string in the header** shows the current build; the
+  amber color tag makes pre-release builds obvious.
+- **Larger close X and a new hamburger button** on the header for
+  reaching the settings/activity sidecar.
+
+### Sidecar (Settings + Recent Activity)
+
+- **New right-docked panel** replaces the two v0.6 flyouts (settings
+  dropdown and activity log frame). Toggled from the hamburger button.
+- **Top half: Settings.** All the settings from v0.6 in one place:
+  auto-purchase toggle, default cap, auto budget per day, auto-open
+  at Auction House.
+- **Bottom half: Recent Activity.** A live feed of the last ~30
+  actions taken -- purchases, cap changes (debounced 10s so retyping
+  a cap value doesn't spam the feed), and auto-block reasons. Tagged
+  entries `[BUY]`, `[CAP]`, `[AUTO-BLOCK]` for quick scanning.
+- **Persists open/closed per character** so if you like it open you
+  won't have to reopen it every reload.
+
+### /clerk log popup
+
+- **/clerk log opens a 500x400 popup** with the full log (up to 500
+  entries), pre-selected so Ctrl+C copies immediately. Optimized
+  for pasting excerpts into bug reports and Discord.
+- **Every entry tagged** for greppability (`[BUY]`, `[CAP]`,
+  `[BUY-FAIL]`, `[AUTO-BLOCK]`, `[LOOP-START]`, ...).
+- **Clear Log button** in the popup replaces the old header button.
+- The old activity log frame remains loaded as a compatibility
+  shim for external callers; it's slated for full removal in v0.8.
+
+### Auction House docking
+
+- **When Auto-open at AH is on, the main frame now docks to the
+  right edge of the AH window** on open, so the two windows sit
+  side-by-side instead of overlapping.
+- **On AH close the main frame restores** to wherever you last
+  dragged it. The docked coordinates are transient; only your
+  floating position gets saved.
+- If the Sidecar is open during docking, it follows the window to
+  the new anchor.
+
+### Known alpha caveats
+
+- New sidecar/popup strings are not localized (English only).
+- Old `UI/LogFrame.lua` still ships as a fallback and is unloaded
+  by the alpha wiring but still occupies a few KB. It'll be removed
+  once we're confident the popup covers every callsite.
+
 ## v0.6.0
 
 Quick-add gestures on the Add box, and a filter to focus the list on
