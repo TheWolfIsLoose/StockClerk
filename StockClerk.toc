@@ -1,6 +1,6 @@
 ## Interface: 120100
 ## Title: Stock Clerk
-## Notes: Per-character consumable restock lists with automated bank/mail/vendor pulls and AH shopping.
+## Notes: Per-character consumable restock lists with keyboard-first entry, confirmed-buy AH automation, and a sidecar activity log.
 ## Author: Jakerator
 ## Version: @project-version@
 ## IconTexture: Interface\ICONS\INV_Misc_Note_01
@@ -25,9 +25,10 @@ Sources\Bags.lua
 RestockLoop.lua
 
 UI\MainFrame.lua
-UI\BuyDialog.lua
 UI\LogFrame.lua
 UI\SettingsDropdown.lua
+UI\Sidecar.lua
+UI\LogPopup.lua
 
 #@debug@
 Dev\RecommendedLists.lua

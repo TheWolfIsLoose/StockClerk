@@ -31,20 +31,21 @@
       }
       global.templates = { [name] = { [itemID] = need, ... } }
       global.settings  = {
-        autoOpenAtAH     = bool,
-        autoPurchase     = bool,      -- QA-10 opt-in auto-purchase master switch
-        autoBudgetGold   = number|nil, -- daily auto-buy budget (gold); manual
-                                       -- buys are never budget-gated
+        autoOpenAtAH     = bool,       -- default TRUE. Pops SC on AH visit.
+        autoRestock      = bool,       -- default FALSE. If TRUE, opening the
+                                       -- AH also fires the restock loop when
+                                       -- there's a shortfall to work through.
         lastPriceTTL     = number,     -- QA-11 seconds before "Last Seen" dims
-        defaultMaxCopper = number|nil, -- PT-1 v0.5 Batch 2 (global default cap).
-                                       -- When set, auto-mode treats items
-                                       -- without their own maxPrice as
-                                       -- having this cap. Nil = no default,
-                                       -- and uncapped items are still
-                                       -- skipped by auto (v0.4 contract).
-                                       -- Never applied to manual mode --
-                                       -- manual is full user discretion.
       }
+      -- v0.7.0-alpha6 AUTO-BUY-NUKE: autoPurchase / autoBudgetGold /
+      -- defaultMaxCopper deleted. WoW's C_AuctionHouse commodity API
+      -- requires a hardware event per transaction, so silent auto-buy
+      -- is impossible. Restock is user-driven: one keystroke = one
+      -- purchase. Budget guardrail deleted with it -- users are
+      -- adults, SC is a tool not a nanny. defaultMaxCopper deleted
+      -- because per-row cap is now the only way to skip: no cap =
+      -- buy at any price (with a one-shot per-AH-session soft
+      -- warning). No global cap fallback.
       global.log      = array of entries (see Log.lua)
 
     We keep the on-disk shape stable across versions; any new field lives
@@ -65,10 +66,8 @@ DB.defaults = {
     char = {
         items = {},
         uiPos = { point = "CENTER", x = 0, y = 0 },
-        -- Daily (realm-reset-aligned) auto-buy spend tracker. resetAt is
-        -- established lazily because C_DateAndTime isn't guaranteed at
-        -- PLAYER_LOGIN for every client build.
-        autoSpend = { copper = 0, resetAt = nil },
+        -- v0.7.0-alpha6 AUTO-BUY-NUKE: autoSpend deleted. Was the
+        -- daily budget tracker. No budget = no tracker.
         -- v0.6 (PT-3): per-character UI state. Filter toggle for the
         -- shopping-list view. `stuckOnly = true` means the list hides
         -- every row except items whose most recent observed unit price
@@ -93,13 +92,18 @@ DB.defaults = {
     global = {
         templates = {},
         settings  = {
-            autoOpenAtAH     = true,
+            autoOpenAtAH     = true,      -- open SC docked to the AH on visit.
+                                          -- Design ended up here: users who
+                                          -- track a shopping list generally
+                                          -- WANT it up when they're at the AH.
+            autoRestock      = false,     -- opt-in. When ON + AH open + at
+                                          -- least one row is short, the
+                                          -- restock loop auto-starts. Off by
+                                          -- default because it commits the
+                                          -- user to a purchase flow they
+                                          -- didn't explicitly ask for.
             debugSeeded      = false,     -- so /clerk seed only runs once by default
-            autoPurchase     = false,     -- QA-10; user must opt in explicitly
-            autoBudgetGold   = nil,       -- QA-10a; required to be set before auto runs
             lastPriceTTL     = 24 * 3600, -- QA-11; 24h before Last Seen dims
-            defaultMaxCopper = nil,       -- PT-1 v0.5 Batch 2; nil preserves
-                                          -- the v0.4 "uncapped => auto skip" contract
         },
     },
 }
@@ -395,81 +399,10 @@ function DB:Settings()
     return self.db.global.settings
 end
 
--- ---------------------------------------------------------------------------
--- Daily auto-buy budget (realm-reset aligned)
---
--- The budget day ends at the REALM daily reset, not local midnight:
--- C_DateAndTime.GetSecondsUntilDailyReset() returns seconds until the
--- player's own realm reset (retail API since Shadowlands), so NA gets
--- 7am Pacific, EU gets their morning reset, etc., with zero hardcoding.
--- If the API is ever unavailable we degrade to "24h from first spend"
--- rather than losing the budget feature outright.
---
--- Semantics (user decision, 2026-09-17): the budget tracks and gates
--- AUTO-BUYS ONLY. Manual buys are full user discretion -- they neither
--- count toward the daily total nor are blocked by it. Budgets exist
--- as guardrails against the autopilot inadvertently spending a pile
--- of gold; a human-confirmed click needs no such guardrail.
---
--- Corollary: the daily readout reads "auto spend today", NOT "total
--- gold out the door". Deliberate split, not an accounting bug.
--- ---------------------------------------------------------------------------
-
--- Internal: unix timestamp of the next daily reset.
-local function NextResetTime()
-    local now = GetServerTime()
-    if C_DateAndTime and C_DateAndTime.GetSecondsUntilDailyReset then
-        local secs = C_DateAndTime.GetSecondsUntilDailyReset()
-        if secs and secs > 0 then
-            return now + secs
-        end
-    end
-    -- Degraded path: 24h rolling window from now. Used only when the
-    -- realm-reset API is missing (unexpected client/API change).
-    return now + 86400
-end
-
--- Normalize the persisted bucket: zero it out when the reset has passed.
-local function EnsureFreshBucket(spend)
-    if spend.resetAt == nil then
-        spend.resetAt = NextResetTime()
-    end
-    if GetServerTime() >= spend.resetAt then
-        spend.copper  = 0
-        spend.resetAt = NextResetTime()
-    end
-    return spend
-end
-
--- Auto-buy spend so far today, in copper, reset-aware. Manual buys
--- are excluded by design (see semantics above).
-function DB:GetDailyAutoSpend()
-    if not self.char then return 0 end
-    return EnsureFreshBucket(self.char.autoSpend).copper
-end
-
--- Remaining daily AUTO-BUY budget in copper (settings.autoBudgetGold
--- is gold). Returns nil when no budget is configured (unlimited).
-function DB:GetDailyAutoBudgetLeft()
-    local s = self:Settings()
-    if not s.autoBudgetGold or s.autoBudgetGold <= 0 then return nil end
-    local left = math.floor(s.autoBudgetGold * 10000) - self:GetDailyAutoSpend()
-    return math.max(0, left)
-end
-
--- Record a successful AUTO purchase against today's budget. Callers:
--- the loop's auto confirm path ONLY -- manual buys must never touch
--- this (user decision: manual spend is outside the budget ledger).
-function DB:AddDailyAutoSpend(copper)
-    if not self.char then return end
-    copper = tonumber(copper) or 0
-    if copper <= 0 then return end
-    local spend = EnsureFreshBucket(self.char.autoSpend)
-    spend.copper = spend.copper + copper
-end
-
--- Seconds until the current budget day ends; for UI readout.
-function DB:GetDailyResetAt()
-    if not self.char then return nil end
-    return EnsureFreshBucket(self.char.autoSpend).resetAt
-end
+-- v0.7.0-alpha6 AUTO-BUY-NUKE: the entire daily-budget subsystem is
+-- gone. NextResetTime / EnsureFreshBucket / GetDailyAutoSpend /
+-- GetDailyAutoBudgetLeft / AddDailyAutoSpend / GetDailyResetAt all
+-- deleted along with settings.autoBudgetGold and char.autoSpend.
+-- Rationale: WoW's commodity API requires a hardware event per
+-- transaction, so silent budget-gated auto-buys are impossible.
+-- Restock is user-driven now; there is nothing to gate.

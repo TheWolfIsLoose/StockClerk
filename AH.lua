@@ -181,9 +181,9 @@ function AH:BuyUpTo(itemID, quantity, maxUnitPrice, callback)
                 if cheapest and maxUnitPrice then
                     local capG = math.floor(maxUnitPrice / 10000)
                     callback(false, ("cheapest %s is above your %dg cap"):format(
-                        GetCoinTextureString(cheapest), capG))
+                        ADDON.MoneyText(cheapest), capG))
                 elseif cheapest then
-                    callback(false, "cheapest " .. GetCoinTextureString(cheapest) .. " but no quantity available")
+                    callback(false, "cheapest " .. ADDON.MoneyText(cheapest) .. " but no quantity available")
                 else
                     callback(false, "no auctions listed")
                 end

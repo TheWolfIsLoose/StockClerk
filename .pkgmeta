@@ -1,22 +1,25 @@
 # Stock Clerk - BigWigsMods packager config
 # https://github.com/BigWigsMods/packager
 #
-# RELEASE POLICY (user decision 2026-09-17):
-#   StockClerk lives on GitHub only during the pre-1.0 phase. Tags on
-#   this repo are ordinary version markers -- they DO NOT publish to
-#   CurseForge, Wago, or WoWInterface, and they SHOULD NOT until we go
-#   wide at 1.0. Tag freely (v0.5, v0.6, ...) as testing milestones.
+# RELEASE POLICY (updated 2026-09-18):
+#   StockClerk publishes to CurseForge via CF's Automatic Packaging
+#   webhook. The .toc carries `X-Curse-Project-ID: 1700292`; CF listens
+#   for GitHub release events on this repo and packages the tag.
 #
-#   Corollary: no CurseForge/Wago project IDs live in StockClerk.toc,
-#   and no publishing workflow exists at .github/workflows/. If a
-#   future turn tries to add either, that IS the go-wide moment and
-#   requires an explicit user decision -- don't copy the pipeline over
-#   from SharedMedia_Tones (the parent project) on autopilot.
+#   IMPORTANT: CF's webhook fires on GitHub RELEASE events, not on plain
+#   tag pushes. Tagging without publishing a release is a no-op for CF.
 #
-# What this file DOES do today: drives local release.sh -d -l builds
-# so we can verify the packaged zip contents against ignore rules
-# before publishing anything to anyone. `ignore:` entries are
-# stripped from the packaged zip.
+#   Channel routing: tag suffix decides the CF release type.
+#     v1.0.0            -> Release channel (Stable)
+#     v1.0.0-beta1      -> Beta channel
+#     v1.0.0-alpha1     -> Alpha channel
+#   Testers opt in via the CurseForge app's Release Type filter.
+#
+#   Wago is not wired up (no X-Wago-ID in the .toc). CF-only for now.
+#
+# This file ALSO drives local release.sh -d -l builds if release.sh is
+# checked in, so we can verify the packaged zip contents against ignore
+# rules before publishing. `ignore:` entries are stripped from the zip.
 
 package-as: StockClerk
 
@@ -42,6 +45,7 @@ manual-changelog:
 ignore:
   - README.md
   - Dev
+  - notes
   - .assets
   - .github
   - .gitignore

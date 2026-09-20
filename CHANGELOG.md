@@ -1,5 +1,315 @@
 # Stock Clerk changelog
 
+## v0.7.0
+
+First stable release on the v0.7 track. Consolidates six months of
+iteration across five alphas and seventeen preview builds into a
+coherent single-window restock addon with confirmed-buy automation,
+keyboard-first entry, and per-character shopping lists.
+
+### Compressed main window
+
+Main frame shrunk from 680x500 to 420x400 so Stock Clerk fits
+comfortably alongside the Auction House and the game world without
+eating half the screen. Every column, header, and inline editor was
+rebuilt for the tighter footprint. Numeric columns now right-align
+on their own edges (accounting-style) with headers matching, so
+values like `41g` / `34g` and counts like `30` / `314` stack cleanly
+for at-a-glance scanning.
+
+### Sidecar panel: settings + activity log
+
+Right-docked panel replaces the old settings dropdown. Contains:
+
+- **Auto-open at Auction House** toggle — pops the shopping list open
+  when you visit the AH.
+- **Auto-Restock on AH open** toggle — starts the restock loop
+  automatically when the AH opens if anything is short.
+- **Recent Activity** log with a `/clerk log` link that opens a
+  larger scrollable popup for full session review.
+
+Sidecar hides with the main window (previously it orphaned).
+
+### Restock loop with armed-flyout confirmation
+
+A `Restock at AH` button runs a batched restock pass across every
+short item on your list, respecting each item's price cap. Each buy
+surfaces an armed flyout below the main window showing:
+
+- What's about to be bought (`30 x Thalassian Phoenix Oil`)
+- Total cost and per-unit cap (`1219g 80s · Cap 41g / unit`), OR
+  amber `No cap set` warning for uncapped items
+- `Buy` / `Skip` buttons with a 3-second arm delay so accidental
+  clicks are impossible during the arming animation
+
+The old StaticPopup confirmation modal is retired: the flyout's
+amber `No cap set` badge IS the soft warning for uncapped buys.
+Capped-out rows (cheapest listing above your cap) auto-skip
+silently. When the loop finishes, a summary flyout shows what was
+bought, total spend, mail-pending count, and a `Close (Ns)`
+countdown.
+
+### Currency letter suffixes (g/s/c)
+
+Gold amounts render as `1219g 80s 66c` throughout the addon instead
+of Blizzard's coin icon textures. Users who swap coin textures with
+alternative art still see consistent price rendering. Precision
+adapts to context: whole gold in tight columns, silver in the Seen
+column, full copper in tooltips.
+
+### Full keyboard-only entry
+
+Tab / Shift+Tab walks the entire editable surface in row-major
+order: Item ID → Target → Price Cap → Add Item → row 1 Need → row 1
+Cap → row 2 Need → wrap. Inline edits commit on Enter, Tab, or
+click-away. Escape cancels without committing.
+
+### Left-edge status bar + Have text color
+
+Each row shows a 2px vertical accent bar on its left edge (mint
+when stocked, red when short) plus color-coded Have text. Dual-
+channel encoding means colorblind users get a reliable positional
+signal, everyone else gets redundant color across two spots.
+
+### Mail-pending ledger (repeat-press safety)
+
+Every successful purchase is tracked in a per-character ledger
+that folds mailed-but-unlooted purchases into the effective have
+count. So if you buy 30 items, close the AH, don't loot the mail,
+and reopen the AH, the loop correctly sees you're stocked and
+doesn't re-buy. The ledger reconciles against actual mail
+contents on `MAIL_INBOX_UPDATE` and garbage-collects entries older
+than 30 days.
+
+### Auction House integration
+
+Open the AH, click a row in Stock Clerk, and it searches for that
+item. Search results feed a Last Seen column showing the cheapest
+unit price and how long ago it was recorded. Stale prices dim
+after the configured TTL (24h default).
+
+### Bank / warband / reagent bank visibility
+
+Items sitting in bank, warband, or reagent bank appear as a dim
+`(+N)` annotation next to the primary bags-only Have count, so you
+always know where your stock actually lives.
+
+### Two-tier activity log
+
+Every loop event (start, stop, buy attempt, buy result) is logged
+both to the Sidecar's condensed Recent Activity feed and to a
+full popup accessible via `/clerk log`.
+
+### Commands
+
+- `/clerk` — open the main window (aliases: `/sc`, `/stock`)
+- `/clerk help` — command list
+- `/clerk reset` — wipe this character's list
+- `/clerk dump` — print current list to chat
+- `/clerk log` — open the full activity popup
+- `/clerk debug on|off` — toggle diagnostic chat output (log only
+  emits on state changes to avoid spam)
+
+### Under the hood
+
+- Single-source-of-truth shortfall computation via
+  `RestockLoop:PreviewShortfallCount()` — button state, footer
+  status, and Core's auto-restock trigger all route through the
+  same effective-have math that BuildQueue uses. Fixes an early
+  alpha bug where three independent shortfall calcs could disagree
+  and cause a phantom restock of already-stocked items.
+- MainFrame:Refresh coalesces multiple triggers in the same frame
+  into a single row-list rebuild.
+- LibSharedMedia-free, LibStub-only dependency stack. No external
+  library requirements at install time.
+
+---
+
+## Pre-1.0 history
+
+The entries below cover each alpha as it shipped. Preserved as
+record; new users only need the v0.7.0 summary above.
+
+## v0.7.0-alpha4
+
+Alpha3 field-testing feedback pass. Five bug fixes plus a status-
+column redesign.
+
+### Fixed: drag-and-drop into the Item ID field silently no-op'd
+
+The drop-target had its `OnReceiveDrag` handler on the container
+frame wrapping the EditBox, but the EditBox always paints on top of
+the container in the mouse-hit stack -- WoW routes drop events to
+the topmost mouse-enabled frame, which was the EditBox with no drop
+handler. Result: the mint drop-zone outline lit up on cursor-hold
+(that lives on the container border and worked fine), but releasing
+the item did nothing.
+
+Registered `OnReceiveDrag` directly on the EditBox in addition to
+the container. Container handler stays so drops on the 1-2px border
+ring outside the EditBox hitbox still work.
+
+### Fixed: header showed literal `v@project-version@`
+
+`## Version: @project-version@` is a BigWigsMods packager keyword
+that only gets substituted with the git tag at CurseForge packaging
+time. If the addon is installed from raw source (git clone, or
+GitHub's "Download ZIP" button which bundles source not the packaged
+release), the literal survives and leaks to the header.
+
+Added a runtime guard: if the version string starts with `@`, the
+header shows a muted grey `dev` instead of the raw keyword. Packaged
+releases still show `v0.7.0-alpha4` (amber) as before.
+
+### Fixed: Sidecar orphaned when main window closed
+
+Sidecar (the Settings + Recent Activity right-docked panel) was
+parented to `UIParent` rather than to `StockClerkFrame`, so hiding
+the main window via X, Close, or Escape left it floating alone.
+`MF:Hide()` already cascaded to hide the old settings dropdown for
+the same reason -- extended it to also hide the Sidecar.
+
+### Fixed: status column leaked `o`/`o!` text at the row's right edge
+
+v0.7 was supposed to drop the Status column entirely (short/ok
+state signaled by Have-color), but the pill FontString stub was
+still being force-shown and populated with `ok` / `-N` text each
+InitializeRow, leaving a stray `o` ("ok") or `o!` visible at the
+right edge of every row.
+
+Replaced the stub with true no-op tables so nothing paints. The
+full status signal now lives in the new left-edge accent bar (see
+below) plus the Have text color.
+
+### Changed: status-column redesign -- left-edge accent bar
+
+Instead of a text pill, each row now shows a 2px vertical accent
+bar on its left edge:
+
+- **Mint green** = stocked (Have >= Need)
+- **Muted red**  = short (Have < Need)
+
+Dual-channel encoding (bar position + Have text color) means
+colorblind users get a reliable signal from the bar's absence/
+presence at a fixed position, and everyone else gets the redundancy
+of matching color across two spots on the row.
+
+Have/Need column order preserved (matches the game's `X/Y` progress
+convention).
+
+Future: tooltip on the Have column showing bag / bank / warbank
+breakdown -- deferred to alpha5+ (needs per-location count queries
+and the warbank lazy-load quirk needs its own handling).
+
+### Changed: Tab-focused row now highlights
+
+Tabbing between row cells (Need <-> Cap <-> next row's Need) now
+triggers the same hover-wash on the containing row that a mouse-
+over would. Without it, keyboard-driven users lost their place in
+the list because the focused cell got a border-brand fade but the
+row around it stayed visually inert.
+
+Hooked via `OnEditFocusGained`/`OnEditFocusLost` on both cell
+editors, with a one-frame defer on Lost so a Tab-to-adjacent-cell
+doesn't visibly flicker the wash off and on.
+
+## v0.7.0-alpha3
+
+Republish of v0.7 alpha with the v0.6.2 `CURSOR_UPDATE` Lua error
+fix back-merged. No new v0.7 features vs alpha2. Bumped to alpha3
+so CurseForge's Alpha channel shows a v0.7 build newer than the
+current Stable (v0.6.2) and remains visible to alpha subscribers.
+
+See v0.6.2 entry below for the full fix write-up.
+
+## v0.7.0-alpha2
+
+Republish of the v0.7 redesign with the v0.6.1 keyboard-capture
+hotfixes back-merged in. No new v0.7 features vs alpha1 -- this
+release exists so alpha subscribers can pick up the hotfixes and so
+CurseForge's Alpha channel shows a v0.7 build newer than the current
+Stable (v0.6.1).
+
+### Included from v0.6.1 hotfix
+
+- Row-editor pool reset on rebind (primary cause of the
+  keyboard-eating bug).
+- Single-exit-point + pcall discipline on both keyboard handlers.
+- Force `SetPropagateKeyboardInput(true)` on window close.
+- Add-button focus-flag desync recovery.
+- New KeyboardWatchdog module that logs `[KBD]` entries to
+  `/clerk log` if it detects a suspicious keyboard state.
+
+See v0.6.1 entry below for the full write-up.
+
+## v0.7.0-alpha1
+
+First preview of the v0.7 redesign. Marked **alpha** in CurseForge so
+normal Stable subscribers keep running v0.6.x; testers who opt into
+Alpha in the CurseForge app's Release Type filter pick this up.
+
+### Compact main window
+
+- **Main frame slimmed from 680x500 to 420x400.** The list now sizes
+  itself to what it holds instead of forcing you to reshape a big
+  empty rectangle. Resize handles stay on so you can still stretch
+  it if you prefer more headroom.
+- **Row layout tightened** so the Item column keeps room for long
+  names while Need, Cap, and Seen columns compress to their actual
+  content.
+- **Status pill retired**; the Have column now colors itself red
+  when you're short of Need and mint when you're stocked, so state
+  reads at a glance without the extra widget.
+- **Filter chip is icon-only** (3-bar funnel) and lives in the
+  column-header strip. Same behavior, less chrome.
+- **Version string in the header** shows the current build; the
+  amber color tag makes pre-release builds obvious.
+- **Larger close X and a new hamburger button** on the header for
+  reaching the settings/activity sidecar.
+
+### Sidecar (Settings + Recent Activity)
+
+- **New right-docked panel** replaces the two v0.6 flyouts (settings
+  dropdown and activity log frame). Toggled from the hamburger button.
+- **Top half: Settings.** All the settings from v0.6 in one place:
+  auto-purchase toggle, default cap, auto budget per day, auto-open
+  at Auction House.
+- **Bottom half: Recent Activity.** A live feed of the last ~30
+  actions taken -- purchases, cap changes (debounced 10s so retyping
+  a cap value doesn't spam the feed), and auto-block reasons. Tagged
+  entries `[BUY]`, `[CAP]`, `[AUTO-BLOCK]` for quick scanning.
+- **Persists open/closed per character** so if you like it open you
+  won't have to reopen it every reload.
+
+### /clerk log popup
+
+- **/clerk log opens a 500x400 popup** with the full log (up to 500
+  entries), pre-selected so Ctrl+C copies immediately. Optimized
+  for pasting excerpts into bug reports and Discord.
+- **Every entry tagged** for greppability (`[BUY]`, `[CAP]`,
+  `[BUY-FAIL]`, `[AUTO-BLOCK]`, `[LOOP-START]`, ...).
+- **Clear Log button** in the popup replaces the old header button.
+- The old activity log frame remains loaded as a compatibility
+  shim for external callers; it's slated for full removal in v0.8.
+
+### Auction House docking
+
+- **When Auto-open at AH is on, the main frame now docks to the
+  right edge of the AH window** on open, so the two windows sit
+  side-by-side instead of overlapping.
+- **On AH close the main frame restores** to wherever you last
+  dragged it. The docked coordinates are transient; only your
+  floating position gets saved.
+- If the Sidecar is open during docking, it follows the window to
+  the new anchor.
+
+### Known alpha caveats
+
+- New sidecar/popup strings are not localized (English only).
+- Old `UI/LogFrame.lua` still ships as a fallback and is unloaded
+  by the alpha wiring but still occupies a few KB. It'll be removed
+  once we're confident the popup covers every callsite.
+
 ## v0.6.2
 
 Hotfix for a Lua error thrown on `/clerk` open.
