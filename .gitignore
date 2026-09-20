@@ -3,3 +3,7 @@
 .DS_Store
 Thumbs.db
 *.bak
+
+# v0.8.0 cleanup: notes are local-only from here on. Retained on disk
+# for roadmap + CF description reference; nothing v0.8 needs is tracked.
+notes/
