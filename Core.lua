@@ -335,7 +335,7 @@ function StockClerk:OnSlashCommand(msg)
         return
     end
 
-    -- v0.7.0-alpha6 AUTO-BUY-NUKE: `/clerk auto` slash command removed.
+    -- `/clerk auto` slash command removed.
     -- Was the entry point for enabling/disabling silent auto-buys, which
     -- WoW's commodity API prohibits. Restock is user-driven via the
     -- toolbar Restock button (Phase B will add a keybind).
@@ -387,7 +387,7 @@ function StockClerk:OnSlashCommand(msg)
         return
     end
 
-    -- v0.7.0-alpha6 AUTO-BUY-NUKE: `/clerk budget` removed along with
+    -- `/clerk budget` removed along with
     -- the daily-auto-budget subsystem. Was daily-spend inspection +
     -- test-only reset; no analogue needed since restock is now
     -- user-driven and the user's gold is their own accounting.

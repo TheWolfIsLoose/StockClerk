@@ -142,7 +142,7 @@ local function Build()
     f:SetScript("OnDragStop",  f.StopMovingOrSizing)
     f:Hide()
 
-    -- v0.7.0-alpha5 LOG-ESCAPE-FIX: register the popup with Blizzard's
+    -- Register the popup with Blizzard's
     -- UISpecialFrames so Escape closes it even when no editbox has focus.
     -- The existing edit:OnEscapePressed only fires when the read-only
     -- transcript editbox has keyboard focus, which is not the common case

@@ -9,7 +9,7 @@
           need        = number,
           maxPrice    = copper,          -- optional; nil = no cap set
           priceSource = string,          -- optional; PT-1 v0.5. Records
-                                         -- how the current maxPrice was
+                                         -- How the current maxPrice was
                                          -- chosen: "user" (manually typed),
                                          -- "vendor" (reserved -- vendor
                                          -- price plumbing lands in Wave 2),
@@ -20,14 +20,14 @@
           addedAt     = timestamp,
           lastPrice   = { copper, seenAt, source },   -- optional; QA-11
           sortOrder   = number,          -- user-arranged list position;
-                                         -- doubles as restock priority
+                                         -- Doubles as restock priority
         }
       }
       char.uiPos = { point, x, y }           -- last MainFrame position
       char.autoSpend = {
           copper  = 0,        -- auto-purchase spend since last daily reset
           resetAt = unixtime, -- when the current budget day ends (realm
-                              -- daily reset via C_DateAndTime), not midnight
+                              -- Daily reset via C_DateAndTime), not midnight
       }
       global.templates = { [name] = { [itemID] = need, ... } }
       global.settings  = {
@@ -37,7 +37,7 @@
                                        -- there's a shortfall to work through.
         lastPriceTTL     = number,     -- QA-11 seconds before "Last Seen" dims
       }
-      -- v0.7.0-alpha6 AUTO-BUY-NUKE: autoPurchase / autoBudgetGold /
+      -- AutoPurchase / autoBudgetGold /
       -- defaultMaxCopper deleted. WoW's C_AuctionHouse commodity API
       -- requires a hardware event per transaction, so silent auto-buy
       -- is impossible. Restock is user-driven: one keystroke = one
@@ -66,9 +66,9 @@ DB.defaults = {
     char = {
         items = {},
         uiPos = { point = "CENTER", x = 0, y = 0 },
-        -- v0.7.0-alpha6 AUTO-BUY-NUKE: autoSpend deleted. Was the
+        -- AutoSpend deleted. Was the
         -- daily budget tracker. No budget = no tracker.
-        -- v0.6 (PT-3): per-character UI state. Filter toggle for the
+        -- (PT-3): per-character UI state. Filter toggle for the
         -- shopping-list view. `stuckOnly = true` means the list hides
         -- every row except items whose most recent observed unit price
         -- exceeds their price cap (i.e. "currently priced out"). Per-
@@ -97,7 +97,7 @@ DB.defaults = {
                                           -- track a shopping list generally
                                           -- WANT it up when they're at the AH.
             autoRestock      = false,     -- opt-in. When ON + AH open + at
-                                          -- least one row is short, the
+                                          -- Least one row is short, the
                                           -- restock loop auto-starts. Off by
                                           -- default because it commits the
                                           -- user to a purchase flow they
@@ -121,7 +121,7 @@ function DB:Initialize()
     _G.StockClerkCharDB = _G.StockClerkCharDB or {}
     for k, v in pairs(self.defaults.char) do
         if _G.StockClerkCharDB[k] == nil then
-            -- shallow copy is fine — nested tables are simple
+            -- Shallow copy is fine — nested tables are simple
             if type(v) == "table" then
                 _G.StockClerkCharDB[k] = CopyTable(v)
             else
@@ -131,7 +131,7 @@ function DB:Initialize()
     end
     self.char = _G.StockClerkCharDB
 
-    -- sortOrder migration (v0.4): pre-priority users have no sortOrder on
+    -- SortOrder migration (v0.4): pre-priority users have no sortOrder on
     -- any item. Stamp everyone in the current alphabetical readout so the
     -- upgrade never visibly reshuffles an existing list.
     local needsOrder = false
@@ -176,7 +176,7 @@ function DB:Initialize()
     end
     self.char.pendingBuys = normal
 
-    -- v0.6 UI defaults hygiene: old saves predate `ui`, so backfill it
+    -- UI defaults hygiene: old saves predate `ui`, so backfill it
     -- without disturbing anything else on disk. This is the same shape
     -- the defaults table declares; keep them in sync if a new UI flag
     -- is added later.
@@ -369,13 +369,13 @@ end
 -- Templates (account-wide named lists we can apply to any character)
 -- ---------------------------------------------------------------------------
 function DB:ApplyTemplate(name, mode)
-    -- mode: "merge" (default, keeps existing) or "replace"
+    -- Mode: "merge" (default, keeps existing) or "replace"
     local t = self.db.global.templates[name]
     if not t then return 0 end
     if mode == "replace" then wipe(self.char.items) end
     local count = 0
     for itemID, need in pairs(t) do
-        -- merge: only set if not present; keep user-modified needs
+        -- Merge: only set if not present; keep user-modified needs
         if mode == "replace" or self.char.items[itemID] == nil then
             self:SetItem(itemID, need)
             count = count + 1
@@ -399,7 +399,7 @@ function DB:Settings()
     return self.db.global.settings
 end
 
--- v0.7.0-alpha6 AUTO-BUY-NUKE: the entire daily-budget subsystem is
+-- The entire daily-budget subsystem is
 -- gone. NextResetTime / EnsureFreshBucket / GetDailyAutoSpend /
 -- GetDailyAutoBudgetLeft / AddDailyAutoSpend / GetDailyResetAt all
 -- deleted along with settings.autoBudgetGold and char.autoSpend.

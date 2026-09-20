@@ -69,12 +69,11 @@ and unzip into your `Interface/AddOns/` folder.
 
 ## Roadmap
 
-Stock Clerk hit v0.7.0 (first stable release) with per-character
-shopping lists, the restock loop, confirmed-buy automation, and the
-sidecar activity log. Planned work for v0.8 includes a tooltip
-overhaul, a hints kill switch, and a bag / bank / warband breakdown
-tooltip on the Have column. v1.0 will focus on documentation and
-store-page polish.
+Stock Clerk hit v0.7.0 as the first stable release: per-character
+shopping lists, the restock loop with confirmed-buy automation, and
+the sidecar activity log. v0.8 is a repo-hygiene pass with an open
+slot for a small core feature if one surfaces during dogfooding.
+v1.0 will finalize documentation, screenshots, and the store page.
 
 ## Credits and inspiration
 
