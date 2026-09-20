@@ -113,105 +113,68 @@ local function Build(anchor)
     settingsTitle:SetPoint("TOPLEFT", 12, -10)
     settingsTitle:SetText("|cff98FF98Settings|r")
 
-    -- Auto-purchase toggle
-    local autoCheck = CreateFrame("CheckButton", "StockClerkSidecarAutoCheck", f, "UICheckButtonTemplate")
-    autoCheck:SetPoint("TOPLEFT", 8, -32)
-    autoCheck:SetSize(22, 22)
-    _G[autoCheck:GetName() .. "Text"]:SetText("Auto-purchase (opt in)")
-    _G[autoCheck:GetName() .. "Text"]:SetTextColor(0.9, 0.9, 0.9, 1)
-    f._autoCheck = autoCheck
+    -- v0.7.0-alpha6 AUTO-BUY-NUKE: the auto-purchase checkbox, default
+    -- cap edit, and daily budget edit are gone. Restock is user-driven
+    -- now (WoW's commodity API requires a hardware event per purchase,
+    -- so silent auto was always impossible). No budget = no readout.
 
-    local autoHint = f:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
-    autoHint:SetPoint("TOPLEFT", 30, -54)
-    autoHint:SetPoint("RIGHT", -8, 0)
-    autoHint:SetJustifyH("LEFT")
-    autoHint:SetWordWrap(true)
-    autoHint:SetText("Uncapped items skipped unless a default is set. Esc cancels a running loop.")
-
-    -- Default cap
-    local defCapLabel = f:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-    defCapLabel:SetPoint("TOPLEFT", 12, -84)
-    defCapLabel:SetText("Default cap per unit, gold:")
-
-    local defCapBg = f:CreateTexture(nil, "BACKGROUND")
-    defCapBg:SetColorTexture(P().bgDark[1], P().bgDark[2], P().bgDark[3], 1)
-    defCapBg:SetPoint("TOPLEFT", 12, -102)
-    defCapBg:SetSize(120, 22)
-
-    local defCapEdit = CreateFrame("EditBox", nil, f)
-    defCapEdit:SetFontObject("GameFontHighlight")
-    defCapEdit:SetAutoFocus(false)
-    defCapEdit:SetNumeric(true)
-    defCapEdit:SetMaxLetters(7)
-    defCapEdit:SetJustifyH("LEFT")
-    defCapEdit:SetPoint("TOPLEFT", 16, -104)
-    defCapEdit:SetSize(112, 18)
-    f._defCapEdit = defCapEdit
-
-    -- Budget
-    local budgetLabel = f:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-    budgetLabel:SetPoint("TOPLEFT", 12, -130)
-    budgetLabel:SetText("Auto budget per day, gold:")
-
-    local budgetBg = f:CreateTexture(nil, "BACKGROUND")
-    budgetBg:SetColorTexture(P().bgDark[1], P().bgDark[2], P().bgDark[3], 1)
-    budgetBg:SetPoint("TOPLEFT", 12, -148)
-    budgetBg:SetSize(120, 22)
-
-    local budgetEdit = CreateFrame("EditBox", nil, f)
-    budgetEdit:SetFontObject("GameFontHighlight")
-    budgetEdit:SetAutoFocus(false)
-    budgetEdit:SetNumeric(true)
-    budgetEdit:SetMaxLetters(9)
-    budgetEdit:SetJustifyH("LEFT")
-    budgetEdit:SetPoint("TOPLEFT", 16, -150)
-    budgetEdit:SetSize(112, 18)
-    f._budgetEdit = budgetEdit
-
-    -- Auto-open at AH
+    -- Auto-open at AH (default ON).
     local ahCheck = CreateFrame("CheckButton", "StockClerkSidecarAHCheck", f, "UICheckButtonTemplate")
-    ahCheck:SetPoint("TOPLEFT", 8, -172)
+    ahCheck:SetPoint("TOPLEFT", 8, -32)
     ahCheck:SetSize(22, 22)
     _G[ahCheck:GetName() .. "Text"]:SetText("Auto-open at Auction House")
     _G[ahCheck:GetName() .. "Text"]:SetTextColor(0.9, 0.9, 0.9, 1)
     f._ahCheck = ahCheck
 
-    -- Daily auto-spend readout
-    local spentLabel = f:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
-    spentLabel:SetPoint("TOPLEFT", 12, -200)
-    spentLabel:SetPoint("RIGHT", -8, 0)
-    spentLabel:SetJustifyH("LEFT")
-    spentLabel:SetWordWrap(false)
-    f._spentLabel = spentLabel
+    local ahHint = f:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
+    ahHint:SetPoint("TOPLEFT", 30, -54)
+    ahHint:SetPoint("RIGHT", -8, 0)
+    ahHint:SetJustifyH("LEFT")
+    ahHint:SetWordWrap(true)
+    ahHint:SetText("Pop the shopping list open when you visit the AH.")
+
+    -- Auto-Restock on AH open (default OFF).
+    local arCheck = CreateFrame("CheckButton", "StockClerkSidecarAutoRestockCheck", f, "UICheckButtonTemplate")
+    arCheck:SetPoint("TOPLEFT", 8, -78)
+    arCheck:SetSize(22, 22)
+    _G[arCheck:GetName() .. "Text"]:SetText("Auto-Restock on AH open")
+    _G[arCheck:GetName() .. "Text"]:SetTextColor(0.9, 0.9, 0.9, 1)
+    f._autoRestockCheck = arCheck
+
+    local arHint = f:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
+    arHint:SetPoint("TOPLEFT", 30, -100)
+    arHint:SetPoint("RIGHT", -8, 0)
+    arHint:SetJustifyH("LEFT")
+    arHint:SetWordWrap(true)
+    arHint:SetText("Also start the restock loop when the AH opens (if anything is short).")
 
     -- ---- Divider -----------------------------------------------------
     local divider = f:CreateTexture(nil, "OVERLAY", nil, 6)
     divider:SetColorTexture(0, 0, 0, 1)
     divider:SetHeight(1)
-    divider:SetPoint("TOPLEFT", 8, -226)
-    divider:SetPoint("TOPRIGHT", -8, -226)
+    divider:SetPoint("TOPLEFT", 8, -136)
+    divider:SetPoint("TOPRIGHT", -8, -136)
 
     -- ---- Activity feed section --------------------------------------
     local feedTitle = f:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-    feedTitle:SetPoint("TOPLEFT", 12, -234)
+    feedTitle:SetPoint("TOPLEFT", 12, -144)
     feedTitle:SetText("|cff98FF98Recent Activity|r")
 
     -- "log" hint anchored to feedTitle's right so the user can find the
-    -- full log dump. Phase D wires the /clerk log popup; for now it just
-    -- notes the slash command.
+    -- full log dump.
     local feedHint = f:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
-    feedHint:SetPoint("TOPRIGHT", -12, -238)
+    feedHint:SetPoint("TOPRIGHT", -12, -148)
     feedHint:SetText("|cff6a6a6a/clerk log|r")
 
     -- Scrollframe hosts the feed rows. Simple, no fancy pooling -- the
     -- panel is bounded and refreshes on Emit, so ~30 rows is the ceiling.
     local scrollBg = f:CreateTexture(nil, "BACKGROUND")
     scrollBg:SetColorTexture(P().bgDark[1], P().bgDark[2], P().bgDark[3], 0.6)
-    scrollBg:SetPoint("TOPLEFT", 8, -256)
+    scrollBg:SetPoint("TOPLEFT", 8, -166)
     scrollBg:SetPoint("BOTTOMRIGHT", -8, 8)
 
     local scrollFrame = CreateFrame("ScrollFrame", "StockClerkSidecarScroll", f, "UIPanelScrollFrameTemplate")
-    scrollFrame:SetPoint("TOPLEFT", 10, -258)
+    scrollFrame:SetPoint("TOPLEFT", 10, -168)
     scrollFrame:SetPoint("BOTTOMRIGHT", -28, 10)  -- -28 leaves room for the scrollbar
 
     local feedContent = CreateFrame("Frame", nil, scrollFrame)
@@ -221,54 +184,11 @@ local function Build(anchor)
     f._feedRows = {}
 
     -- ---- Wire behavior ----------------------------------------------
-    autoCheck:SetScript("OnClick", function(self)
-        local s = ADDON.DB:Settings()
-        if self:GetChecked() then
-            -- Bounce the visual check so RequestAutoEnable's popup
-            -- controls the final state; matches SettingsDropdown flow.
-            self:SetChecked(false)
-            if ADDON.SettingsDropdown and ADDON.SettingsDropdown.RequestAutoEnable then
-                ADDON.SettingsDropdown:RequestAutoEnable()
-            else
-                s.autoPurchase = true
-                if ADDON.Log then ADDON.Log:Emit("auto_toggle", nil, { on = true }) end
-            end
-        else
-            s.autoPurchase = false
-            if ADDON.Log then ADDON.Log:Emit("auto_toggle", nil, { on = false }) end
-            Sidecar:Refresh()
-            if ADDON.MainFrame then ADDON.MainFrame:Refresh() end
-        end
-    end)
-
-    local function CommitBudget()
-        local s = ADDON.DB:Settings()
-        local n = tonumber(budgetEdit:GetText())
-        s.autoBudgetGold = (n and n > 0) and n or nil
-        Sidecar:Refresh()
-    end
-    budgetEdit:SetScript("OnEnterPressed", function(self) self:ClearFocus() end)
-    budgetEdit:SetScript("OnEditFocusLost", CommitBudget)
-    budgetEdit:SetScript("OnEscapePressed", function(self) self:ClearFocus() end)
-
-    local function CommitDefCap()
-        local s = ADDON.DB:Settings()
-        local n = tonumber(defCapEdit:GetText() or "")
-        s.defaultMaxCopper = (n and n > 0) and (n * 10000) or nil
-        Sidecar:Refresh()
-        if ADDON.MainFrame and ADDON.MainFrame.Refresh then ADDON.MainFrame:Refresh() end
-    end
-    defCapEdit:SetScript("OnEnterPressed", function(self) self:ClearFocus() end)
-    defCapEdit:SetScript("OnEditFocusLost", CommitDefCap)
-    defCapEdit:SetScript("OnEscapePressed", function(self) self:ClearFocus() end)
-
     ahCheck:SetScript("OnClick", function(self)
         ADDON.DB:Settings().autoOpenAtAH = self:GetChecked() and true or false
     end)
-
-    f:SetScript("OnHide", function()
-        if budgetEdit:HasFocus() then budgetEdit:ClearFocus() end
-        if defCapEdit:HasFocus() then defCapEdit:ClearFocus() end
+    arCheck:SetScript("OnClick", function(self)
+        ADDON.DB:Settings().autoRestock = self:GetChecked() and true or false
     end)
 
     Sidecar.frame = f
@@ -336,33 +256,9 @@ function Sidecar:Refresh()
     local s = ADDON.DB:Settings()
 
     -- Settings widgets
-    f._autoCheck:SetChecked(s.autoPurchase and true or false)
     f._ahCheck:SetChecked(s.autoOpenAtAH and true or false)
-
-    if s.autoBudgetGold then
-        f._budgetEdit:SetText(tostring(s.autoBudgetGold))
-    else
-        f._budgetEdit:SetText("")
-    end
-
-    if s.defaultMaxCopper and s.defaultMaxCopper > 0 then
-        f._defCapEdit:SetText(tostring(math.floor(s.defaultMaxCopper / 10000)))
-    else
-        f._defCapEdit:SetText("")
-    end
-
-    local autoSpendG = math.floor((ADDON.DB:GetDailyAutoSpend() or 0) / 10000)
-    local budgetG    = s.autoBudgetGold
-    local resetAt    = ADDON.DB.GetDailyResetAt and ADDON.DB:GetDailyResetAt() or nil
-    local resetH = ""
-    if resetAt then
-        local secs = math.max(0, resetAt - GetServerTime())
-        resetH = (" (resets in %.1fh)"):format(secs / 3600)
-    end
-    if budgetG then
-        f._spentLabel:SetText(("auto spent today: %dg / %dg%s"):format(autoSpendG, budgetG, resetH))
-    else
-        f._spentLabel:SetText(("auto spent today: %dg%s (no budget set)"):format(autoSpendG, resetH))
+    if f._autoRestockCheck then
+        f._autoRestockCheck:SetChecked(s.autoRestock and true or false)
     end
 
     -- Activity feed. Two-tier model per v0.7 spec:

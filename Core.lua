@@ -12,6 +12,40 @@ local addonName = ...
 local ADDON     = _G[addonName]
 local L         = _G[addonName .. "_L"]
 
+-- ---------------------------------------------------------------------------
+-- ADDON-wide money helper. Renders copper as compact "#g #s #c" text using
+-- letter suffixes instead of Blizzard's coin-icon textures, so users who
+-- swap those textures out with alternative art still see consistent price
+-- rendering inside SC. Lives in Core (early in load order) so every module
+-- can call ADDON.MoneyText(copper) without a nil-guard.
+--
+-- precision:
+--   "gold"   -> rounds to whole gold, e.g. "1219g"
+--   "silver" -> shows silver when non-zero, drops copper, e.g. "1219g 80s"
+--   "copper" -> full precision, e.g. "1219g 80s 66c" (default)
+-- Zero always returns "0g"; sub-gold amounts drop the leading 0g so
+-- "12s 34c" doesn't read as "0g 12s 34c".
+-- ---------------------------------------------------------------------------
+function ADDON.MoneyText(copper, precision)
+    copper = tonumber(copper) or 0
+    if copper <= 0 then return "0g" end
+    precision = precision or "copper"
+    local g = math.floor(copper / 10000)
+    local s = math.floor((copper % 10000) / 100)
+    local c = copper % 100
+    if precision == "gold" then
+        return ("%dg"):format(g)
+    end
+    local parts = {}
+    if g > 0 then parts[#parts + 1] = ("%dg"):format(g) end
+    if s > 0 then parts[#parts + 1] = ("%ds"):format(s) end
+    if precision == "copper" and c > 0 then
+        parts[#parts + 1] = ("%dc"):format(c)
+    end
+    if #parts == 0 then return "0g" end
+    return table.concat(parts, " ")
+end
+
 -- Create the AceAddon object with the mixins we need.
 -- AceConsole gives us self:RegisterChatCommand and self:Print.
 -- AceEvent gives us self:RegisterEvent.
@@ -152,38 +186,60 @@ function StockClerk:OnMailInboxUpdate()
 end
 
 function StockClerk:OnAuctionHouseShow()
-    if not ADDON.DB:Settings().autoOpenAtAH then return end
-
-    -- The AH UI is load-on-demand; force it in so AuctionHouseFrame exists.
-    if not C_AddOns.IsAddOnLoaded("Blizzard_AuctionHouseUI") then
-        C_AddOns.LoadAddOn("Blizzard_AuctionHouseUI")
+    -- Refresh the restock button state -- ahOpen is now true, so the
+    -- button should paint enabled if there's a shortfall. Independent
+    -- of the auto-open setting (button state matters even when SC is
+    -- already open on the user's schedule).
+    if ADDON.MainFrame and ADDON.MainFrame.RefreshRestockBtn then
+        ADDON.MainFrame:RefreshRestockBtn()
     end
 
-    if ADDON.MainFrame then
-        ADDON.MainFrame.openedByAH = true
-        ADDON.MainFrame:Show()
-
-        -- v0.7: dock the main frame to the right edge of the AH so the
-        -- two windows sit side-by-side instead of overlapping. Stash the
-        -- pre-dock position so AH close restores exactly where the user
-        -- last placed the floating window. The dock is transient (frame
-        -- state only, not persisted) -- only the floating anchor is
-        -- saved, so a /reload during an AH session doesn't overwrite it.
-        local f  = ADDON.MainFrame.frame
-        local ah = _G.AuctionHouseFrame
-        if f and ah and ah:IsShown() then
-            local point, _, _, x, y = f:GetPoint()
-            ADDON.MainFrame._preDockPos = { point = point, x = x, y = y }
-            f:ClearAllPoints()
-            f:SetPoint("TOPLEFT", ah, "TOPRIGHT", 1, 0)
-            ADDON.MainFrame._docked = true
-            -- Re-anchor the sidecar if it's open so it hangs off the
-            -- newly docked main frame instead of a stale UIParent anchor.
-            if ADDON.Sidecar and ADDON.Sidecar:IsShown() then
-                ADDON.Sidecar:Toggle()  -- hide
-                ADDON.Sidecar:Toggle()  -- show at new anchor
+    -- Auto-open the SC main frame if the user opted in.
+    if ADDON.DB:Settings().autoOpenAtAH then
+        -- The AH UI is load-on-demand; force it in so AuctionHouseFrame exists.
+        if not C_AddOns.IsAddOnLoaded("Blizzard_AuctionHouseUI") then
+            C_AddOns.LoadAddOn("Blizzard_AuctionHouseUI")
+        end
+        if ADDON.MainFrame then
+            ADDON.MainFrame.openedByAH = true
+            ADDON.MainFrame:Show()
+            if ADDON.MainFrame.DockToAHIfOpen then
+                ADDON.MainFrame:DockToAHIfOpen()
             end
         end
+    else
+        -- SC didn't auto-open, but if the user opened it manually already,
+        -- dock it now so it snaps to the AH edge the same as auto-open does.
+        if ADDON.MainFrame and ADDON.MainFrame.frame
+           and ADDON.MainFrame.frame:IsShown()
+           and ADDON.MainFrame.DockToAHIfOpen then
+            ADDON.MainFrame:DockToAHIfOpen()
+        end
+    end
+
+    -- Auto-restock: opt-in trigger for the restock loop on AH open. Fires
+    -- only when there's a shortfall to work through -- opening the AH with
+    -- everything stocked shouldn't kick off an empty loop that immediately
+    -- terminates. Small delay lets the AH frame settle before the search
+    -- query goes out.
+    if ADDON.DB:Settings().autoRestock then
+        C_Timer.After(0.3, function()
+            if not (AuctionHouseFrame and AuctionHouseFrame:IsShown()) then return end
+            if not ADDON.RestockLoop then return end
+            if ADDON.RestockLoop:IsActive() then return end
+            -- Use Loop:PreviewShortfallCount so this decision uses the SAME
+            -- shortfall math as Loop:BuildQueue -- _EffectiveHave, which
+            -- counts bags + unlooted purchase ledger. Two different calcs
+            -- previously drifted (Core used raw bags, Loop used effective),
+            -- which is how the phantom-restock bug crept in: Core said
+            -- "1 short" from stale ledger, Loop's BuildQueue found the
+            -- same 1 short, and it fired despite the user having looted
+            -- the mail. Same math both sides = same verdict.
+            local shortCount = ADDON.RestockLoop:PreviewShortfallCount()
+            if shortCount > 0 then
+                ADDON.RestockLoop:Start()
+            end
+        end)
     end
 end
 
@@ -191,7 +247,10 @@ function StockClerk:OnAuctionHouseClosed()
     -- Abort any in-flight AH operation before hiding UI.
     if ADDON.AH        then ADDON.AH:OnAuctionHouseClosed() end
     if ADDON.RestockLoop and ADDON.RestockLoop.IsActive and ADDON.RestockLoop:IsActive() then
-        ADDON.RestockLoop:Stop("AH closed, restock loop stopped.")
+        ADDON.RestockLoop:Stop("AH closed")
+    end
+    if ADDON.MainFrame and ADDON.MainFrame.RefreshRestockBtn then
+        ADDON.MainFrame:RefreshRestockBtn()
     end
 
     -- Restore the floating position if we docked to the AH. Do this
@@ -276,42 +335,11 @@ function StockClerk:OnSlashCommand(msg)
         return
     end
 
-    -- QA-10: `/clerk auto` prints current auto-purchase state.
-    -- `/clerk auto on` routes through the SAME click-to-confirm popup
-    -- the settings checkbox uses (SettingsDropdown:RequestAutoEnable) --
-    -- the confirmation is a hard requirement, not a GUI nicety, and the
-    -- slash path previously bypassed it (code-review finding 5).
-    -- `/clerk auto off` remains a one-step power-user shortcut.
-    if cmd == "auto" then
-        local sub = (rest or ""):match("^(%S+)") or ""
-        local s = ADDON.DB:Settings()
-        sub = sub:lower()
-        if sub == "on" then
-            if ADDON.SettingsDropdown and ADDON.SettingsDropdown.RequestAutoEnable then
-                ADDON.SettingsDropdown:RequestAutoEnable()
-            end
-            return
-        elseif sub == "off" then
-            s.autoPurchase = false
-            if ADDON.Log then ADDON.Log:Emit("auto_toggle", nil, { on = false }) end
-            self:Print("Auto-purchase: |cffff8888OFF|r")
-        else
-            local budget = s.autoBudgetGold and (s.autoBudgetGold .. "g") or "not set"
-            local defCapText = "none"
-            if s.defaultMaxCopper and s.defaultMaxCopper > 0 then
-                defCapText = ("%dg"):format(math.floor(s.defaultMaxCopper / 10000))
-            end
-            self:Print(("Auto-purchase: %s  \194\183  budget: %s  \194\183  default cap: %s"):format(
-                s.autoPurchase and "|cff4ade80ON|r" or "|cffff8888OFF|r", budget, defCapText))
-        end
-        if ADDON.SettingsDropdown and ADDON.SettingsDropdown.Refresh then
-            ADDON.SettingsDropdown:Refresh()
-        end
-        if ADDON.MainFrame and ADDON.MainFrame.Refresh then
-            ADDON.MainFrame:Refresh()
-        end
-        return
-    end
+    -- v0.7.0-alpha6 AUTO-BUY-NUKE: `/clerk auto` slash command removed.
+    -- Was the entry point for enabling/disabling silent auto-buys, which
+    -- WoW's commodity API prohibits. Restock is user-driven via the
+    -- toolbar Restock button (Phase B will add a keybind).
+
 
     if cmd == "help" or cmd == "?" then
         self:Print(L.HELP_TITLE)
@@ -320,7 +348,6 @@ function StockClerk:OnSlashCommand(msg)
         self:Print(L.HELP_SEED)
         self:Print(L.HELP_RESET)
         self:Print(L.HELP_DUMP)
-        self:Print(L.HELP_BUDGET)
         self:Print(L.HELP_PENDING)
         return
     end
@@ -360,46 +387,11 @@ function StockClerk:OnSlashCommand(msg)
         return
     end
 
-    -- v0.4: budget inspection + a test-only reset. The reset zeroes
-    -- the current auto-spend bucket and slams resetAt to right now so
-    -- the next successful auto buy starts a fresh day. Intended for
-    -- verifying the reset-aware ledger without waiting for realm
-    -- reset; harmless in normal use.
-    if cmd == "budget" then
-        local sub = (rest or ""):match("^(%S+)") or ""
-        sub = sub:lower()
-        local s = ADDON.DB:Settings()
-        if sub == "reset" then
-            if ADDON.DB.char and ADDON.DB.char.autoSpend then
-                ADDON.DB.char.autoSpend.copper  = 0
-                ADDON.DB.char.autoSpend.resetAt = nil
-            end
-            self:Print("|cff98FF98Budget reset.|r Daily auto-spend zeroed and reset clock rearmed.")
-            if ADDON.SettingsDropdown and ADDON.SettingsDropdown.Refresh then
-                ADDON.SettingsDropdown:Refresh()
-            end
-            return
-        end
-        -- No arg: print current status.
-        local spentG  = math.floor((ADDON.DB:GetDailyAutoSpend() or 0) / 10000)
-        local budgetG = s.autoBudgetGold
-        local leftG   = ADDON.DB:GetDailyAutoBudgetLeft()
-        leftG = leftG and math.floor(leftG / 10000) or nil
-        local resetAt = ADDON.DB.GetDailyResetAt and ADDON.DB:GetDailyResetAt() or nil
-        local resetTxt = "never (no auto spend yet)"
-        if resetAt then
-            local secs = math.max(0, resetAt - GetServerTime())
-            resetTxt = ("%.1fh"):format(secs / 3600)
-        end
-        if budgetG then
-            self:Print(("Daily auto budget: |cff98FF98%dg|r spent %dg (%dg left) · resets in %s"):format(
-                budgetG, spentG, leftG or 0, resetTxt))
-        else
-            self:Print(("Daily auto budget: |cffff8888not set|r · %dg spent today · resets in %s"):format(
-                spentG, resetTxt))
-        end
-        return
-    end
+    -- v0.7.0-alpha6 AUTO-BUY-NUKE: `/clerk budget` removed along with
+    -- the daily-auto-budget subsystem. Was daily-spend inspection +
+    -- test-only reset; no analogue needed since restock is now
+    -- user-driven and the user's gold is their own accounting.
+
 
     -- PT-4: mail-delivery ledger inspection + test-only wipe. Parallels
     -- /clerk budget: prints what's currently pending on-hand confirmation,
@@ -412,12 +404,12 @@ function StockClerk:OnSlashCommand(msg)
             if ADDON.DB and ADDON.DB.char then
                 ADDON.DB.char.pendingBuys = {}
             end
-            self:Print("|cff98FF98Pending ledger cleared.|r Auto-pass gate open.")
+            self:Print("|cff98FF98Pending ledger cleared.|r Mail-in-flight tracking reset.")
             return
         end
         -- No arg: print current pending items.
         if not next(ledger) then
-            self:Print("|cff4ade80Nothing pending.|r Auto-pass gate open.")
+            self:Print("|cff4ade80Nothing pending.|r Mail-in-flight ledger is empty.")
             return
         end
         local now = GetServerTime and GetServerTime() or time()

@@ -1,61 +1,54 @@
 --[[
     Stock Clerk - RestockLoop.lua
-    Walks the shortlist and drives per-item buy prompts.
+    Walks the shortlist and arms per-item purchases for user firing.
+
+    v0.7.0-alpha6 AUTO-BUY-NUKE + Phase B ARMED-MODEL:
+      The "auto" run mode is gone. WoW's C_AuctionHouse commodity API
+      requires a hardware event to advance (StartCommoditiesPurchase
+      is user-input-gated), so silent auto-buys were always impossible.
+
+      What replaces it: an ARMED model. The loop searches the AH for
+      the top-of-queue item, then STOPS in an "armed" state. The
+      restock button on the main frame lights up as a big buy button
+      -- "Buy 5 x Flask of Alchemical Chaos - 250g" -- and one click
+      fires the purchase in the same hardware-event context. The loop
+      auto-advances to the next item and re-arms.
+
+      Capped-out rows (cheapest listing above the user's cap) are
+      auto-skipped silently -- the loop advances without ever arming.
+
+      Uncapped rows arm normally with the armed-flyout's amber
+      'No cap set' badge on its sub line. That badge IS the soft
+      warning -- the user sees they're about to buy at market
+      price before pressing Buy. No per-session ack needed.
 
     Loop lifecycle:
       Start()  - snapshot the current shortfall list IN USER-ARRANGED
-                 LIST ORDER (the list is the priority), draw the auto
-                 mode's allowance from the daily budget, open the AH
-                 search for the first item, hand off to either the buy
-                 dialog (manual) or ExecutePurchase (auto).
-      Advance()- pop the current item, jump to the next. Called after
-                 the user confirms, skips, or a search yields nothing.
-      Stop()   - abort, close any open dialog, clear state, log outcome.
+                 LIST ORDER (the list is the priority), advance to
+                 the first item.
+      Advance()- move to the next queue item, run its search, then
+                 either auto-skip (cap out) or ARM.
+      Fire()   - user pressed the buy button on an armed item. Runs
+                 ExecutePurchase, then auto-advances on completion.
+      Stop()   - abort, clear armed state, log outcome.
 
-    Two run modes:
-      "manual" - every buy waits for a BuyDialog confirmation. Budget is
-                 neither enforced nor tracked here: manual buys are full
-                 user discretion (user decision 2026-09-17 -- budgets
-                 guard against inadvertent autopilot spend only).
-      "auto"   - sanity checks pass -> ExecutePurchase directly, no
-                 per-item confirmation. Requires:
-                   * settings.autoPurchase == true
-                   * settings.autoBudgetGold not nil
-                 Each item MUST have a maxPrice set; uncapped items are
-                 skipped and logged (buy_skip, reason "no cap set").
-
-    Budget semantics (v0.4):
-      The budget is a DAILY allowance aligned to the realm daily reset
-      (C_DateAndTime.GetSecondsUntilDailyReset), persisted in
-      char.autoSpend -- see DB.lua. The loop draws from
-      DB:GetDailyAutoBudgetLeft(), not a fresh per-run amount: pressing
-      Restock twice in one day spends from the same allowance.
-      Priority is the list's own order (sortOrder): the queue walks the
-      shopping list top-down and the daily allowance runs out wherever
-      it runs out. The old two-pass proportional allocator
-      (AllocateBudget / budgetSlice) was deleted -- it computed slices
-      nothing consumed, and tacit list-order priority replaced it.
-
-    Repeat-press safety (v0.5 mail-delivery gate):
-      pendingBuys is now PERSISTED on char.pendingBuys (not session-
-      scoped as it was in v0.4). Once auto has bought anything, the
-      next auto pass is BLOCKED until the ledger is empty. The ledger
-      empties by either:
-        (a) bag-count catch-up via _EffectiveHave -- items landing in
-            bags absorb ledger qty, or
-        (b) mailbox reconciliation via _OnMailInboxUpdate -- opening a
-            mailbox with pending items lets us cross-check against
-            actual mail contents and clamp or delete accordingly.
-      Manual mode is NOT gated (standing rule: manual is full user
-      discretion). Gate exists to force a natural on-hand confirmation
-      checkpoint on the AUTO path only.
+    Repeat-press safety (v0.5 mail-delivery gate, preserved):
+      pendingBuys is PERSISTED on char.pendingBuys. Every successful
+      purchase increments the ledger; _EffectiveHave folds mailed-
+      but-unlooted purchases into the "have" number so BuildQueue
+      correctly returns short=0 for a row already bought this AH
+      session. Reconciles against actual mail contents when the
+      user opens their mailbox (MAIL_INBOX_UPDATE). This is the
+      guardrail that protects users from running several buy loops
+      without ever leaving the AH -- an early testing loophole that
+      let them repeatedly buy items they were in a deficit of because
+      they hadn't fetched their mail. It stays.
 
     Contract:
-      * Only runs while the AH is open. If the user closes the AH we
-        stop cleanly.
-      * Auto never buys uncapped items and never exceeds an item's cap.
-      * Auto never spends past the loop's budget.
-      * Esc key while a loop is active -> Stop("user_esc").
+      * Only runs while the AH is open. Closing the AH stops cleanly.
+      * User confirms every buy via the armed-flyout's Buy button
+        (hardware click required by StartCommoditiesPurchase).
+      * Escape while active -> Stop("user_esc").
 --]]
 
 local addonName = ...
@@ -66,15 +59,18 @@ ADDON.RestockLoop = Loop
 
 Loop.state = {
     active         = false,
-    mode           = "manual",
     queue          = nil,   -- array of shortfall items to process (copies)
     index          = 0,     -- current position in queue
+    armed          = false, -- an item is ready to buy; MainFrame paints buy button
+    armedPlan      = nil,   -- plan object (itemID, planQuantity, plannedSpend, ...)
+    buying         = false, -- ExecutePurchase in flight; guards double-fires
     lastPlan       = nil,
-    budgetCopper   = nil,   -- total budget for this loop, nil = unlimited
-    budgetLeft     = nil,   -- copper remaining after prior purchases
     spentCopper    = 0,     -- copper spent in this loop
     touched        = 0,     -- items successfully bought this loop
     stillShort     = 0,     -- items whose need was not met at loop end
+    skippedCapped  = 0,     -- rows silently skipped for cap-out
+    -- (uncappedAcked removed in v0.7.0 sweep: soft warning now lives in
+    -- the armed-flyout's amber 'No cap set' badge, no per-session ack needed)
 }
 
 local function DebugPrint(...)
@@ -101,11 +97,17 @@ end
 -- "Restock at AH" re-buys everything it just bought.
 --
 -- v0.5 change (PT-4): PERSISTED on char.pendingBuys (was session-only in
--- v0.4). Two reasons: (1) the ledger closes the auto-pass gate, and if a
--- user buys then logs out, the gate must remain closed on next login
--- until on-hand confirmation; (2) mailbox reconciliation needs the
+-- v0.4). Two reasons: (1) the ledger closes the repeat-press gate, and
+-- if a user buys then logs out, the gate must remain closed on next
+-- login until on-hand confirmation; (2) mailbox reconciliation needs the
 -- ledger to survive across sessions because auction mail sits in the
 -- inbox for up to 30 days.
+--
+-- v0.7.0-alpha6 note: the ledger is used by ALL restock passes now
+-- (manual-only mode). "Have" always means _EffectiveHave, never raw
+-- bag count -- this is what stops a user from rebuying the same
+-- items on the second, third, fourth press of the buy bind before
+-- their mail arrives.
 --
 -- Stale-offset hazard is bounded by:
 --   * 30-day GC in DB:Initialize -- entries older than 30 days are
@@ -199,10 +201,9 @@ end
 
 -- ---------------------------------------------------------------------------
 -- Build the shortfall queue in LIST ORDER. The user-arranged shopping
--- list IS the priority (tacit): top of the list gets restocked first,
--- and when the daily budget runs out the bottom of the list waits for
--- tomorrow. No re-sorting here -- the old biggest-shortfall-first
--- ordering would contradict the user's explicit arrangement.
+-- list IS the priority: top of the list gets restocked first. No
+-- re-sorting here -- biggest-shortfall-first would contradict the
+-- user's explicit arrangement.
 -- ---------------------------------------------------------------------------
 local function BuildQueue()
     local q = {}
@@ -227,14 +228,47 @@ local function BuildQueue()
     return q
 end
 
--- DELETED: AllocateBudget. The two-pass proportional allocator computed
--- a per-item budgetSlice that nothing ever consumed (flagged in the
--- v0.2.0..HEAD code review) and its model -- divide the pot up front --
--- was replaced by: daily running-total budget + list-order priority.
-
 -- ---------------------------------------------------------------------------
 -- Start
 -- ---------------------------------------------------------------------------
+-- Public preview: how many items would BuildQueue enqueue right now?
+-- Uses _EffectiveHave (bags + unlooted purchase ledger) so callers
+-- outside RestockLoop don't have to reimplement the same math and
+-- risk drifting from BuildQueue's real behavior. Used by
+-- Core.lua's auto-restock trigger so "would the loop find work?" is
+-- a SINGLE decision point, not two independent shortfall calcs.
+-- Called many times per frame from Refresh, button state, and Core's
+-- auto-restock trigger. To keep debug logs signal-heavy we memoize the
+-- last per-item shortfall snapshot and only log entries whose short
+-- number CHANGED since the previous call. Under normal steady-state
+-- browsing the log stays silent; when something actually moves (bag
+-- update, purchase, mail loot), the log records the delta once.
+Loop._previewLast = Loop._previewLast or {}
+function Loop:PreviewShortfallCount()
+    local n = 0
+    if not ADDON.DB then return 0 end
+    local seen = {}
+    for _, it in ipairs(ADDON.DB:GetSortedItems()) do
+        local have  = self:_EffectiveHave(it.itemID)
+        local short = it.need - have
+        if short > 0 then
+            n = n + 1
+            if ADDON.debug and self._previewLast[it.itemID] ~= short then
+                DebugPrint(("preview: id=%d name=%s need=%d effHave=%d short=%d"):format(
+                    it.itemID, tostring(it.name), it.need, have, short))
+            end
+            seen[it.itemID] = short
+        end
+    end
+    -- Drop stale memo entries so items that transitioned short -> stocked
+    -- log their next transition back to short.
+    for id in pairs(self._previewLast) do
+        if not seen[id] then self._previewLast[id] = nil end
+    end
+    for id, short in pairs(seen) do self._previewLast[id] = short end
+    return n
+end
+
 function Loop:Start()
     if self.state.active then
         DebugPrint("already active, ignoring Start")
@@ -247,71 +281,26 @@ function Loop:Start()
 
     local q = BuildQueue()
     if #q == 0 then
-        Status("|cff4ade80Nothing to restock -- all items at or above target.|r")
+        -- Red, not mint: this is an unexpected refusal, not a success.
+        -- Under normal flow the button is greyed when there's nothing
+        -- to do, so hitting Start with an empty queue means the caller
+        -- (slash command / autoRestock race) is out of sync with the
+        -- current inventory state.
+        Status("|cfff87171Nothing to restock -- every row is at or above its need.|r")
         return
     end
 
-    -- Determine run mode from settings. Auto draws from the DAILY
-    -- allowance: remaining = configured budget minus auto spend since the
-    -- last realm daily reset. Manual runs have no budget plumbing at all.
-    local s = ADDON.DB:Settings()
-    local mode = "manual"
-    local budgetCopper = nil
-    if s.autoPurchase and s.autoBudgetGold and s.autoBudgetGold > 0 then
-        mode = "auto"
-        budgetCopper = s.autoBudgetGold * 10000
-    end
-
-    -- PT-4 mail-delivery gate. Auto passes are blocked while any
-    -- purchase from a prior pass is still awaiting on-hand
-    -- confirmation. We nudge _EffectiveHave on each ledger entry
-    -- first so passive bag-count decay runs -- items already looted
-    -- to bags drop out on the spot. Whatever remains is genuinely
-    -- outstanding. Manual mode is not gated.
-    if mode == "auto" then
-        local ledger = self:_Ledger()
-        if ledger then
-            for id in pairs(ledger) do self:_EffectiveHave(id) end
-            if next(ledger) then
-                local pieces = {}
-                for id, p in pairs(ledger) do
-                    local nm = C_Item.GetItemInfo(id) or ("item:" .. id)
-                    pieces[#pieces + 1] = ("%s x%d"):format(nm, p.qty)
-                end
-                table.sort(pieces)
-                Status(("|cffff8888Auto blocked -- awaiting mail delivery: %s. Loot mail to continue.|r")
-                    :format(table.concat(pieces, ", ")))
-                DebugPrint("gate closed: pending=" .. table.concat(pieces, ", "))
-                if ADDON.Log then
-                    ADDON.Log:Emit("loop_gate_blocked", nil, { pending = pieces })
-                end
-                return
-            end
-        end
-    end
-
-    local dailyLeft = (mode == "auto") and ADDON.DB:GetDailyAutoBudgetLeft() or nil
-
     self.state.active       = true
-    self.state.mode         = mode
     self.state.queue        = q
     self.state.index        = 0
-    self.state.budgetCopper = budgetCopper
-    self.state.budgetLeft   = dailyLeft   -- auto only; nil = unlimited
     self.state.spentCopper  = 0
     self.state.touched      = 0
     self.state.stillShort   = 0
 
-    DebugPrint(("started mode=%s items=%d dailyLeft=%s"):format(
-        mode, #q, tostring(dailyLeft)))
+    DebugPrint(("started items=%d"):format(#q))
 
-    -- QA-13: log the loop start with mode + budget context.
     if ADDON.Log then
-        ADDON.Log:Emit("loop_start", nil, {
-            queueSize    = #q,
-            mode         = mode,
-            budgetCopper = budgetCopper,
-        })
+        ADDON.Log:Emit("loop_start", nil, { queueSize = #q })
     end
 
     self:Advance()
@@ -345,58 +334,37 @@ function Loop:Advance()
         return
     end
 
-    -- Auto-mode: resolve the effective cap. Per-item maxPrice wins;
-    -- if the item is uncapped, fall back to the global defaultMaxCopper
-    -- (PT-1 v0.5 Batch 2). Only if neither is set do we skip.
-    --
-    -- Manual mode is intentionally never affected -- users retain full
-    -- discretion, so the effective-cap fallback is auto-only.
-    local effectiveCap = item.maxPrice
-    local capSource = "item"
-    if not effectiveCap and self.state.mode == "auto" then
-        local s = ADDON.DB and ADDON.DB.Settings and ADDON.DB:Settings()
-        if s and s.defaultMaxCopper and s.defaultMaxCopper > 0 then
-            effectiveCap = s.defaultMaxCopper
-            capSource = "default"
-        end
-    end
+    -- Phase B ARMED-MODEL: search + arm, don't dialog.
+    DebugPrint(("processing id=%d need=%d have=%d short=%d cap=%s"):format(
+        item.itemID, item.need, have, short, tostring(item.maxPrice)))
 
-    if self.state.mode == "auto" and not effectiveCap then
-        DebugPrint(("auto skip id=%d, no cap set"):format(item.itemID))
-        if ADDON.Log then
-            ADDON.Log:Emit("buy_skip", item.itemID, { reason = "no cap set" })
-        end
-        self.state.stillShort = self.state.stillShort + 1
-        self:Advance()
-        return
-    end
-
-    -- Auto-mode budget fast-fail: no DAILY budget left means nothing
-    -- more can happen before the next realm daily reset. Stop cleanly.
-    if self.state.mode == "auto" and self.state.budgetLeft and self.state.budgetLeft <= 0 then
-        DebugPrint("auto stop: daily budget exhausted")
-        -- Count this and every remaining item as stillShort for the
-        -- loop-stop summary.
-        self.state.stillShort = self.state.stillShort + (#self.state.queue - self.state.index + 1)
-        self:Stop("budget exhausted")
-        return
-    end
-
-    DebugPrint(("processing id=%d need=%d have=%d short=%d cap=%s (%s)"):format(
-        item.itemID, item.need, have, short, tostring(effectiveCap), capSource))
-
-    ADDON.AH:BuyUpTo(item.itemID, short, effectiveCap, function(ok, plan)
+    ADDON.AH:BuyUpTo(item.itemID, short, item.maxPrice, function(ok, plan)
         if not self.state.active then return end -- user stopped mid-flight
         if not ok then
-            DebugPrint("search/plan failed: " .. tostring(plan))
-            Status(("|cffff8888%s: %s|r"):format(item.name, tostring(plan)))
-            if ADDON.Log then
-                ADDON.Log:Emit("buy_fail", item.itemID, { reason = tostring(plan) })
+            -- Distinguish cap-out (silent skip) from real failure. AH.lua's
+            -- BuyUpTo returns "cheapest ... is above your Ng cap" for the
+            -- cap-out case; treat that as a benign, silent skip -- the
+            -- whole point of the reshape is that capped-out rows don't
+            -- bother the user. Everything else is logged and status-noted.
+            local reason = tostring(plan)
+            local isCapOut = reason:find("above your") and reason:find("cap")
+            if isCapOut then
+                DebugPrint("cap-out silent skip: " .. reason)
+                self.state.skippedCapped = self.state.skippedCapped + 1
+                if ADDON.Log then
+                    ADDON.Log:Emit("buy_skip", item.itemID, { reason = "cap out (silent)" })
+                end
+            else
+                DebugPrint("search/plan failed: " .. reason)
+                Status(("|cffff8888%s: %s|r"):format(item.name, reason))
+                if ADDON.Log then
+                    ADDON.Log:Emit("buy_fail", item.itemID, { reason = reason })
+                end
+                self.state.stillShort = self.state.stillShort + 1
             end
-            self.state.stillShort = self.state.stillShort + 1
-            -- On failure we still auto-advance -- one bad item shouldn't
-            -- stall the queue.
-            C_Timer.After(1.0, function() if self.state.active then self:Advance() end end)
+            C_Timer.After(isCapOut and 0.15 or 1.0, function()
+                if self.state.active then self:Advance() end
+            end)
             return
         end
 
@@ -404,77 +372,96 @@ function Loop:Advance()
         plan.name = item.name
         plan.have = have
         plan.need = item.need
-        plan.maxPrice   = effectiveCap
-        plan.capSource  = capSource -- "item" or "default" -- BuyDialog can
-                                    -- surface which cap the plan used
+        plan.maxPrice = item.maxPrice
+        plan.capSource = "item"
 
-        -- ------ Auto-mode sanity checks (QA-10) --------------------------
-        if self.state.mode == "auto" then
-            -- Qty sanity: refuse anything more than 3x need, per NOTES.md.
-            if plan.planQuantity > 3 * item.need then
-                DebugPrint(("auto refuse id=%d qty=%d >3x need=%d"):format(
-                    item.itemID, plan.planQuantity, item.need))
-                if ADDON.Log then
-                    ADDON.Log:Emit("auto_refuse", item.itemID, {
-                        reason              = "qty sanity (>3x need)",
-                        qty                 = plan.planQuantity,
-                        plannedSpendCopper  = plan.plannedSpend,
-                    })
-                end
-                self.state.stillShort = self.state.stillShort + 1
-                C_Timer.After(0.2, function() if self.state.active then self:Advance() end end)
-                return
-            end
-
-            -- Budget: refuse if this plan exceeds remaining DAILY
-            -- budget (auto only; manual never reaches this branch).
-            if self.state.budgetLeft and plan.plannedSpend > self.state.budgetLeft then
-                DebugPrint(("auto refuse id=%d spend=%d > left=%d"):format(
-                    item.itemID, plan.plannedSpend, self.state.budgetLeft))
-                if ADDON.Log then
-                    ADDON.Log:Emit("auto_refuse", item.itemID, {
-                        reason             = "over daily budget",
-                        qty                = plan.planQuantity,
-                        plannedSpendCopper = plan.plannedSpend,
-                    })
-                end
-                self.state.stillShort = self.state.stillShort + 1
-                C_Timer.After(0.2, function() if self.state.active then self:Advance() end end)
-                return
-            end
-
-            -- All checks passed: execute directly, no user confirmation.
-            if ADDON.Log then
-                ADDON.Log:Emit("buy_attempt", item.itemID, {
-                    qty                = plan.planQuantity,
-                    plannedSpendCopper = plan.plannedSpend,
-                    worstUnitCopper    = plan.worstUnitPrice,
-                })
-            end
-            self:_OnConfirm(plan)
-            return
-        end
-
-        -- ------ Manual mode: hand off to BuyDialog (unchanged) -----------
-        ADDON.BuyDialog:Show(plan, {
-            onConfirm = function()
-                if ADDON.Log then
-                    ADDON.Log:Emit("buy_attempt", item.itemID, {
-                        qty                = plan.planQuantity,
-                        plannedSpendCopper = plan.plannedSpend,
-                        worstUnitCopper    = plan.worstUnitPrice,
-                    })
-                end
-                self:_OnConfirm(plan)
-            end,
-            onSkip    = function() self:_OnSkip(plan) end,
-            onStop    = function() self:Stop("user_stop") end,
-        })
+        -- Uncapped items arm normally: the armed-flyout already flags
+        -- 'No cap set' in amber on the sub line, which IS the soft warning
+        -- for buying at market price. Previously we short-circuited to a
+        -- StaticPopup modal via BuyDialog on the first uncapped row of an
+        -- AH session, but that was a legacy Phase-A pattern that fought
+        -- the flyout instead of leveraging it (multi-source-of-truth for
+        -- the same 'confirm this buy' decision). Consolidated to the
+        -- flyout in v0.7.0 release sweep.
+        self:_Arm(plan)
     end)
 end
 
 -- ---------------------------------------------------------------------------
--- Confirmation path (shared by manual + auto)
+-- Arm the loop on a plan. Post-feedback rework: the confirm/skip UI lives
+-- in MainFrame's ConfirmToast flyout above the restock button, NOT on the
+-- restock button itself. The toast has a 3s arm delay on its Buy button
+-- so accidental clicks are impossible during arm.
+-- Fire() is invoked from the toast's Buy OnClick -- that click is the
+-- hardware event that lets StartCommoditiesPurchase go through.
+-- ---------------------------------------------------------------------------
+function Loop:_Arm(plan)
+    self.state.armed     = true
+    self.state.armedPlan = plan
+    DebugPrint(("armed id=%d qty=%d spend=%d"):format(
+        plan.itemID, plan.planQuantity, plan.plannedSpend))
+    Status(("Ready: %d x %s for %s -- confirm in the buy flyout"):format(
+        plan.planQuantity, plan.name, ADDON.MoneyText(plan.plannedSpend)))
+    if ADDON.MainFrame then
+        if ADDON.MainFrame.RefreshRestockBtn then
+            ADDON.MainFrame:RefreshRestockBtn()
+        end
+        if ADDON.MainFrame.ShowArmedToast then
+            ADDON.MainFrame:ShowArmedToast(plan, {
+                onBuy  = function() self:Fire() end,
+                onSkip = function() self:_OnSkip(plan) end,
+                onStop = function() self:Stop("user_stop") end,
+            })
+        end
+    end
+end
+
+-- ---------------------------------------------------------------------------
+-- Fire: user clicked the armed Buy button on the toast. MUST be called
+-- from a hardware-event context (the toast Buy OnClick). Consumes armed
+-- state, kicks ExecutePurchase.
+-- ---------------------------------------------------------------------------
+function Loop:Fire()
+    if not self.state.active then return end
+    if not self.state.armed then
+        DebugPrint("Fire called but not armed, ignoring")
+        return
+    end
+    if self.state.buying then
+        DebugPrint("Fire called mid-buy, ignoring (guards double-click)")
+        return
+    end
+    local plan = self.state.armedPlan
+    if not plan then return end
+
+    self.state.armed  = false
+    self.state.buying = true
+
+    if ADDON.Log then
+        ADDON.Log:Emit("buy_attempt", plan.itemID, {
+            qty                = plan.planQuantity,
+            plannedSpendCopper = plan.plannedSpend,
+            worstUnitCopper    = plan.worstUnitPrice,
+        })
+    end
+    self:_OnConfirm(plan)
+    if ADDON.MainFrame then
+        if ADDON.MainFrame.HideToast then ADDON.MainFrame:HideToast() end
+        if ADDON.MainFrame.RefreshRestockBtn then
+            ADDON.MainFrame:RefreshRestockBtn()
+        end
+    end
+end
+
+-- Test-only convenience for the armed-plan getter. MainFrame uses this to
+-- paint the button label.
+function Loop:GetArmedPlan()
+    if self.state.armed then return self.state.armedPlan end
+    return nil
+end
+
+-- ---------------------------------------------------------------------------
+-- Confirmation path
 -- ---------------------------------------------------------------------------
 function Loop:_OnConfirm(plan)
     if not self.state.active then return end
@@ -483,25 +470,17 @@ function Loop:_OnConfirm(plan)
     Status(("Buying %d x %s..."):format(plan.planQuantity, plan.name))
     ADDON.AH:ExecutePurchase(plan.itemID, plan.planQuantity, plan.plannedSpend, function(ok, result)
         if not self.state.active then return end
+        self.state.buying = false
         if ok then
             local spent = plan.plannedSpend or 0
             self.state.spentCopper = self.state.spentCopper + spent
             self.state.touched     = self.state.touched + 1
-            if self.state.budgetLeft then
-                self.state.budgetLeft = math.max(0, self.state.budgetLeft - spent)
-            end
-            -- Persist against the DAILY allowance. AUTO ONLY: manual buys
-            -- are outside the budget ledger entirely (see DB.lua
-            -- semantics block).
-            if self.state.mode == "auto" then
-                ADDON.DB:AddDailyAutoSpend(spent)
-            end
-            -- Record in the session ledger BEFORE logging/status so the
-            -- very next shortfall computation (next Advance, or the next
-            -- manual Restock press) sees these units as provisionally
-            -- owned. Items arrive by mail; bags-only counts won't show
-            -- them until the user loots, and the ledger decays away as
-            -- soon as they do.
+            -- Record in the ledger BEFORE logging/status so the very
+            -- next shortfall computation (next Advance, or the next
+            -- Restock press) sees these units as provisionally owned.
+            -- Items arrive by mail; bags-only counts won't show them
+            -- until the user loots, and the ledger decays away as
+            -- soon as they do. This is the repeat-press safeguard.
             self:_RecordPurchase(plan.itemID, plan.planQuantity)
             if ADDON.Log then
                 ADDON.Log:Emit("buy_success", plan.itemID, {
@@ -510,13 +489,16 @@ function Loop:_OnConfirm(plan)
                 })
             end
             Status(("|cff4ade80Bought %d %s for %s (via mail)|r"):format(
-                plan.planQuantity, plan.name, GetCoinTextureString(spent)))
+                plan.planQuantity, plan.name, ADDON.MoneyText(spent)))
         else
             if ADDON.Log then
                 ADDON.Log:Emit("buy_fail", plan.itemID, { reason = tostring(result) })
             end
             self.state.stillShort = self.state.stillShort + 1
             Status(("|cffff8888Buy failed for %s: %s|r"):format(plan.name, tostring(result)))
+        end
+        if ADDON.MainFrame and ADDON.MainFrame.RefreshRestockBtn then
+            ADDON.MainFrame:RefreshRestockBtn()
         end
         -- Auto-advance regardless of outcome. Give the game a beat to
         -- refresh inventory counts before the next search.
@@ -531,6 +513,12 @@ function Loop:_OnSkip(plan)
         ADDON.Log:Emit("buy_skip", plan.itemID, { reason = "user skipped" })
     end
     Status(("Skipped %s"):format(plan.name))
+    -- Clear armed state so the next Advance re-searches and re-arms cleanly.
+    self.state.armed     = false
+    self.state.armedPlan = nil
+    if ADDON.MainFrame and ADDON.MainFrame.HideToast then
+        ADDON.MainFrame:HideToast()
+    end
     C_Timer.After(0.2, function() if self.state.active then self:Advance() end end)
 end
 
@@ -539,11 +527,10 @@ end
 --
 -- `reason` is a short machine-y string that becomes payload.reason on
 -- the loop_stop log entry. Callers use:
---   "done"              - queue exhausted normally
---   "budget exhausted"  - auto mode ran out of budget mid-queue
---   "AH closed"         - AH window closed while active
---   "user_esc"          - user pressed Escape while active
---   "user_stop"         - user clicked Stop in the manual buy dialog
+--   "done"       - queue exhausted normally
+--   "AH closed"  - AH window closed while active
+--   "user_esc"   - user pressed Escape while active
+--   "user_stop"  - user clicked Stop in the manual buy dialog
 -- ---------------------------------------------------------------------------
 function Loop:Stop(reason)
     if not self.state.active then return end
@@ -551,66 +538,105 @@ function Loop:Stop(reason)
     DebugPrint("stopping loop: " .. reason)
 
     -- Snapshot for the log emit; state is cleared below.
-    local spent      = self.state.spentCopper or 0
-    local touched    = self.state.touched     or 0
-    local stillShort = self.state.stillShort  or 0
+    local spent         = self.state.spentCopper   or 0
+    local touched       = self.state.touched       or 0
+    local stillShort    = self.state.stillShort    or 0
+    local skippedCapped = self.state.skippedCapped or 0
     if ADDON.Log then
         ADDON.Log:Emit("loop_stop", nil, {
-            reason      = reason,
-            spentCopper = spent,
-            touched     = touched,
-            stillShort  = stillShort,
+            reason        = reason,
+            spentCopper   = spent,
+            touched       = touched,
+            stillShort    = stillShort,
+            skippedCapped = skippedCapped,
         })
     end
 
-    self.state.active       = false
-    self.state.queue        = nil
-    self.state.index        = 0
-    self.state.lastPlan     = nil
-    self.state.budgetCopper = nil
-    self.state.budgetLeft   = nil
-    self.state.spentCopper  = 0
-    self.state.touched      = 0
-    self.state.stillShort   = 0
-    if ADDON.BuyDialog and ADDON.BuyDialog.Hide then
-        ADDON.BuyDialog:Hide()
+    self.state.active        = false
+    self.state.queue         = nil
+    self.state.index         = 0
+    self.state.armed         = false
+    self.state.armedPlan     = nil
+    self.state.buying        = false
+    self.state.lastPlan      = nil
+    self.state.spentCopper   = 0
+    self.state.touched       = 0
+    self.state.stillShort    = 0
+    self.state.skippedCapped = 0
+    -- (uncappedAcked field removed in v0.7.0 sweep -- see state init above)
+    -- reset by Core.lua on AUCTION_HOUSE_CLOSED. A user starting a new
+    -- restock pass in the same AH visit shouldn't re-see the warning.
+    -- (BuyDialog removed in v0.7.0 sweep; nothing to hide here)
+    if ADDON.MainFrame then
+        -- Hide any armed toast on stop; the summary toast below replaces it.
+        if ADDON.MainFrame._toastMode == "armed" and ADDON.MainFrame.HideToast then
+            ADDON.MainFrame:HideToast()
+        end
+        if ADDON.MainFrame.RefreshRestockBtn then
+            ADDON.MainFrame:RefreshRestockBtn()
+        end
     end
 
-    -- One human-readable statusbar summary. Kept short; the sidecar
-    -- has the full breakdown. Auto runs append the daily allowance
-    -- readout (the number the user actually cares about now) plus,
-    -- if the ledger is non-empty at loop end, a mail-check nudge --
-    -- the next auto pass will be gated until those items arrive.
-    local daily = ""
-    if self.state.mode == "auto" and ADDON.DB and ADDON.DB.GetDailyAutoBudgetLeft then
-        local left = ADDON.DB:GetDailyAutoBudgetLeft()
-        if left then
-            daily = (" %s left today."):format(GetCoinTextureString(left))
-        end
-    end
+    -- If the ledger is non-empty at loop end, nudge the user to loot
+    -- their mail -- this is the "you already bought these, next
+    -- press won't re-buy them because we're tracking mail-in-flight"
+    -- transparency message.
     local mailNudge = ""
-    if self.state.mode == "auto" then
-        local ledger = self:_Ledger()
-        if ledger and next(ledger) then
-            mailNudge = " |cffff8888Check mail before next auto pass.|r"
-        end
+    local ledger = self:_Ledger()
+    if ledger and next(ledger) then
+        mailNudge = " (mail pending)"
     end
-    local msg
+
+    -- Post-feedback session-summary toast. The confirm flyout repurposes
+    -- for the recap: two lines + [Close]. Status line gets a shorter
+    -- version so the activity log still records the outcome.
+    local title, sub
+    local skipTxt = ""
+    if skippedCapped > 0 then
+        skipTxt = (("  \194\183  %d skipped over cap"):format(skippedCapped))
+    end
+    -- Total items the loop touched at ALL (bought + still-short + capped-skip).
+    -- When totalItems == 1, the sub line ('1/1 items resolved') is redundant
+    -- with the title -- suppress it. Multi-item loops keep the recap.
+    local totalItems = touched + stillShort + skippedCapped
+    local moneyText  = ADDON.MoneyText(spent)
+
     if reason == "done" then
-        msg = ("|cff4ade80Loop done. Bought %d, spent %s.%s|r%s"):format(
-            touched, GetCoinTextureString(spent), daily, mailNudge)
-    elseif reason == "budget exhausted" then
-        msg = ("|cffffaa00Daily budget exhausted. Bought %d, %d still short until reset.|r%s"):format(
-            touched, stillShort, mailNudge)
-    elseif reason == "user_esc" then
-        msg = ("Loop stopped (Escape). Bought %d, spent %s.%s%s"):format(
-            touched, GetCoinTextureString(spent), daily, mailNudge)
+        title = ("|cff4ade80Restock complete|r  \194\183  bought %d for %s"):format(touched, moneyText)
+        if totalItems > 1 then
+            sub = ("%d/%d items resolved%s%s"):format(touched, totalItems, skipTxt, mailNudge)
+        else
+            -- Single item: keep only the mail-pending nudge if present.
+            sub = (mailNudge ~= "") and mailNudge:gsub("^%s+", "") or ""
+        end
+    elseif reason == "user_esc" or reason == "user_stop" then
+        title = ("Stopped  \194\183  bought %d for %s"):format(touched, moneyText)
+        sub   = ("Loop halted with %d left%s%s"):format(stillShort, skipTxt, mailNudge)
+    elseif reason == "AH closed" then
+        title = ("AH closed  \194\183  bought %d for %s"):format(touched, moneyText)
+        sub   = ("Reopen the AH to continue%s%s"):format(skipTxt, mailNudge)
     else
-        msg = ("Loop stopped (%s).%s"):format(reason, mailNudge)
+        title = ("Stopped (%s)"):format(reason)
+        sub   = ("bought %d for %s%s%s"):format(touched, moneyText, skipTxt, mailNudge)
     end
-    Status(msg)
+    Status(title)
+    if ADDON.MainFrame and ADDON.MainFrame.ShowSummaryToast then
+        ADDON.MainFrame:ShowSummaryToast({ title = title, sub = sub })
+    end
 end
 
 function Loop:IsActive()
     return self.state.active == true
 end
+
+function Loop:IsArmed()
+    return self.state.active and self.state.armed == true
+end
+
+function Loop:IsBuying()
+    return self.state.buying == true
+end
+
+-- (ResetSessionFlags removed in v0.7.0 sweep -- the uncappedAcked flag
+-- it managed is gone. If new AH-session flags ever need per-visit
+-- resets, reintroduce here.)

@@ -45,6 +45,7 @@ manual-changelog:
 ignore:
   - README.md
   - Dev
+  - notes
   - .assets
   - .github
   - .gitignore

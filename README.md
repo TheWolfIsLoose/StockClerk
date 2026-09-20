@@ -54,6 +54,8 @@ to get more?"*
 - `/clerk help` — command list
 - `/clerk reset` — wipe this character's list
 - `/clerk dump` — print current list to chat
+- `/clerk log` — open the full activity log popup
+- `/clerk debug on|off` — toggle diagnostic chat output
 
 ## Installation
 
@@ -67,11 +69,12 @@ and unzip into your `Interface/AddOns/` folder.
 
 ## Roadmap
 
-Stock Clerk is early days. Planned work includes opt-in full auto-
-purchase with per-session spend caps and proportional budget
-allocation, a last-known-price column, sidecar activity log with an
-audit trail, and per-item historical price sparklines. See
-`Dev/NOTES.md` in the repo for the full backlog.
+Stock Clerk hit v0.7.0 (first stable release) with per-character
+shopping lists, the restock loop, confirmed-buy automation, and the
+sidecar activity log. Planned work for v0.8 includes a tooltip
+overhaul, a hints kill switch, and a bag / bank / warband breakdown
+tooltip on the Have column. v1.0 will focus on documentation and
+store-page polish.
 
 ## Credits and inspiration
 

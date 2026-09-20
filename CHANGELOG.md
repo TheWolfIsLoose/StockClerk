@@ -1,5 +1,135 @@
 # Stock Clerk changelog
 
+## v0.7.0
+
+First stable release on the v0.7 track. Consolidates six months of
+iteration across five alphas and seventeen preview builds into a
+coherent single-window restock addon with confirmed-buy automation,
+keyboard-first entry, and per-character shopping lists.
+
+### Compressed main window
+
+Main frame shrunk from 680x500 to 420x400 so Stock Clerk fits
+comfortably alongside the Auction House and the game world without
+eating half the screen. Every column, header, and inline editor was
+rebuilt for the tighter footprint. Numeric columns now right-align
+on their own edges (accounting-style) with headers matching, so
+values like `41g` / `34g` and counts like `30` / `314` stack cleanly
+for at-a-glance scanning.
+
+### Sidecar panel: settings + activity log
+
+Right-docked panel replaces the old settings dropdown. Contains:
+
+- **Auto-open at Auction House** toggle — pops the shopping list open
+  when you visit the AH.
+- **Auto-Restock on AH open** toggle — starts the restock loop
+  automatically when the AH opens if anything is short.
+- **Recent Activity** log with a `/clerk log` link that opens a
+  larger scrollable popup for full session review.
+
+Sidecar hides with the main window (previously it orphaned).
+
+### Restock loop with armed-flyout confirmation
+
+A `Restock at AH` button runs a batched restock pass across every
+short item on your list, respecting each item's price cap. Each buy
+surfaces an armed flyout below the main window showing:
+
+- What's about to be bought (`30 x Thalassian Phoenix Oil`)
+- Total cost and per-unit cap (`1219g 80s · Cap 41g / unit`), OR
+  amber `No cap set` warning for uncapped items
+- `Buy` / `Skip` buttons with a 3-second arm delay so accidental
+  clicks are impossible during the arming animation
+
+The old StaticPopup confirmation modal is retired: the flyout's
+amber `No cap set` badge IS the soft warning for uncapped buys.
+Capped-out rows (cheapest listing above your cap) auto-skip
+silently. When the loop finishes, a summary flyout shows what was
+bought, total spend, mail-pending count, and a `Close (Ns)`
+countdown.
+
+### Currency letter suffixes (g/s/c)
+
+Gold amounts render as `1219g 80s 66c` throughout the addon instead
+of Blizzard's coin icon textures. Users who swap coin textures with
+alternative art still see consistent price rendering. Precision
+adapts to context: whole gold in tight columns, silver in the Seen
+column, full copper in tooltips.
+
+### Full keyboard-only entry
+
+Tab / Shift+Tab walks the entire editable surface in row-major
+order: Item ID → Target → Price Cap → Add Item → row 1 Need → row 1
+Cap → row 2 Need → wrap. Inline edits commit on Enter, Tab, or
+click-away. Escape cancels without committing.
+
+### Left-edge status bar + Have text color
+
+Each row shows a 2px vertical accent bar on its left edge (mint
+when stocked, red when short) plus color-coded Have text. Dual-
+channel encoding means colorblind users get a reliable positional
+signal, everyone else gets redundant color across two spots.
+
+### Mail-pending ledger (repeat-press safety)
+
+Every successful purchase is tracked in a per-character ledger
+that folds mailed-but-unlooted purchases into the effective have
+count. So if you buy 30 items, close the AH, don't loot the mail,
+and reopen the AH, the loop correctly sees you're stocked and
+doesn't re-buy. The ledger reconciles against actual mail
+contents on `MAIL_INBOX_UPDATE` and garbage-collects entries older
+than 30 days.
+
+### Auction House integration
+
+Open the AH, click a row in Stock Clerk, and it searches for that
+item. Search results feed a Last Seen column showing the cheapest
+unit price and how long ago it was recorded. Stale prices dim
+after the configured TTL (24h default).
+
+### Bank / warband / reagent bank visibility
+
+Items sitting in bank, warband, or reagent bank appear as a dim
+`(+N)` annotation next to the primary bags-only Have count, so you
+always know where your stock actually lives.
+
+### Two-tier activity log
+
+Every loop event (start, stop, buy attempt, buy result) is logged
+both to the Sidecar's condensed Recent Activity feed and to a
+full popup accessible via `/clerk log`.
+
+### Commands
+
+- `/clerk` — open the main window (aliases: `/sc`, `/stock`)
+- `/clerk help` — command list
+- `/clerk reset` — wipe this character's list
+- `/clerk dump` — print current list to chat
+- `/clerk log` — open the full activity popup
+- `/clerk debug on|off` — toggle diagnostic chat output (log only
+  emits on state changes to avoid spam)
+
+### Under the hood
+
+- Single-source-of-truth shortfall computation via
+  `RestockLoop:PreviewShortfallCount()` — button state, footer
+  status, and Core's auto-restock trigger all route through the
+  same effective-have math that BuildQueue uses. Fixes an early
+  alpha bug where three independent shortfall calcs could disagree
+  and cause a phantom restock of already-stocked items.
+- MainFrame:Refresh coalesces multiple triggers in the same frame
+  into a single row-list rebuild.
+- LibSharedMedia-free, LibStub-only dependency stack. No external
+  library requirements at install time.
+
+---
+
+## Pre-1.0 history
+
+The entries below cover each alpha as it shipped. Preserved as
+record; new users only need the v0.7.0 summary above.
+
 ## v0.7.0-alpha4
 
 Alpha3 field-testing feedback pass. Five bug fixes plus a status-

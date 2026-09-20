@@ -142,6 +142,16 @@ local function Build()
     f:SetScript("OnDragStop",  f.StopMovingOrSizing)
     f:Hide()
 
+    -- v0.7.0-alpha5 LOG-ESCAPE-FIX: register the popup with Blizzard's
+    -- UISpecialFrames so Escape closes it even when no editbox has focus.
+    -- The existing edit:OnEscapePressed only fires when the read-only
+    -- transcript editbox has keyboard focus, which is not the common case
+    -- for `/clerk log` (opened to read, not to edit) -- so Escape
+    -- previously fell through and the log window ignored it, breaking the
+    -- consistent Escape-closes-my-window pattern set by the settings
+    -- window and main frame.
+    tinsert(UISpecialFrames, "StockClerkLogPopup")
+
     -- Bg + black frame edges
     local bg = f:CreateTexture(nil, "BACKGROUND", nil, -8)
     bg:SetAllPoints()
