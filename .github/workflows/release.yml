@@ -1,0 +1,90 @@
+name: Release
+
+# Fires on every pushed tag. Handles two things automatically:
+#   1. Packages the addon (BigWigsMods packager, same tool CurseForge
+#      uses internally) so the zip attached to the GitHub Release is
+#      structurally identical to what CF publishes.
+#   2. Creates the GitHub Release itself with notes drawn from the
+#      matching CHANGELOG section.
+#
+# Prereleases: tags like v0.8.0-alpha1 or v0.8.0-preview3 are marked
+# as prereleases automatically. Stable tags like v1.0.0 are marked
+# as latest.
+#
+# Not wired to publish to CurseForge -- that path is handled by the
+# GitHub -> CurseForge webhook already configured on this repo. This
+# workflow only exists to keep GitHub Releases in sync with git tags.
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repo
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Extract release notes from CHANGELOG
+        id: notes
+        run: |
+          TAG="${GITHUB_REF_NAME}"
+          echo "Building release notes for tag: $TAG"
+          # Strip leading 'v' for CHANGELOG section header match.
+          SECTION="${TAG#v}"
+          # Pull the section between `## vX.Y.Z` and the next `## ` or `---`.
+          awk -v section="$SECTION" '
+            $0 == "## v" section {flag=1; next}
+            /^## |^---/ {if (flag) exit}
+            flag {print}
+          ' CHANGELOG.md > /tmp/release-notes.md
+          if [ ! -s /tmp/release-notes.md ]; then
+            echo "No CHANGELOG entry found for $TAG; using tag message."
+            git tag -l --format='%(contents)' "$TAG" > /tmp/release-notes.md
+          fi
+          head -5 /tmp/release-notes.md
+
+      - name: Detect prerelease
+        id: prerelease
+        run: |
+          TAG="${GITHUB_REF_NAME}"
+          if [[ "$TAG" == *"-alpha"* || "$TAG" == *"-beta"* || "$TAG" == *"-preview"* || "$TAG" == *"-rc"* ]]; then
+            echo "prerelease=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "prerelease=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Package addon (BigWigsMods packager)
+        # Packages the addon following .pkgmeta rules, producing a zip
+        # in .release/ that matches CurseForge's own build output.
+        uses: BigWigsMods/packager@master
+        with:
+          # -d: no CurseForge upload (webhook handles that)
+          # -w: no WoWInterface upload
+          # -a: no Wago upload (no Wago project configured)
+          args: -d -w -a
+
+      - name: Create GitHub Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          TAG="${GITHUB_REF_NAME}"
+          PRERELEASE_FLAG=""
+          if [ "${{ steps.prerelease.outputs.prerelease }}" = "true" ]; then
+            PRERELEASE_FLAG="--prerelease"
+          fi
+          # Attach any zip the packager produced (usually a single file
+          # in .release/).
+          ZIP_FILES=(.release/*.zip)
+          gh release create "$TAG" \
+            "${ZIP_FILES[@]}" \
+            --title "Stock Clerk $TAG" \
+            --notes-file /tmp/release-notes.md \
+            $PRERELEASE_FLAG
