@@ -99,6 +99,11 @@ local Palette = {
     -- outshine the brand mint)
     ok            = { 0.30, 0.80, 0.40, 1.00 },
     short         = { 0.90, 0.30, 0.30, 1.00 },
+    -- Row separator: 1px muted dark gray line drawn along each row's
+    -- bottom edge. Distinct from Palette.border (pure black, used for
+    -- window/cell chrome) so it reads as a between-rows divider rather
+    -- than a hard boundary.
+    rowSeparator  = { 0.15, 0.15, 0.15, 1.00 },
 }
 
 local BORDER_SIZE = 1
@@ -380,6 +385,17 @@ local function BuildRow(row)
     row.accent:SetPoint("TOPLEFT",    row, "TOPLEFT",     0, -1)
     row.accent:SetPoint("BOTTOMLEFT", row, "BOTTOMLEFT",  0,  1)
     row.accent:Hide()  -- shown only when we have a definite short/ok call
+
+    -- Row separator: 1px muted gray line along the row's bottom edge,
+    -- full width. Gives the shopping list visual rhythm between rows
+    -- without needing per-row backgrounds or heavy dividers. Drawn on
+    -- BACKGROUND sublevel 0 so hover washes and cell fills paint over
+    -- it cleanly.
+    row.separator = row:CreateTexture(nil, "BACKGROUND", nil, 0)
+    row.separator:SetColorTexture(unpack(Palette.rowSeparator))
+    row.separator:SetHeight(1)
+    row.separator:SetPoint("BOTTOMLEFT",  row, "BOTTOMLEFT",  0, 0)
+    row.separator:SetPoint("BOTTOMRIGHT", row, "BOTTOMRIGHT", 0, 0)
 
     -- Grip handle (v0.4). Three dim horizontal lines, EnableMouse'd for
     -- the drag-to-reorder path. Sits at the far left; icon & name shift

@@ -4,6 +4,12 @@
 
 Cleanup pass on the road to 1.0. No new features.
 
+### Shopping list row separator
+
+Each row in the shopping list is now separated from the next by a
+1px muted-gray line spanning the full row width. Gives the list
+visual rhythm without competing with row content.
+
 ### Bag/warband-open hitch eliminated
 
 Opening bags or the warband bank no longer triggers a visible hitch
