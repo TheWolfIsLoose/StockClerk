@@ -4,6 +4,29 @@
 
 Cleanup pass on the road to 1.0. No new features.
 
+### Bank/warband guardrail on Restock at AH
+
+Before committing gold on an item you already own copies of in bank
+or warband bank, the buy flyout now says so. When the restock loop
+queues an item with a non-empty stash, the flyout displays:
+
+* `You have N in bank (this character)` — shown when the character
+  bank (including reagent bank) has any copies
+* `You have N in warband bank (account-wide)` — shown when the
+  account warband bank has any copies
+
+Both lines are amber-tinted to match the existing "No cap set"
+warning idiom. The flyout's border also pulses amber-to-mint on a
+0.5s cadence while the stash warning is active, drawing your eye to
+the warning before the Buy button unlocks.
+
+The 3-second Buy arm delay is unchanged. Skip advances to the next
+item exactly as it did before; there's no third option for retrieving
+from the bank — that's on you.
+
+Items with no stashed copies show the flyout exactly the same as
+prior versions (no stash lines, no pulse).
+
 ### Shopping list row separator
 
 Each row in the shopping list is now separated from the next by a

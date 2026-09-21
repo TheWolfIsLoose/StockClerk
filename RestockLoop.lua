@@ -373,6 +373,25 @@ function Loop:Advance()
         plan.maxPrice = item.maxPrice
         plan.capSource = "item"
 
+        -- Bank/warband guardrail (v0.8): attach a stash breakdown to
+        -- the plan so the flyout can warn the user before spending gold
+        -- on something they already own (elsewhere). Bags is folded out
+        -- of the breakdown -- Advance's `have` above IS the bags count,
+        -- what we care about here is what lives in non-bag storage.
+        -- Reagent bank folds into bank per retail 11.2+ (single storage
+        -- volume; see Inventory.lua header).
+        local bd = ADDON.Inventory and ADDON.Inventory.GetBreakdown
+                    and ADDON.Inventory:GetBreakdown(item.itemID)
+        if bd then
+            plan.stashBank    = (bd.bank or 0) + (bd.reagent or 0)
+            plan.stashWarband = bd.warband or 0
+            plan.hasStash     = (plan.stashBank + plan.stashWarband) > 0
+        else
+            plan.stashBank    = 0
+            plan.stashWarband = 0
+            plan.hasStash     = false
+        end
+
         -- Uncapped items arm normally: the armed-flyout already flags
         -- 'No cap set' in amber on the sub line, which IS the soft warning
         -- for buying at market price. Previously we short-circuited to a

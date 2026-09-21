@@ -2611,7 +2611,9 @@ function MF:Build()
     local toastBG = toast:CreateTexture(nil, "BACKGROUND")
     toastBG:SetAllPoints()
     toastBG:SetColorTexture(0.055, 0.075, 0.055, 0.98)
-    -- Full 1px mint border, four edges
+    -- Full 1px mint border, four edges. Textures are captured on MF as
+    -- _toastBorderTex so the bank/warband guardrail pulse animation can
+    -- retint them from mint to amber and back while the flyout is armed.
     local topL = toast:CreateTexture(nil, "OVERLAY")
     topL:SetColorTexture(Palette.brand[1], Palette.brand[2], Palette.brand[3], 0.85)
     topL:SetPoint("TOPLEFT"); topL:SetPoint("TOPRIGHT"); topL:SetHeight(1)
@@ -2633,6 +2635,22 @@ function MF:Build()
     titleFS:SetTextColor(1, 1, 1, 1)
     titleFS:SetWordWrap(false)   -- truncate long titles, don't wrap into sub
 
+    -- Bank/warband stash lines (v0.8 guardrail). Sit between title and
+    -- sub when the item has copies in bank or warband. Amber-tinted so
+    -- they read as a soft warning; hidden by default and re-anchored in
+    -- ShowArmedToast based on which sources have >0 copies.
+    local stashBankFS = toast:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    stashBankFS:SetJustifyH("LEFT")
+    stashBankFS:SetTextColor(1.0, 0.66, 0.4, 1)  -- amber (matches "No cap set")
+    stashBankFS:SetWordWrap(false)
+    stashBankFS:Hide()
+
+    local stashWarbandFS = toast:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    stashWarbandFS:SetJustifyH("LEFT")
+    stashWarbandFS:SetTextColor(1.0, 0.66, 0.4, 1)  -- amber
+    stashWarbandFS:SetWordWrap(false)
+    stashWarbandFS:Hide()
+
     local subFS = toast:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
     subFS:SetPoint("TOPLEFT", titleFS, "BOTTOMLEFT", 0, -1)
     subFS:SetPoint("RIGHT", -160, 0)
@@ -2649,6 +2667,7 @@ function MF:Build()
     skipText:SetPoint("CENTER")
     skipText:SetText("Skip")
     skipBtn:SetScript("OnClick", function()
+        MF:_StopToastPulse()
         if MF._toastHandlers and MF._toastHandlers.onSkip then
             MF._toastHandlers.onSkip()
         end
@@ -2675,6 +2694,7 @@ function MF:Build()
         if MF._toastMode == "armed" then
             -- Countdown gate: silently ignore clicks until arm delay elapses.
             if MF._toastArmReady and MF._toastHandlers and MF._toastHandlers.onBuy then
+                MF:_StopToastPulse()
                 MF._toastHandlers.onBuy()
             end
         elseif MF._toastMode == "summary" then
@@ -2708,10 +2728,13 @@ function MF:Build()
     self.confirmToast     = toast
     self._toastTitle      = titleFS
     self._toastSub        = subFS
+    self._toastStashBank    = stashBankFS
+    self._toastStashWarband = stashWarbandFS
     self._toastSkip       = skipBtn
     self._toastPrimary    = primaryBtn
     self._toastPrimaryTxt = primaryText
     self._toastPrimaryFill= primaryFill
+    self._toastBorderTex  = { topL, botL, lefL, rigL }
     self._toastMode       = nil
     self._toastHandlers   = nil
     self._toastArmReady   = false
@@ -3043,9 +3066,52 @@ function MF:_StopToastCountdown()
     end
 end
 
+-- ---------------------------------------------------------------------------
+-- Bank/warband guardrail pulse (v0.8): retints the toast's 4 border textures
+-- between mint (rest) and amber (warn) on a 0.5s cadence to draw the user's
+-- eye toward the stash lines before they commit gold. Runs until Buy or
+-- Skip is pressed (or the toast is hidden).
+--
+-- Uses a simple C_Timer.NewTicker toggle rather than a real AnimationGroup
+-- because we only need two colors, we don't need easing, and the ticker
+-- pattern is already used elsewhere in this file (matches border-color
+-- tween idiom in AttachBorderAnimator).
+-- ---------------------------------------------------------------------------
+local PULSE_MINT  = { Palette.brand[1], Palette.brand[2], Palette.brand[3], 0.85 }
+local PULSE_AMBER = { 1.0, 0.66, 0.4, 0.95 }
+
+function MF:_StartToastPulse()
+    if self._toastPulseTicker then return end
+    if not self._toastBorderTex then return end
+    local state = false  -- false = mint (rest), true = amber (warn)
+    self._toastPulseTicker = C_Timer.NewTicker(0.5, function()
+        state = not state
+        local c = state and PULSE_AMBER or PULSE_MINT
+        for _, tex in ipairs(self._toastBorderTex) do
+            tex:SetColorTexture(c[1], c[2], c[3], c[4])
+        end
+    end)
+end
+
+function MF:_StopToastPulse()
+    if self._toastPulseTicker then
+        self._toastPulseTicker:Cancel()
+        self._toastPulseTicker = nil
+    end
+    -- Always restore to resting mint so the next arm (which may not have
+    -- stash and thus won't restart the pulse) doesn't inherit an amber
+    -- border from the previous arm.
+    if self._toastBorderTex then
+        for _, tex in ipairs(self._toastBorderTex) do
+            tex:SetColorTexture(PULSE_MINT[1], PULSE_MINT[2], PULSE_MINT[3], PULSE_MINT[4])
+        end
+    end
+end
+
 function MF:ShowArmedToast(plan, handlers)
     if not self.confirmToast then return end
     self:_StopToastCountdown()
+    self:_StopToastPulse()  -- ensure any prior arm's pulse doesn't bleed in
     self._toastMode     = "armed"
     self._toastHandlers = handlers or {}
     self._toastArmReady = false
@@ -3056,9 +3122,57 @@ function MF:ShowArmedToast(plan, handlers)
     self._toastTitle:ClearAllPoints()
     self._toastTitle:SetPoint("TOPLEFT", 10, -6)
     self._toastTitle:SetPoint("RIGHT", -160, 0)
+
+    -- Bank/warband guardrail (v0.8): if the item has copies stashed in
+    -- bank or warband, insert stash lines between title and sub with
+    -- amber-tinted "you already have some" copy, and start the pulse.
+    -- Each source (bank/warband) gets its own line so the retrievability
+    -- label (this character / account-wide) is unambiguous.
+    local shownStashLines = 0
+    if plan.hasStash then
+        if (plan.stashBank or 0) > 0 then
+            self._toastStashBank:ClearAllPoints()
+            self._toastStashBank:SetPoint("TOPLEFT", self._toastTitle, "BOTTOMLEFT", 0, -1)
+            self._toastStashBank:SetPoint("RIGHT", -160, 0)
+            self._toastStashBank:SetText(("You have %d in bank (this character)"):format(plan.stashBank))
+            self._toastStashBank:Show()
+            shownStashLines = shownStashLines + 1
+        else
+            self._toastStashBank:Hide()
+        end
+        if (plan.stashWarband or 0) > 0 then
+            self._toastStashWarband:ClearAllPoints()
+            local anchor = (shownStashLines > 0) and self._toastStashBank or self._toastTitle
+            self._toastStashWarband:SetPoint("TOPLEFT", anchor, "BOTTOMLEFT", 0, -1)
+            self._toastStashWarband:SetPoint("RIGHT", -160, 0)
+            self._toastStashWarband:SetText(("You have %d in warband bank (account-wide)"):format(plan.stashWarband))
+            self._toastStashWarband:Show()
+            shownStashLines = shownStashLines + 1
+        else
+            self._toastStashWarband:Hide()
+        end
+    else
+        self._toastStashBank:Hide()
+        self._toastStashWarband:Hide()
+    end
+
+    -- Anchor the sub line below whatever the last visible line is: the
+    -- warband stash line if shown, else the bank stash line if shown,
+    -- else the title (the original default).
     self._toastSub:ClearAllPoints()
-    self._toastSub:SetPoint("TOPLEFT", self._toastTitle, "BOTTOMLEFT", 0, -1)
+    local subAnchor = self._toastTitle
+    if self._toastStashWarband:IsShown() then
+        subAnchor = self._toastStashWarband
+    elseif self._toastStashBank:IsShown() then
+        subAnchor = self._toastStashBank
+    end
+    self._toastSub:SetPoint("TOPLEFT", subAnchor, "BOTTOMLEFT", 0, -1)
     self._toastSub:SetPoint("RIGHT", -160, 0)
+
+    -- Grow toast height to fit stash lines. Base is 44px (title + sub);
+    -- each stash line adds ~13px. Buttons are vertically centered so they
+    -- track the growth automatically.
+    self.confirmToast:SetHeight(44 + shownStashLines * 13)
 
     -- Title line: qty x item name (truncated to 22 chars for horizontal fit).
     -- Total spend on the sub line alongside the cap so both money values
@@ -3094,6 +3208,13 @@ function MF:ShowArmedToast(plan, handlers)
 
     self.confirmToast:Show()
 
+    -- Start the guardrail pulse once the flyout is on-screen. The pulse
+    -- runs the whole time the flyout is armed with a stash present and is
+    -- stopped by HideToast() or by the Buy/Skip OnClick handlers.
+    if plan.hasStash then
+        self:_StartToastPulse()
+    end
+
     self._toastTicker = C_Timer.NewTicker(1.0, function()
         if self._toastMode ~= "armed" then return end
         remaining = remaining - 1
@@ -3114,6 +3235,12 @@ end
 function MF:ShowSummaryToast(summary)
     if not self.confirmToast then return end
     self:_StopToastCountdown()
+    self:_StopToastPulse()  -- summary is a stopping surface -- no pulse
+    -- Hide any lingering stash lines from a previous armed state so the
+    -- summary layout matches the original 44px, 2-line shape.
+    if self._toastStashBank then self._toastStashBank:Hide() end
+    if self._toastStashWarband then self._toastStashWarband:Hide() end
+    self.confirmToast:SetHeight(44)
     self._toastMode     = "summary"
     self._toastHandlers = nil
     self._toastArmReady = false
@@ -3170,6 +3297,7 @@ end
 
 function MF:HideToast()
     self:_StopToastCountdown()
+    self:_StopToastPulse()
     if self._summaryAutoHide then
         self._summaryAutoHide:Cancel(); self._summaryAutoHide = nil
     end
@@ -3177,6 +3305,8 @@ function MF:HideToast()
     self._toastHandlers = nil
     self._toastArmReady = false
     if self._toastSkip then self._toastSkip:Show() end
+    if self._toastStashBank then self._toastStashBank:Hide() end
+    if self._toastStashWarband then self._toastStashWarband:Hide() end
     if self.confirmToast then self.confirmToast:Hide() end
 end
 
