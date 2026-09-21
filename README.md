@@ -28,8 +28,10 @@ to get more?"*
   shows up in your restock window with a live count.
 - **Have / Need / Price Cap columns.** The primary Have count is your
   bags; anything sitting in bank, reagent bank, or warband appears as
-  a dim `(+N: 5 bank, 2 warband)` annotation so you always know where
-  your stock actually lives.
+  a compact `(+N)` suffix. Hover the Have cell to fan out the full
+  breakdown — `+N in bank (this character)` and `+N in warband bank
+  (account-wide)` — so you always know where your stock actually
+  lives.
 - **Per-item price cap.** Set an optional maximum gold-per-unit for
   any item. The restock loop will never buy above that price.
   Uncapped items are visible in the list but excluded from any
@@ -43,9 +45,32 @@ to get more?"*
   → Add Item → row 1 Need → row 1 Cap → row 2 Need → ... and wraps.
   Inline edits commit on Enter, Tab, or clicking away. Escape
   cancels without committing.
+- **Bank/warband guardrail.** When the restock loop queues an item
+  you already own copies of in bank or warband bank, the buy flyout
+  says so in amber before you commit gold. No third "withdraw from
+  bank" option — that's still on you — but you'll never spend a
+  thousand gold on flasks you forgot were in the warband bank.
 - **Flat, out-of-the-way UI.** Single-window, resizable, mint-accented
   chrome that stays out of your face. Position and size persist per
   character.
+
+## Screenshots
+
+<p align="center">
+  <img src=".assets/screenshots/hero.jpg" alt="Stock Clerk main window with restock flyout and sidecar" width="900">
+  <br>
+  <em>Main window: four-item shopping list showing at-target, over-target,
+  under-target, and stashed rows side by side. Bottom-center: the Skip/Buy
+  flyout for the next queued item. Right sidecar: settings toggles and
+  the recent-activity log.</em>
+</p>
+
+<p align="center">
+  <img src=".assets/screenshots/have-tooltip.jpg" alt="Have cell tooltip showing storage breakdown" width="900">
+  <br>
+  <em>Hover the Have cell to fan out where a consumable actually lives —
+  bags, bank, warband bank — without cluttering the row itself.</em>
+</p>
 
 ## Commands
 
@@ -67,13 +92,12 @@ the CurseForge desktop app or your addon manager of choice.
 [Releases page](https://github.com/TheWolfIsLoose/StockClerk/releases)
 and unzip into your `Interface/AddOns/` folder.
 
-## Roadmap
+## Status
 
-Stock Clerk hit v0.7.0 as the first stable release: per-character
-shopping lists, the restock loop with confirmed-buy automation, and
-the sidecar activity log. v0.8 is a repo-hygiene pass with an open
-slot for a small core feature if one surfaces during dogfooding.
-v1.0 will finalize documentation, screenshots, and the store page.
+Stock Clerk v1.0.0 is the first stable public release. New features
+after 1.0 will land on organic demand; the addon considers its
+restock loop, keyboard-first entry, per-character lists, sidecar
+activity log, and bank/warband guardrail feature-complete.
 
 ## Credits and inspiration
 
@@ -111,4 +135,4 @@ patient model.
 ## License
 
 Not yet declared. Treat as all-rights-reserved for now; a permissive
-license will be added before v1.0.
+license may be added in a future release.

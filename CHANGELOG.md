@@ -1,8 +1,10 @@
 # Stock Clerk changelog
 
-## v0.8.0
+## v1.0.0
 
-Cleanup pass on the road to 1.0. No new features.
+First stable release. Consolidates the v0.8.0 cleanup pass with the
+v1.0.0 launch polish. No new features versus late v0.8 alphas —
+Stock Clerk 1.0 is v0.7.0 hardened, refined, and stamped stable.
 
 ### Bank/warband guardrail on Restock at AH
 
@@ -43,11 +45,15 @@ into the Item column at narrow widths.
 Hover the Have cell to see where the stash lives: a tooltip anchored
 above the row lists `+N in bank (this character)` and
 `+N in warband bank (account-wide)`, matching the visual idiom of
-the Need and Cap tooltips.
+the Need and Cap tooltips. The cell itself stays visually plain on
+hover — no border box, no fill change; the cursor arrow and the
+tooltip appearing are sufficient signal.
 
-The Have cell now has the same border-animates-mint-on-hover chrome
-as Need and Cap for visual consistency, but is not clickable — Have
-is derived from inventory, not user input.
+### Addon-list icon
+
+Stock Clerk now ships with a proper icon that shows in the in-game
+addon list and the addon compartment dropdown, replacing the
+placeholder Blizzard note glyph used through the v0.8 alphas.
 
 ### LogFrame surface removed
 

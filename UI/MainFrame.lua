@@ -512,41 +512,32 @@ local function BuildRow(row)
     -- the row itself stays compact and can't overflow into the Item name
     -- column at narrow widths.
     --
-    -- Cell chrome matches Need/Cap for visual unity: same fill idle/hover,
-    -- same border animator, same tooltip anchor. Difference: haveCell has
-    -- NO OnClick handler because Have is derived from inventory, not user
-    -- input. Users hover to inspect, they don't click to edit.
+    -- Have cell is an INVISIBLE hit region: no fill, no border, no animator.
+    -- Alpha3 wrapped Have in a chromed button matching Need/Cap for visual
+    -- unity, but in practice the border box clipped the guardrail "0 (+24)"
+    -- overflow and read as nuisance. v1.0.0 rolls the box back: cursor arrow
+    -- + tooltip appearing are sufficient signal. The button is retained
+    -- purely so OnEnter/OnLeave fire the Have tooltip; Have is derived from
+    -- inventory, not user input, so no OnClick handler either.
     row.haveCell = CreateFrame("Button", nil, row)
     row.haveCell:SetSize(50, 20)  -- slightly wider than needCell (42) to
                                   -- comfortably fit "999 (+9999)" worst case
     row.haveCell:SetPoint("RIGHT", row, "RIGHT", -212, 0)
     row.haveCell:SetFrameLevel(row:GetFrameLevel() + 2)
 
-    local HAVE_FILL_IDLE   = { 0, 0, 0, 0.35 }
-    local HAVE_FILL_HOVER  = { Palette.bgMedium[1], Palette.bgMedium[2], Palette.bgMedium[3], 1 }
-    local HAVE_BORDER_IDLE = Palette.border
-
-    ApplyFill(row.haveCell, HAVE_FILL_IDLE)
-    AddBlackBorder(row.haveCell, HAVE_BORDER_IDLE)
-    AttachBorderAnimator(row.haveCell)
-    row.haveCell._fillIdle   = HAVE_FILL_IDLE
-    row.haveCell._fillHover  = HAVE_FILL_HOVER
-    row.haveCell._borderIdle = HAVE_BORDER_IDLE
-
     row.have = row.haveCell:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
     row.have:SetPoint("RIGHT", row.haveCell, "RIGHT", -6, 0)
     row.have:SetJustifyH("RIGHT")
 
-    -- Have cell hover: same ANCHOR_TOP tooltip idiom as Need/Cap, but the
-    -- content is inventory-derived instead of a CTA. Title line is the
-    -- bags count; storage-source lines follow only when that source has
-    -- >0. Reagent bank is folded into bank on retail 11.2+ (see
-    -- Inventory.lua header) so we present them as one "bank" line.
+    -- Have cell hover: tooltip only, no cell chrome change. Same ANCHOR_TOP
+    -- tooltip idiom as Need/Cap, but the content is inventory-derived
+    -- instead of a CTA. Title line is the bags count; storage-source lines
+    -- follow only when that source has >0. Reagent bank is folded into bank
+    -- on retail 11.2+ (see Inventory.lua header) so we present them as one
+    -- "bank" line.
     row.haveCell:SetScript("OnEnter", function(self)
         local r = self:GetParent()
         r:GetScript("OnEnter")(r)
-        self._borderAnim.AnimateTo(Palette.brand)
-        if self._bg then self._bg:SetVertexColor(unpack(self._fillHover)) end
         GameTooltip:SetOwner(self, "ANCHOR_TOP")
         local bd = r._breakdown
         local bags = (bd and bd.bags) or (r._have or 0)
@@ -563,8 +554,6 @@ local function BuildRow(row)
         GameTooltip:Show()
     end)
     row.haveCell:SetScript("OnLeave", function(self)
-        self._borderAnim.AnimateTo(self._borderIdle)
-        if self._bg then self._bg:SetVertexColor(unpack(self._fillIdle)) end
         GameTooltip:Hide()
         local r = self:GetParent()
         r:GetScript("OnLeave")(r)
