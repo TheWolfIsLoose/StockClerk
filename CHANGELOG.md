@@ -10,6 +10,22 @@ Each row in the shopping list is now separated from the next by a
 1px muted-gray line spanning the full row width. Gives the list
 visual rhythm without competing with row content.
 
+### Have column simplified; hover for storage detail
+
+The Have column no longer inlines the storage-source breakdown.
+Rows now show either `N` or `N (+M)` where `M` is the total stashed
+in bank/warband — no more `(+M: X bank, Y warband)` overflowing
+into the Item column at narrow widths.
+
+Hover the Have cell to see where the stash lives: a tooltip anchored
+above the row lists `+N in bank (this character)` and
+`+N in warband bank (account-wide)`, matching the visual idiom of
+the Need and Cap tooltips.
+
+The Have cell now has the same border-animates-mint-on-hover chrome
+as Need and Cap for visual consistency, but is not clickable — Have
+is derived from inventory, not user input.
+
 ### Bag/warband-open hitch eliminated
 
 Opening bags or the warband bank no longer triggers a visible hitch

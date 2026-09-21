@@ -505,9 +505,70 @@ local function BuildRow(row)
     --   trash  right edge   -6, width 18
     -- Status column dropped in v0.7 (short/ok signalled by Have text
     -- color plus the left-edge accent bar).
-    row.have = row:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
-    row.have:SetPoint("RIGHT", row, "RIGHT", -212, 0)
+    -- Have column: read-only display of bags count with an optional dim
+    -- (+N) suffix when the item has stashed copies in bank/warband. The
+    -- suffix is intentionally quantity-only; the storage-source breakdown
+    -- (which container has how many) moves to the cell's hover tooltip so
+    -- the row itself stays compact and can't overflow into the Item name
+    -- column at narrow widths.
+    --
+    -- Cell chrome matches Need/Cap for visual unity: same fill idle/hover,
+    -- same border animator, same tooltip anchor. Difference: haveCell has
+    -- NO OnClick handler because Have is derived from inventory, not user
+    -- input. Users hover to inspect, they don't click to edit.
+    row.haveCell = CreateFrame("Button", nil, row)
+    row.haveCell:SetSize(50, 20)  -- slightly wider than needCell (42) to
+                                  -- comfortably fit "999 (+9999)" worst case
+    row.haveCell:SetPoint("RIGHT", row, "RIGHT", -212, 0)
+    row.haveCell:SetFrameLevel(row:GetFrameLevel() + 2)
+
+    local HAVE_FILL_IDLE   = { 0, 0, 0, 0.35 }
+    local HAVE_FILL_HOVER  = { Palette.bgMedium[1], Palette.bgMedium[2], Palette.bgMedium[3], 1 }
+    local HAVE_BORDER_IDLE = Palette.border
+
+    ApplyFill(row.haveCell, HAVE_FILL_IDLE)
+    AddBlackBorder(row.haveCell, HAVE_BORDER_IDLE)
+    AttachBorderAnimator(row.haveCell)
+    row.haveCell._fillIdle   = HAVE_FILL_IDLE
+    row.haveCell._fillHover  = HAVE_FILL_HOVER
+    row.haveCell._borderIdle = HAVE_BORDER_IDLE
+
+    row.have = row.haveCell:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+    row.have:SetPoint("RIGHT", row.haveCell, "RIGHT", -6, 0)
     row.have:SetJustifyH("RIGHT")
+
+    -- Have cell hover: same ANCHOR_TOP tooltip idiom as Need/Cap, but the
+    -- content is inventory-derived instead of a CTA. Title line is the
+    -- bags count; storage-source lines follow only when that source has
+    -- >0. Reagent bank is folded into bank on retail 11.2+ (see
+    -- Inventory.lua header) so we present them as one "bank" line.
+    row.haveCell:SetScript("OnEnter", function(self)
+        local r = self:GetParent()
+        r:GetScript("OnEnter")(r)
+        self._borderAnim.AnimateTo(Palette.brand)
+        if self._bg then self._bg:SetVertexColor(unpack(self._fillHover)) end
+        GameTooltip:SetOwner(self, "ANCHOR_TOP")
+        local bd = r._breakdown
+        local bags = (bd and bd.bags) or (r._have or 0)
+        GameTooltip:SetText(("Have: %d in bags"):format(bags), 1, 1, 1)
+        if bd then
+            local bankTotal = (bd.bank or 0) + (bd.reagent or 0)
+            if bankTotal > 0 then
+                GameTooltip:AddLine(("+%d in bank (this character)"):format(bankTotal), 0.78, 0.78, 0.78)
+            end
+            if (bd.warband or 0) > 0 then
+                GameTooltip:AddLine(("+%d in warband bank (account-wide)"):format(bd.warband), 0.78, 0.78, 0.78)
+            end
+        end
+        GameTooltip:Show()
+    end)
+    row.haveCell:SetScript("OnLeave", function(self)
+        self._borderAnim.AnimateTo(self._borderIdle)
+        if self._bg then self._bg:SetVertexColor(unpack(self._fillIdle)) end
+        GameTooltip:Hide()
+        local r = self:GetParent()
+        r:GetScript("OnLeave")(r)
+    end)
 
     -- Need column: dedicated editable cell for the target count. Styled
     -- exactly like the Price Cap cell — transparent at rest, dark fill +
@@ -1209,13 +1270,14 @@ local function InitializeRow(row, data)
             haveColorEnd = "|r"
         end
     end
+    -- Suffix is quantity-only: "N (+M)". Storage-source detail (which
+    -- container has how many) lives in the haveCell hover tooltip so the
+    -- row itself stays compact and can't overflow into the Item column
+    -- at narrow widths. Simplified in v0.8.0 (was
+    -- "(+M: X bank, Y reagent, Z warband)" inline).
     local haveText = haveColor .. tostring(have) .. haveColorEnd
     if stashed > 0 then
-        local parts = {}
-        if bd.bank    > 0 then parts[#parts+1] = bd.bank    .. " bank"    end
-        if bd.reagent > 0 then parts[#parts+1] = bd.reagent .. " reagent" end
-        if bd.warband > 0 then parts[#parts+1] = bd.warband .. " warband" end
-        haveText = haveText .. ("  |cff888888(+%d: %s)|r"):format(stashed, table.concat(parts, ", "))
+        haveText = haveText .. ("  |cff888888(+%d)|r"):format(stashed)
     end
     row.have:SetText(haveText)
 
