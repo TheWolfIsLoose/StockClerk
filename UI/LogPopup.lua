@@ -16,9 +16,9 @@
     * This popup shows the FULL log (up to Log.MAX_ENTRIES, currently 500)
       for the user who wants everything
 
-    LogFrame.lua remains loaded through v0.7 for backwards compatibility
-    with any callers that still reference ADDON.LogFrame; it's slated for
-    deletion in v0.8.
+    LogFrame.lua was the v0.6 log surface. LogPopup replaced it in v0.7
+    (kept alongside for one release to give any external callers a grace
+    period) and LogFrame.lua was deleted in v0.8.
 ]]
 
 local addonName = ...

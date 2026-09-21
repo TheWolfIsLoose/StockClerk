@@ -6,7 +6,7 @@
     Every entry carries a timestamp, a kind, and a kind-specific payload
     table. The log is intended for two things:
 
-      1) Human review in the sidecar window (see UI/LogFrame.lua).
+      1) Human review in the LogPopup window (see UI/LogPopup.lua).
       2) Debug reproduction of "wait, what did the addon just do?"
          moments after an auto-purchase.
 
@@ -33,7 +33,7 @@
     2) Pick payload fields; keep them small and JSON-y (numbers,
        strings, booleans). Nested tables are fine but the log window
        renders them shallow, so keep it flat where possible.
-    3) Add a formatter case in UI/LogFrame.lua FormatEntry().
+    3) Add a formatter case in UI/LogPopup.lua's formatter.
 --]]
 
 local addonName = ...
@@ -127,9 +127,11 @@ function Log:Emit(kind, itemID, payload)
         table.remove(buf, 1)
     end
 
-    -- Live sidecar refresh, if the sidecar is currently open.
-    if ADDON.LogFrame and ADDON.LogFrame.frame and ADDON.LogFrame.frame:IsShown() then
-        ADDON.LogFrame:Refresh()
+    -- Live LogPopup refresh, if the popup is currently open. (v0.6
+    -- LogFrame surface was retired in v0.8; LogPopup replaced it in v0.7.)
+    if ADDON.LogPopup and ADDON.LogPopup.frame and ADDON.LogPopup.frame:IsShown()
+            and ADDON.LogPopup.Refresh then
+        ADDON.LogPopup:Refresh()
     end
 end
 
@@ -204,7 +206,8 @@ end
 function Log:Clear()
     local buf = GetBuffer()
     if buf then wipe(buf) end
-    if ADDON.LogFrame and ADDON.LogFrame.frame and ADDON.LogFrame.frame:IsShown() then
-        ADDON.LogFrame:Refresh()
+    if ADDON.LogPopup and ADDON.LogPopup.frame and ADDON.LogPopup.frame:IsShown()
+            and ADDON.LogPopup.Refresh then
+        ADDON.LogPopup:Refresh()
     end
 end

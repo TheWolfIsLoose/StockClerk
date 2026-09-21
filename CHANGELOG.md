@@ -26,6 +26,13 @@ The Have cell now has the same border-animates-mint-on-hover chrome
 as Need and Cap for visual consistency, but is not clickable — Have
 is derived from inventory, not user input.
 
+### LogFrame surface removed
+
+`UI/LogFrame.lua` (the v0.6 log surface, replaced by LogPopup in v0.7)
+has been deleted. It was carried through v0.7 as a compatibility shim
+and is no longer referenced by any caller. `/clerk log` continues to
+open the LogPopup exactly as before.
+
 ### Bag/warband-open hitch eliminated
 
 Opening bags or the warband bank no longer triggers a visible hitch
