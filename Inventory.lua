@@ -55,18 +55,37 @@ function INV:GetBreakdown(itemID)
 
     -- C_Item.GetItemCount(id, includeBank, includeUses, includeReagent, includeAccount)
     -- returns cumulative totals; subtract to derive per-container values.
+    --
+    -- Fast path: two calls answer the common question "does this item
+    -- live anywhere besides bags?" If total == bags there's no stash,
+    -- and we can skip the two extra calls that decompose stash into
+    -- bank/reagent/warband. Rows without stashed copies (the common
+    -- case for actively-consumed items) do 2 calls instead of 4. The
+    -- expensive account-bank variant is only hit on the slow path.
     local bagsOnly    = C_Item.GetItemCount(itemID) or 0
-    local plusBank    = C_Item.GetItemCount(itemID, true) or 0
-    local plusReagent = C_Item.GetItemCount(itemID, true, false, true) or 0
     local plusWarband = C_Item.GetItemCount(itemID, true, false, true, true) or 0
 
-    local breakdown = {
-        bags    = bagsOnly,
-        bank    = plusBank    - bagsOnly,
-        reagent = plusReagent - plusBank,
-        warband = plusWarband - plusReagent,
-        total   = plusWarband,
-    }
+    local breakdown
+    if plusWarband == bagsOnly then
+        breakdown = {
+            bags    = bagsOnly,
+            bank    = 0,
+            reagent = 0,
+            warband = 0,
+            total   = bagsOnly,
+        }
+    else
+        -- Full decomposition needed for the (+N: bank/reagent/warband) suffix.
+        local plusBank    = C_Item.GetItemCount(itemID, true) or 0
+        local plusReagent = C_Item.GetItemCount(itemID, true, false, true) or 0
+        breakdown = {
+            bags    = bagsOnly,
+            bank    = plusBank    - bagsOnly,
+            reagent = plusReagent - plusBank,
+            warband = plusWarband - plusReagent,
+            total   = plusWarband,
+        }
+    end
     self.cache[itemID] = breakdown
 
     if ADDON.debug then
@@ -90,8 +109,14 @@ function INV:OnInventoryChanged()
         print("|cff98FF98[SC:debug]|r OnInventoryChanged fired, invalidating cache")
     end
     self:Invalidate()
-    -- Notify UI (fire a lightweight callback the MainFrame listens for).
-    if ADDON.MainFrame and ADDON.MainFrame.Refresh then
-        ADDON.MainFrame:Refresh()
+    -- Only trigger a UI rebuild when the window is actually visible.
+    -- Cache invalidation always runs so the next open reads fresh data,
+    -- but rebuilding the row list is wasted work while we're closed --
+    -- and each row does GetBreakdown() -> up to 4 GetItemCount calls,
+    -- which is the hitch that surfaces when opening bags/warband bank.
+    -- MF:Show() calls Refresh() explicitly, so the next open repaints.
+    local mf = ADDON.MainFrame
+    if mf and mf.Refresh and mf.frame and mf.frame:IsShown() then
+        mf:Refresh()
     end
 end

@@ -1,5 +1,33 @@
 # Stock Clerk changelog
 
+## v0.8.0
+
+Cleanup pass on the road to 1.0. No new features.
+
+### Bag/warband-open hitch eliminated
+
+Opening bags or the warband bank no longer triggers a visible hitch
+when Stock Clerk is closed. Two changes:
+
+- Inventory-change events still invalidate the item-count cache (so
+  the next open reads fresh data), but they no longer rebuild the
+  row list while the window is hidden. Reopening the window repaints
+  as before.
+- `GetBreakdown` uses a fast path for items with nothing stashed
+  outside bags: two `C_Item.GetItemCount` calls instead of four. The
+  expensive account-bank decomposition only runs when a row actually
+  needs to show a `(+N: bank/reagent/warband)` suffix.
+
+### Cleanup
+
+- `notes/` moved out of the public tree (was published in v0.8.0-alpha1).
+- Alpha-era scar comments stripped from every source file (v0.8.0-alpha1).
+- Pre-1.0 CHANGELOG history collapsed to a git-history pointer
+  (v0.8.0-alpha1).
+- CI wired to auto-create GitHub Releases on tag push, so the
+  CurseForge webhook fires without a manual `gh release create`
+  step (v0.8.0-alpha1).
+
 ## v0.7.0
 
 First stable release on the v0.7 track. Consolidates six months of
