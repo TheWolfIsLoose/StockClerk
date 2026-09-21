@@ -3,7 +3,7 @@
 ## Notes: Per-character consumable restock lists with keyboard-first entry, confirmed-buy AH automation, and a sidecar activity log.
 ## Author: Jakerator
 ## Version: @project-version@
-## IconTexture: Interface\ICONS\INV_Misc_Note_01
+## IconTexture: Interface\AddOns\StockClerk\icon.png
 ## SavedVariables: StockClerkDB
 ## SavedVariablesPerCharacter: StockClerkCharDB
 ## X-Category: Inventory
