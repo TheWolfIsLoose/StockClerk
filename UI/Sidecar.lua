@@ -113,7 +113,7 @@ local function Build(anchor)
     settingsTitle:SetPoint("TOPLEFT", 12, -10)
     settingsTitle:SetText("|cff98FF98Settings|r")
 
-    -- v0.7.0-alpha6 AUTO-BUY-NUKE: the auto-purchase checkbox, default
+    -- The auto-purchase checkbox, default
     -- cap edit, and daily budget edit are gone. Restock is user-driven
     -- now (WoW's commodity API requires a hardware event per purchase,
     -- so silent auto was always impossible). No budget = no readout.
@@ -239,7 +239,7 @@ local function FormatEntry(entry)
     elseif kind == "status" then
         return ("|cff888888[%s]|r %s"):format(when, pay.text or "")
     elseif kind == "kbd_stuck" then
-        -- v0.6.1 keyboard-capture watchdog. Alarm red so it stands out in
+        -- Keyboard-capture watchdog. Alarm red so it stands out in
         -- the recent activity list if the bug ever recurs on a tester.
         return ("|cff888888[%s]|r |cffff6666[KBD] %s|r"):format(when, tostring(pay.reason or "unknown"))
     else
@@ -291,10 +291,10 @@ function Sidecar:Refresh()
         if BASIC_KINDS[e.kind] then
             if e.kind == "cap_change" and e.itemID then
                 local prev = lastCapByItem[e.itemID]
-                -- raw is newest-first, so "prev" is a NEWER kept entry;
+                -- Raw is newest-first, so "prev" is a NEWER kept entry;
                 -- we drop this one if it's within 10s of that newer one.
                 if prev and (prev - (e.ts or 0)) < CAP_DEBOUNCE_SEC then
-                    -- swallow
+                    -- Swallow
                 else
                     lastCapByItem[e.itemID] = e.ts or 0
                     entries[#entries + 1] = e

@@ -1,5 +1,91 @@
 # Stock Clerk changelog
 
+## v1.0.0
+
+First stable release. Consolidates the v0.8.0 cleanup pass with the
+v1.0.0 launch polish. No new features versus late v0.8 alphas —
+Stock Clerk 1.0 is v0.7.0 hardened, refined, and stamped stable.
+
+### Bank/warband guardrail on Restock at AH
+
+Before committing gold on an item you already own copies of in bank
+or warband bank, the buy flyout now says so. When the restock loop
+queues an item with a non-empty stash, the flyout displays:
+
+* `You have N in bank (this character)` — shown when the character
+  bank (including reagent bank) has any copies
+* `You have N in warband bank (account-wide)` — shown when the
+  account warband bank has any copies
+
+Both lines are amber-tinted to match the existing "No cap set"
+warning idiom. The flyout's border also pulses amber-to-mint on a
+0.5s cadence while the stash warning is active, drawing your eye to
+the warning before the Buy button unlocks.
+
+The 3-second Buy arm delay is unchanged. Skip advances to the next
+item exactly as it did before; there's no third option for retrieving
+from the bank — that's on you.
+
+Items with no stashed copies show the flyout exactly the same as
+prior versions (no stash lines, no pulse).
+
+### Shopping list row separator
+
+Each row in the shopping list is now separated from the next by a
+1px muted-gray line spanning the full row width. Gives the list
+visual rhythm without competing with row content.
+
+### Have column simplified; hover for storage detail
+
+The Have column no longer inlines the storage-source breakdown.
+Rows now show either `N` or `N (+M)` where `M` is the total stashed
+in bank/warband — no more `(+M: X bank, Y warband)` overflowing
+into the Item column at narrow widths.
+
+Hover the Have cell to see where the stash lives: a tooltip anchored
+above the row lists `+N in bank (this character)` and
+`+N in warband bank (account-wide)`, matching the visual idiom of
+the Need and Cap tooltips. The cell itself stays visually plain on
+hover — no border box, no fill change; the cursor arrow and the
+tooltip appearing are sufficient signal.
+
+### Addon-list icon
+
+Stock Clerk now ships with a proper icon that shows in the in-game
+addon list and the addon compartment dropdown, replacing the
+placeholder Blizzard note glyph used through the v0.8 alphas.
+
+### LogFrame surface removed
+
+`UI/LogFrame.lua` (the v0.6 log surface, replaced by LogPopup in v0.7)
+has been deleted. It was carried through v0.7 as a compatibility shim
+and is no longer referenced by any caller. `/clerk log` continues to
+open the LogPopup exactly as before.
+
+### Bag/warband-open hitch eliminated
+
+Opening bags or the warband bank no longer triggers a visible hitch
+when Stock Clerk is closed. Two changes:
+
+- Inventory-change events still invalidate the item-count cache (so
+  the next open reads fresh data), but they no longer rebuild the
+  row list while the window is hidden. Reopening the window repaints
+  as before.
+- `GetBreakdown` uses a fast path for items with nothing stashed
+  outside bags: two `C_Item.GetItemCount` calls instead of four. The
+  expensive account-bank decomposition only runs when a row actually
+  needs to show a `(+N: bank/reagent/warband)` suffix.
+
+### Cleanup
+
+- `notes/` moved out of the public tree (was published in v0.8.0-alpha1).
+- Alpha-era scar comments stripped from every source file (v0.8.0-alpha1).
+- Pre-1.0 CHANGELOG history collapsed to a git-history pointer
+  (v0.8.0-alpha1).
+- CI wired to auto-create GitHub Releases on tag push, so the
+  CurseForge webhook fires without a manual `gh release create`
+  step (v0.8.0-alpha1).
+
 ## v0.7.0
 
 First stable release on the v0.7 track. Consolidates six months of
@@ -123,511 +209,13 @@ full popup accessible via `/clerk log`.
 - LibSharedMedia-free, LibStub-only dependency stack. No external
   library requirements at install time.
 
----
-
-## Pre-1.0 history
-
-The entries below cover each alpha as it shipped. Preserved as
-record; new users only need the v0.7.0 summary above.
-
-## v0.7.0-alpha4
-
-Alpha3 field-testing feedback pass. Five bug fixes plus a status-
-column redesign.
-
-### Fixed: drag-and-drop into the Item ID field silently no-op'd
-
-The drop-target had its `OnReceiveDrag` handler on the container
-frame wrapping the EditBox, but the EditBox always paints on top of
-the container in the mouse-hit stack -- WoW routes drop events to
-the topmost mouse-enabled frame, which was the EditBox with no drop
-handler. Result: the mint drop-zone outline lit up on cursor-hold
-(that lives on the container border and worked fine), but releasing
-the item did nothing.
-
-Registered `OnReceiveDrag` directly on the EditBox in addition to
-the container. Container handler stays so drops on the 1-2px border
-ring outside the EditBox hitbox still work.
-
-### Fixed: header showed literal `v@project-version@`
-
-`## Version: @project-version@` is a BigWigsMods packager keyword
-that only gets substituted with the git tag at CurseForge packaging
-time. If the addon is installed from raw source (git clone, or
-GitHub's "Download ZIP" button which bundles source not the packaged
-release), the literal survives and leaks to the header.
-
-Added a runtime guard: if the version string starts with `@`, the
-header shows a muted grey `dev` instead of the raw keyword. Packaged
-releases still show `v0.7.0-alpha4` (amber) as before.
-
-### Fixed: Sidecar orphaned when main window closed
-
-Sidecar (the Settings + Recent Activity right-docked panel) was
-parented to `UIParent` rather than to `StockClerkFrame`, so hiding
-the main window via X, Close, or Escape left it floating alone.
-`MF:Hide()` already cascaded to hide the old settings dropdown for
-the same reason -- extended it to also hide the Sidecar.
-
-### Fixed: status column leaked `o`/`o!` text at the row's right edge
-
-v0.7 was supposed to drop the Status column entirely (short/ok
-state signaled by Have-color), but the pill FontString stub was
-still being force-shown and populated with `ok` / `-N` text each
-InitializeRow, leaving a stray `o` ("ok") or `o!` visible at the
-right edge of every row.
-
-Replaced the stub with true no-op tables so nothing paints. The
-full status signal now lives in the new left-edge accent bar (see
-below) plus the Have text color.
-
-### Changed: status-column redesign -- left-edge accent bar
-
-Instead of a text pill, each row now shows a 2px vertical accent
-bar on its left edge:
-
-- **Mint green** = stocked (Have >= Need)
-- **Muted red**  = short (Have < Need)
-
-Dual-channel encoding (bar position + Have text color) means
-colorblind users get a reliable signal from the bar's absence/
-presence at a fixed position, and everyone else gets the redundancy
-of matching color across two spots on the row.
-
-Have/Need column order preserved (matches the game's `X/Y` progress
-convention).
-
-Future: tooltip on the Have column showing bag / bank / warbank
-breakdown -- deferred to alpha5+ (needs per-location count queries
-and the warbank lazy-load quirk needs its own handling).
-
-### Changed: Tab-focused row now highlights
-
-Tabbing between row cells (Need <-> Cap <-> next row's Need) now
-triggers the same hover-wash on the containing row that a mouse-
-over would. Without it, keyboard-driven users lost their place in
-the list because the focused cell got a border-brand fade but the
-row around it stayed visually inert.
-
-Hooked via `OnEditFocusGained`/`OnEditFocusLost` on both cell
-editors, with a one-frame defer on Lost so a Tab-to-adjacent-cell
-doesn't visibly flicker the wash off and on.
-
-## v0.7.0-alpha3
-
-Republish of v0.7 alpha with the v0.6.2 `CURSOR_UPDATE` Lua error
-fix back-merged. No new v0.7 features vs alpha2. Bumped to alpha3
-so CurseForge's Alpha channel shows a v0.7 build newer than the
-current Stable (v0.6.2) and remains visible to alpha subscribers.
-
-See v0.6.2 entry below for the full fix write-up.
-
-## v0.7.0-alpha2
-
-Republish of the v0.7 redesign with the v0.6.1 keyboard-capture
-hotfixes back-merged in. No new v0.7 features vs alpha1 -- this
-release exists so alpha subscribers can pick up the hotfixes and so
-CurseForge's Alpha channel shows a v0.7 build newer than the current
-Stable (v0.6.1).
-
-### Included from v0.6.1 hotfix
-
-- Row-editor pool reset on rebind (primary cause of the
-  keyboard-eating bug).
-- Single-exit-point + pcall discipline on both keyboard handlers.
-- Force `SetPropagateKeyboardInput(true)` on window close.
-- Add-button focus-flag desync recovery.
-- New KeyboardWatchdog module that logs `[KBD]` entries to
-  `/clerk log` if it detects a suspicious keyboard state.
-
-See v0.6.1 entry below for the full write-up.
-
-## v0.7.0-alpha1
-
-First preview of the v0.7 redesign. Marked **alpha** in CurseForge so
-normal Stable subscribers keep running v0.6.x; testers who opt into
-Alpha in the CurseForge app's Release Type filter pick this up.
-
-### Compact main window
-
-- **Main frame slimmed from 680x500 to 420x400.** The list now sizes
-  itself to what it holds instead of forcing you to reshape a big
-  empty rectangle. Resize handles stay on so you can still stretch
-  it if you prefer more headroom.
-- **Row layout tightened** so the Item column keeps room for long
-  names while Need, Cap, and Seen columns compress to their actual
-  content.
-- **Status pill retired**; the Have column now colors itself red
-  when you're short of Need and mint when you're stocked, so state
-  reads at a glance without the extra widget.
-- **Filter chip is icon-only** (3-bar funnel) and lives in the
-  column-header strip. Same behavior, less chrome.
-- **Version string in the header** shows the current build; the
-  amber color tag makes pre-release builds obvious.
-- **Larger close X and a new hamburger button** on the header for
-  reaching the settings/activity sidecar.
-
-### Sidecar (Settings + Recent Activity)
-
-- **New right-docked panel** replaces the two v0.6 flyouts (settings
-  dropdown and activity log frame). Toggled from the hamburger button.
-- **Top half: Settings.** All the settings from v0.6 in one place:
-  auto-purchase toggle, default cap, auto budget per day, auto-open
-  at Auction House.
-- **Bottom half: Recent Activity.** A live feed of the last ~30
-  actions taken -- purchases, cap changes (debounced 10s so retyping
-  a cap value doesn't spam the feed), and auto-block reasons. Tagged
-  entries `[BUY]`, `[CAP]`, `[AUTO-BLOCK]` for quick scanning.
-- **Persists open/closed per character** so if you like it open you
-  won't have to reopen it every reload.
-
-### /clerk log popup
-
-- **/clerk log opens a 500x400 popup** with the full log (up to 500
-  entries), pre-selected so Ctrl+C copies immediately. Optimized
-  for pasting excerpts into bug reports and Discord.
-- **Every entry tagged** for greppability (`[BUY]`, `[CAP]`,
-  `[BUY-FAIL]`, `[AUTO-BLOCK]`, `[LOOP-START]`, ...).
-- **Clear Log button** in the popup replaces the old header button.
-- The old activity log frame remains loaded as a compatibility
-  shim for external callers; it's slated for full removal in v0.8.
-
-### Auction House docking
-
-- **When Auto-open at AH is on, the main frame now docks to the
-  right edge of the AH window** on open, so the two windows sit
-  side-by-side instead of overlapping.
-- **On AH close the main frame restores** to wherever you last
-  dragged it. The docked coordinates are transient; only your
-  floating position gets saved.
-- If the Sidecar is open during docking, it follows the window to
-  the new anchor.
-
-### Known alpha caveats
-
-- New sidecar/popup strings are not localized (English only).
-- Old `UI/LogFrame.lua` still ships as a fallback and is unloaded
-  by the alpha wiring but still occupies a few KB. It'll be removed
-  once we're confident the popup covers every callsite.
-
-## v0.6.2
-
-Hotfix for a Lua error thrown on `/clerk` open.
-
-### Fixed: `Frame:RegisterEvent(): Attempt to register unknown event "CURSOR_UPDATE"`
-
-The drop-zone code (shipped in v0.6.0) registered two cursor events
-for the mint-outline affordance around the Add box: `CURSOR_UPDATE`
-and `CURSOR_CHANGED`. `CURSOR_UPDATE` isn't a real event on retail
-Midnight 12.1 -- it either never existed or was removed in a recent
-client build. Some users saw a silent script error (default
-scriptErrors setting hides Lua errors); a tester with
-`/console scriptErrors 1` on caught it on window open.
-
-`CURSOR_CHANGED` fires on every cursor state transition (pickup,
-drop, hover-target change), so removing the invalid registration
-doesn't cost us any detection coverage -- the drop-zone highlight
-still works exactly as before.
-
-## v0.6.1
-
-Critical hotfix for a keyboard-capture bug that could leave the game
-unresponsive to input.
-
-### Fixed: addon capturing keyboard input under some conditions
-
-Tester reported that under various conditions -- editing target counts,
-using filter chips, or after inventory refreshes -- Stock Clerk could
-end up silently swallowing every keystroke game-wide: chat, movement,
-hotbars, even Escape were dead until an alt-tab out of the game and
-back in. Four separate defensive fixes:
-
-- **Row-editor pool reset.** The main cause: the list's row frames are
-  pooled and recycled by WoW's ScrollView when the underlying data
-  changes (bag update, filter toggle, scroll). If you had an inline
-  Need or Price editor open with focus when the pool re-bound that row
-  to a different item, the editor stayed alive and focused -- often
-  scrolled offscreen -- and captured every keystroke silently. Row
-  initialization now force-closes any open editor before binding new
-  data, and every EditBox in the addon clears focus on Hide as a
-  belt-and-suspenders defense.
-- **Single-exit keyboard handlers.** The main-window and Add-button
-  keyboard handlers previously had early `return` statements after
-  telling WoW to stop propagating a key. If any code inside those
-  branches errored, propagation stayed off -- swallowing every
-  subsequent key. Both handlers now run their actions inside a
-  protected call and restore propagation exactly once at the end.
-- **Force propagation restore on window close.** Explicit safety net
-  on the main window's OnHide to guarantee keyboard propagation is
-  restored across every close path (X button, `/clerk` toggle,
-  Escape, addon reload).
-- **Add-button focus recovery.** If the Add button's internal focused
-  flag ever drifts from its actual keyboard-capture state, the next
-  keypress now force-clears the state instead of silently eating
-  keys forever.
-
-### Added: keyboard-capture watchdog
-
-A diagnostic sampler runs once per second while the Stock Clerk window
-is open and logs a red `[KBD]` entry to `/clerk log` if it detects a
-Stock Clerk EditBox holding focus while invisible, or the Add button's
-focus state stuck on after the window closes. The v0.6.1 fixes should
-make this a no-op, but if the bug recurs the tester can `/clerk log`
-and share the [KBD] lines as a timestamped incident report.
-
-## v0.6.0
-
-Quick-add gestures on the Add box, and a filter to focus the list on
-items currently priced above your cap.
-
-### Quick-add via drag, shift-click, and item links (PT-2)
-
-- **Drag any item onto the Add box.** Drop an item from your bags
-  or from a Blizzard item slot onto Stock Clerk's Add box and its
-  itemID appears in the field, ready for you to review Target and
-  Price Cap and press Enter to commit.
-- **Shift-click the Add box while holding an item on the cursor.**
-  Same result as drag-and-drop; pick whichever gesture fits your
-  hand.
-- **Shift-click any item link while the Add box has focus.** With
-  the Add box focused, shift-clicking an item in chat, in a
-  tooltip, in the Auction House browse pane, or anywhere else
-  routes the itemID into the Add box instead of into chat. Your
-  chat's own "shift-click to link" behavior is untouched when the
-  Add box isn't focused.
-- **Mint drop-zone hint.** The Add box outline lights up mint
-  whenever you're holding an item on the cursor, so you can see
-  where the drop will land.
-- **The gestures fill the box; they don't commit.** Enter still
-  commits, matching the rest of the addon's edit model. This
-  keeps a stray drag from adding an unwanted item; we'll revisit
-  based on how the gestures actually get used in practice.
-
-### "Stuck above cap" filter (PT-3)
-
-- **New filter chip in the column-header strip.** Toggle it on to
-  hide every item except the ones whose most recent seen AH price
-  exceeds your price cap -- i.e. the items you're currently
-  waiting out. Toggle off to see the full list again.
-- **Filter state is per character** and persists across sessions,
-  so your alt with lots of enchanting mats doesn't inherit your
-  main's filter state.
-- **Cap column tri-state coloring.** The Cap value paints:
-  - Mint when the last seen price is at or under the cap (ready)
-  - Pink when the last seen price exceeds the cap (stuck)
-  - Muted gray-mint when a cap is set but there is no fresh price
-    data yet, so you can tell "unknown" from "known and healthy".
-
-### Under the hood
-
-- New DB getters `GetStuckOnly` / `SetStuckOnly` and a
-  `char.ui.stuckOnly` field, backfilled for existing saves.
-- Refresh path now applies the filter before building the data
-  provider, and paints the filter chip on every refresh so the
-  chip and the visible list stay in sync.
-
-## v0.5.0
-
-Safer auto mode: mail-delivery gate, price polish, default cap.
-
-### Mail-delivery gate on auto-purchase
-
-- **Auto no longer double-buys while your last order is still in
-  the mail.** Purchases via the auto loop go onto a per-character
-  "pending on-hand" ledger and count toward your effective bag
-  total until you actually pick up the mail. Repeat-pressing
-  Restock at AH before the mailbox arrives no longer piles orders.
-- **`/clerk pending`** lists what auto has bought this session
-  that hasn't landed in your bags yet. Old entries older than 30
-  days are garbage-collected on load so a forgotten mail from a
-  character you don't play doesn't skew the count forever.
-- **Manual buys are unchanged.** The gate is auto-mode only —
-  manual purchase is full user discretion.
-
-### Price cap polish
-
-- **Row cap turns pink when the last seen price is over your cap.**
-  Within the 24h staleness window, if the AH last-seen exceeds your
-  cap, the row's cap value paints pink so you can eyeball at a
-  glance which items your caps are currently blocking. Mint if the
-  last-seen is at or below your cap.
-- **Cap entry is whole gold.** Row cap editor, the toolbar Add
-  field, and the new Settings default cap all accept gold
-  integers only. Sub-gold caps aren't a real workflow for
-  consumables and the extra parsing surface wasn't earning its
-  keep.
-
-### Global default cap for auto mode
-
-- **New Settings field: "Default cap per unit, gold (auto only)."**
-  Set it once and auto mode uses it as a fallback for any item
-  that doesn't have its own cap. Leave it blank to keep the v0.4
-  behavior of skipping uncapped items outright.
-- **Row display shows `(Ng)` in dim gray** on uncapped rows when
-  auto is on and a default is set, so you can tell at a glance
-  which rows will be bought at what price.
-- **The auto-enable confirmation now tells the truth.** When a
-  default cap is set, the popup no longer warns that "N uncapped
-  items will be skipped" — it shows the default cap alongside the
-  daily budget instead.
-- **`/clerk auto`** readout adds the current default cap alongside
-  the auto state and budget.
-
-### Under the hood
-
-- New per-item `priceSource` metadata ("user" / "vendor" /
-  "template") on caps. Not surfaced in the UI yet; groundwork for a
-  future "where did this cap come from" affordance.
-- Restock plan now carries `capSource` ("item" / "default") so the
-  activity log and future BuyDialog copy can distinguish per-item
-  caps from default-cap purchases.
-- Dev workflow: solo-dev, single-branch. All work lands on `main`
-  and every push is tag-eligible. `Dev/update.bat` (moved from
-  root) always tracks main.
-
-## v0.4.0
-
-Priority ordering + daily budget.
-
-### List order is the priority
-
-- **Drag rows to reorder.** Each row has a grip handle on its far
-  left (three horizontal bars, mint on hover). Drag it up or down
-  and drop to insert; a mint insertion line shows where the row
-  will land.
-- **Keyboard reorder.** Tab from the toolbar's Price Cap into the
-  list now soft-selects the first row (1px mint ring, no cell
-  focus). While selected: Up / Down move the row, Enter or Tab
-  drop into the Need cell, Shift+Tab climbs back to Add, first
-  Escape clears the selection, second Escape closes the window.
-- **The restock loop walks the list top-down.** Whatever order you
-  arrange is the order Restock at AH tries. Replaces the old
-  biggest-shortfall-first sort.
-
-### Daily auto budget
-
-- **Budget is now a daily allowance**, aligned to the realm's daily
-  reset (server-local: currently 7 AM PT for NA realms, morning
-  reset for EU, etc.).
-  Pressing Restock at AH multiple times in a day draws from the same
-  allowance. When exhausted, auto stops and waits for reset.
-- **Manual buys are never counted and never blocked.** Budgets are
-  guardrails against the autopilot spending on you; a human-confirmed
-  click needs no such guardrail.
-- **Settings dropdown shows a live readout**: "auto spent today:
-  Xg / Yg (resets in Zh)".
-- **Loop status appends the remaining allowance** on auto runs
-  ("Loop done. Bought N, spent Xg. Yg left today.").
-
-### Repeat-press safety (backported to v0.3.x behavior)
-
-- **Session purchase ledger** tracks commodities bought this session
-  that haven't yet been looted from the mail. Hammering Restock at
-  AH no longer re-buys the same items; the ledger decays as you
-  loot mail.
-
-### Keyboard hygiene
-
-- **Fixed keyboard-eating** after focusing the Add button. Unhandled
-  keys now propagate correctly, so B / hotbars / Escape work while
-  the addon window is open.
-
-### Slash commands
-
-- **/clerk budget** — prints the current daily auto-spend, budget,
-  and time until reset.
-- **/clerk budget reset** — zeros today's counter and rearms the
-  reset clock. For testing without waiting for realm reset.
-
-## v0.2.0
-
-First public release. Consolidates all Wave 1 / Wave 1.5 work plus a
-full visual reskin.
-
-### Pre-release polish
-
-- **Resizable window** with a drag handle in the bottom-right corner
-  (Blizzard-native SizeGrabber texture). Minimum width 640, maximum
-  1200x1200. Size and position persist per character.
-- **Full keyboard-only entry.** Tab / Shift+Tab walks the entire
-  editable surface in row-major order: Item ID -> Target -> Price
-  Cap -> Add Item button (mint focus ring, activates on Space or
-  Enter) -> row 1 Need -> row 1 Price Cap -> row 2 Need -> ... and
-  wraps. Off-screen rows auto-scroll into view before opening.
-- **Inline edits commit on blur** as well as on Enter. Tabbing or
-  clicking away no longer discards the pending value. Escape still
-  cancels without committing.
-- **Row cell values stay visible on hover.** Previously the cell fill
-  occluded the value on hover; the FontStrings are now parented to
-  the cell itself so they draw over the fill.
-- **Placeholder hints** in all three toolbar fields; the fields
-  clear back to their placeholders after a successful add.
-- **Column-header band** stretches flush to the right edge of the
-  window, matching the toolbar and footer bands.
-- **Item ID-only add.** The Item field now accepts numeric item IDs
-  only (e.g. `212283`). Name-based add is deferred to a future
-  release because Blizzard's API returns non-deterministic matches
-  when a display name maps to multiple item IDs (rank 1/2/3 craft
-  variants, event duplicates).
-- **Escape releases keyboard cleanly.** Pressing Escape out of an
-  editbox no longer leaves the window holding keyboard input --
-  bag hotkeys, chat toggle, and macro binds all fire immediately.
-
-### New
-
-- **Auction House integration.** With the AH open, left-click a tracked
-  row to search for it; a "Restock at AH" button in the footer runs a
-  batched restock loop against every item currently under its target
-  count. The loop respects each item's price cap and stops
-  automatically when the AH closes.
-- **Per-item price cap.** Every tracked item has an optional maximum
-  gold-per-unit. The restock loop will never buy above that price. Caps
-  are shown in a dedicated **Price Cap** column and can be edited in
-  place by clicking the cell (Enter to save, blank to clear, Escape
-  to cancel).
-- **Editable Need column.** The target count is now its own cell,
-  edited the same way as the price cap.
-- **Have column with source breakdown.** The primary count is your
-  bags only; anything sitting in bank / reagent bank / warband appears
-  as a dim `(+N: 5 bank, 2 warband)` annotation so the metric stays
-  meaningful when items move between storage locations.
-- **Slash command debug toggle.** `/sc debug` prints instrumentation
-  for stale-count investigation.
-
-### Redesigned
-
-- **Full flat-dark UI.** New chrome inspired by atrocityEssentials:
-  single near-black window fill, 1px pure-black borders separating
-  sections, no per-row backgrounds. Rows use a translucent grey hover
-  wash and every editable cell grows a mint-green border on hover.
-- **Brand accent** is SharedMedia\_Tones organic mint green
-  (#98FF98) applied to the title accent word, column headers, focus
-  rings, price-cap values, and the tracked-count status text.
-- **Column layout** is centered under labeled headers (Item / Have /
-  Need / Price Cap / Status) with the item name column tightened to
-  make room.
-
-### Fixed
-
-- Stale row counts after bag / bank moves (ScrollView was reusing
-  frames without re-invoking the row initializer).
-- Sticky tooltip when the mouse exited through the GameTooltip frame.
-- Trash-icon clicks eating row clicks.
-- Shift-click item link into chat now works from the row.
-- AH close no longer leaves the frame in an inconsistent state.
-- Warband and bank event handlers wired correctly so counts update
-  when quartermaster or bank UIs open and close.
-
-### Under the hood
-
-- Modern ScrollBox + ScrollView + DataProvider list (Dragonflight
-  pattern) with the DataProvider replaced on each refresh (Auctionator
-  pattern) to avoid stale row reuse.
-- LibSharedMedia-3.0 and other libs embedded so the addon remains
-  standalone.
 
 ---
 
-## v0.1.1 (internal)
+## Earlier development
 
-- Initial working build (Wave 1, bags-only).
+Stock Clerk went through five internal alpha cycles (v0.5 through
+v0.7.0-alpha5) plus seventeen preview builds during v0.7.0's
+development, all of which are captured in the git history if
+anyone needs the detail. The v0.7.0 entry above is the coherent
+narrative of what changed from a user's perspective.

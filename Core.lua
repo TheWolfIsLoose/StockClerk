@@ -305,9 +305,8 @@ function StockClerk:OnSlashCommand(msg)
 
     -- QA-13: `/clerk log` opens the log popup (v0.7). `/clerk log clear`
     -- is a quick shortcut for the popup's Clear Log button.
-    -- The popup replaces the v0.6 LogFrame; the old surface remains
-    -- loaded for external callers but is no longer bound to a slash
-    -- command. Retired fully in v0.8.
+    -- LogPopup is the sole log surface as of v0.8; the retired LogFrame
+    -- fallback was removed (its file was deleted from the TOC).
     if cmd == "log" then
         local sub = (rest or ""):match("^(%S+)") or ""
         if sub:lower() == "clear" then
@@ -325,17 +324,12 @@ function StockClerk:OnSlashCommand(msg)
         else
             if ADDON.LogPopup and ADDON.LogPopup.Toggle then
                 ADDON.LogPopup:Toggle()
-            elseif ADDON.LogFrame and ADDON.LogFrame.Toggle then
-                -- Fallback for any transitional state where LogPopup
-                -- didn't load (e.g. .toc not yet updated). Should never
-                -- trigger in a normal v0.7 install.
-                ADDON.LogFrame:Toggle()
             end
         end
         return
     end
 
-    -- v0.7.0-alpha6 AUTO-BUY-NUKE: `/clerk auto` slash command removed.
+    -- `/clerk auto` slash command removed.
     -- Was the entry point for enabling/disabling silent auto-buys, which
     -- WoW's commodity API prohibits. Restock is user-driven via the
     -- toolbar Restock button (Phase B will add a keybind).
@@ -387,7 +381,7 @@ function StockClerk:OnSlashCommand(msg)
         return
     end
 
-    -- v0.7.0-alpha6 AUTO-BUY-NUKE: `/clerk budget` removed along with
+    -- `/clerk budget` removed along with
     -- the daily-auto-budget subsystem. Was daily-spend inspection +
     -- test-only reset; no analogue needed since restock is now
     -- user-driven and the user's gold is their own accounting.

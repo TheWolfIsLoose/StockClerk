@@ -16,9 +16,9 @@
     * This popup shows the FULL log (up to Log.MAX_ENTRIES, currently 500)
       for the user who wants everything
 
-    LogFrame.lua remains loaded through v0.7 for backwards compatibility
-    with any callers that still reference ADDON.LogFrame; it's slated for
-    deletion in v0.8.
+    LogFrame.lua was the v0.6 log surface. LogPopup replaced it in v0.7
+    (kept alongside for one release to give any external callers a grace
+    period) and LogFrame.lua was deleted in v0.8.
 ]]
 
 local addonName = ...
@@ -142,7 +142,7 @@ local function Build()
     f:SetScript("OnDragStop",  f.StopMovingOrSizing)
     f:Hide()
 
-    -- v0.7.0-alpha5 LOG-ESCAPE-FIX: register the popup with Blizzard's
+    -- Register the popup with Blizzard's
     -- UISpecialFrames so Escape closes it even when no editbox has focus.
     -- The existing edit:OnEscapePressed only fires when the read-only
     -- transcript editbox has keyboard focus, which is not the common case

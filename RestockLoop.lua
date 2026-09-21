@@ -2,17 +2,15 @@
     Stock Clerk - RestockLoop.lua
     Walks the shortlist and arms per-item purchases for user firing.
 
-    v0.7.0-alpha6 AUTO-BUY-NUKE + Phase B ARMED-MODEL:
-      The "auto" run mode is gone. WoW's C_AuctionHouse commodity API
-      requires a hardware event to advance (StartCommoditiesPurchase
-      is user-input-gated), so silent auto-buys were always impossible.
-
-      What replaces it: an ARMED model. The loop searches the AH for
+    Armed model:
+      WoW's C_AuctionHouse commodity API requires a hardware event
+      to advance (StartCommoditiesPurchase is user-input-gated), so
+      silent auto-buys are impossible. The loop searches the AH for
       the top-of-queue item, then STOPS in an "armed" state. The
-      restock button on the main frame lights up as a big buy button
+      restock button on the main frame lights up as a big Buy button
       -- "Buy 5 x Flask of Alchemical Chaos - 250g" -- and one click
-      fires the purchase in the same hardware-event context. The loop
-      auto-advances to the next item and re-arms.
+      fires the purchase in the same hardware-event context. The
+      loop auto-advances to the next item and re-arms.
 
       Capped-out rows (cheapest listing above the user's cap) are
       auto-skipped silently -- the loop advances without ever arming.
@@ -96,14 +94,14 @@ end
 -- (short = need - have) never sees the purchase, and every press of
 -- "Restock at AH" re-buys everything it just bought.
 --
--- v0.5 change (PT-4): PERSISTED on char.pendingBuys (was session-only in
+-- change (PT-4): PERSISTED on char.pendingBuys (was session-only in
 -- v0.4). Two reasons: (1) the ledger closes the repeat-press gate, and
 -- if a user buys then logs out, the gate must remain closed on next
 -- login until on-hand confirmation; (2) mailbox reconciliation needs the
 -- ledger to survive across sessions because auction mail sits in the
 -- inbox for up to 30 days.
 --
--- v0.7.0-alpha6 note: the ledger is used by ALL restock passes now
+-- note: the ledger is used by ALL restock passes now
 -- (manual-only mode). "Have" always means _EffectiveHave, never raw
 -- bag count -- this is what stops a user from rebuying the same
 -- items on the second, third, fourth press of the buy bind before
@@ -334,7 +332,7 @@ function Loop:Advance()
         return
     end
 
-    -- Phase B ARMED-MODEL: search + arm, don't dialog.
+    -- ARMED-MODEL: search + arm, don't dialog.
     DebugPrint(("processing id=%d need=%d have=%d short=%d cap=%s"):format(
         item.itemID, item.need, have, short, tostring(item.maxPrice)))
 
@@ -374,6 +372,25 @@ function Loop:Advance()
         plan.need = item.need
         plan.maxPrice = item.maxPrice
         plan.capSource = "item"
+
+        -- Bank/warband guardrail (v0.8): attach a stash breakdown to
+        -- the plan so the flyout can warn the user before spending gold
+        -- on something they already own (elsewhere). Bags is folded out
+        -- of the breakdown -- Advance's `have` above IS the bags count,
+        -- what we care about here is what lives in non-bag storage.
+        -- Reagent bank folds into bank per retail 11.2+ (single storage
+        -- volume; see Inventory.lua header).
+        local bd = ADDON.Inventory and ADDON.Inventory.GetBreakdown
+                    and ADDON.Inventory:GetBreakdown(item.itemID)
+        if bd then
+            plan.stashBank    = (bd.bank or 0) + (bd.reagent or 0)
+            plan.stashWarband = bd.warband or 0
+            plan.hasStash     = (plan.stashBank + plan.stashWarband) > 0
+        else
+            plan.stashBank    = 0
+            plan.stashWarband = 0
+            plan.hasStash     = false
+        end
 
         -- Uncapped items arm normally: the armed-flyout already flags
         -- 'No cap set' in amber on the sub line, which IS the soft warning

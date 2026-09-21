@@ -2,20 +2,6 @@
     Stock Clerk - UI/SettingsDropdown.lua
     Compact settings surface attached to the header cog button.
 
-    v0.7.0-alpha6 AUTO-BUY-NUKE:
-      The auto-purchase toggle, default-cap edit, budget edit, and
-      daily-spend readout are all gone. WoW's C_AuctionHouse commodity
-      API requires a hardware event per transaction, so silent auto-
-      buys were always impossible. Restock is now user-driven: the
-      user visits the AH, keystroke = one purchase.
-
-      Settings dropdown carries two toggles:
-        - Auto-open at AH   (default ON)
-        - Auto-Restock      (default OFF -- also fire the loop on AH open)
-
-      RequestAutoEnable, the STOCKCLERK_AUTO_ENABLE StaticPopup, and
-      all the confirmation-modal scaffolding are deleted with it.
-
     Toggles:
       - Auto-open at AH (default ON). Pop the shopping list open on
         AH visit.
@@ -67,8 +53,7 @@ local function BuildDropdown(anchor)
     catcher:Hide()
 
     local f = CreateFrame("Frame", "StockClerkSettingsDropdown", UIParent, "BackdropTemplate")
-    -- v0.7.0-alpha6: shrunk from 218 -> 92 after auto-buy nuke; grown
-    -- back to 156 to fit the new Auto-Restock toggle + its hint line.
+    -- Sized to fit the two toggles + their hint lines.
     f:SetSize(280, 156)
     f:SetFrameStrata("DIALOG")
     f:SetFrameLevel(10)                       -- above the catcher
