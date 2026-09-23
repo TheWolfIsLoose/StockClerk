@@ -14,7 +14,6 @@ Libs\Libs.xml
 Locale.lua
 DB.lua
 Log.lua
-KeyboardWatchdog.lua
 ItemResolver.lua
 Inventory.lua
 AH.lua
@@ -25,6 +24,7 @@ Sources\Bags.lua
 RestockLoop.lua
 
 UI\MainFrame.lua
+UI\BulkImport.lua
 UI\SettingsDropdown.lua
 UI\Sidecar.lua
 UI\LogPopup.lua

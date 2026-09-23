@@ -992,13 +992,11 @@ local function BuildRow(row)
     end
     -- Commit Need edit: reads the current text, writes to DB if valid,
     -- and refreshes the list ONLY if the value actually changed. Skipping
-    -- the refresh in the no-op case is important: a Tab from need -> cap
-    -- (or need -> next row) triggers this commit via OnEditFocusLost, and
-    -- an unnecessary MF:Refresh() rebuilds the DataProvider between the
-    -- Tab keystroke and the deferred FocusRowCell open, which leaves the
-    -- ScrollView without spawned rows for FindFrame() to return -- so the
-    -- next cell silently no-ops. Guarding on 'value changed' keeps the
-    -- happy Tab path clean.
+    -- the refresh in the no-op case is a perf win -- clicking away from
+    -- a cell you didn't actually edit shouldn't cost a full DataProvider
+    -- rebuild. (Historically the guard also protected the row-body Tab
+    -- traversal from racing with FindFrame lookups; that path is gone as
+    -- of v1.1 but the guard is still worth keeping on its own merits.)
     local function CommitNeedEdit(r)
         local newNeed = tonumber(r.needEdit:GetText())
         local changed = false
@@ -1042,17 +1040,13 @@ local function BuildRow(row)
         local r = self:GetParent()
         if r.needEdit:IsShown() then CommitNeedEdit(r) end
     end)
-    -- QA-7: Tab advances to this row's Price Cap; Shift+Tab moves back
-    -- to the toolbar's Price Cap field (previous cell in row-major order).
-    -- OnEditFocusLost above will commit the pending value before the
-    -- next target's SetFocus fires.
+    -- v1.1: Tab traversal into row-body cells has been excised. Rows are
+    -- click-to-edit only; Tab now cycles Item ID -> Target -> Cap -> Add
+    -- button and wraps back to Item ID (see toolbar wiring below). Pressing
+    -- Tab in an active row editor commits and clears focus rather than
+    -- hopping to the next cell.
     row.needEdit:SetScript("OnTabPressed", function(self)
-        local r = self:GetParent()
-        if IsShiftKeyDown() then
-            MF:TabFromCell(r, "need", -1)
-        else
-            MF:TabFromCell(r, "need", 1)
-        end
+        self:ClearFocus()
     end)
     -- Alpha4's ROW-FOCUS grey-wash hooks are
     -- removed. The mint ring (row.selRing, painted by SetRowSelection)
@@ -1131,13 +1125,9 @@ local function BuildRow(row)
         local r = self:GetParent()
         if r.priceEdit:IsShown() then CommitPriceEdit(r) end
     end)
+    -- v1.1: row Tab excised; commit and unfocus (matches needEdit above).
     row.priceEdit:SetScript("OnTabPressed", function(self)
-        local r = self:GetParent()
-        if IsShiftKeyDown() then
-            MF:TabFromCell(r, "price", -1)
-        else
-            MF:TabFromCell(r, "price", 1)
-        end
+        self:ClearFocus()
     end)
 end
 
@@ -1539,8 +1529,8 @@ function MF:Build()
     -- KBD-FIX (H1): SetPropagateKeyboardInput is sticky per-frame,
     -- so every OnKeyDown MUST end with an explicit propagate call in
     -- BOTH branches. The previous shape used early `return`s after
-    -- SetPropagateKeyboardInput(false), which meant any Lua error in the
-    -- handled action (Stop, MoveSelectedItem, FocusRowCell) would leave
+    -- SetPropagateKeyboardInput(false), which meant any Lua error in a
+    -- handled action (Stop, MoveSelectedItem, ...) would leave
     -- propagate=false stuck -- swallowing every subsequent key game-wide.
     -- New shape: decide (consumed / not consumed), do the action inside a
     -- pcall, then set propagate exactly ONCE at the end via a single exit
@@ -1837,8 +1827,10 @@ function MF:Build()
     -- Wider containers (100 / 110) give the labels comfortable slack too.
     -- The 6th argument is a PLACEHOLDER (ghost text), not an initial value.
     -- Boxes start empty; the hints disappear the moment the user focuses.
-    -- countBox empty falls back to 20 in DoAdd; priceBox empty means "no
-    -- cap" — both semantics are unchanged from the previous default.
+    -- v1.1: countBox empty falls back to 1 (was 20 pre-v1.1) so quick-add
+    -- is zero-friction — type an ID, hit Enter, get 1. Users edit the
+    -- target inline afterward if they want more. priceBox empty means
+    -- "no cap" — unchanged.
     -- scope: itemID-only. Item name resolution is deferred to a
     -- future release (see Dev/NOTES QA-2 backlog) because Blizzard's API
     -- returns non-deterministic matches when a name maps to multiple
@@ -1851,7 +1843,7 @@ function MF:Build()
     -- Price Cap 120 -> 80. "Price Cap / Unit" label shortened to "Cap"
     -- (the /unit context is documented in the tooltip and the CHANGELOG).
     local addEB   = MakeEditBox(toolbar, "Item ID", 130, true, 8, "e.g. 212283")
-    local countEB = MakeEditBox(toolbar, "Target",   60, true, 5, "20")
+    local countEB = MakeEditBox(toolbar, "Target",   60, true, 5, "e.g. 20")
     local priceEB = MakeEditBox(toolbar, "Cap",      80, true, 7, "none")
     local addBox   = addEB.editBox
     local countBox = countEB.editBox
@@ -1867,8 +1859,35 @@ function MF:Build()
     StyleButton(addBtn)
     local addBtnText = addBtn:CreateFontString(nil, "OVERLAY", "GameFontNormal")
     addBtnText:SetPoint("CENTER")
-    addBtnText:SetText(L.BTN_ADD_ITEM or "Add Item")
+    addBtnText:SetText(L.BTN_ADD_ITEM or "Add")
     addBtnText:SetTextColor(1, 1, 1, 1)
+
+    -- v1.1: Bulk-import button. Icon-only compact button (24x22) placed to
+    -- the right of Add Item. Opens a modal popup with a paste area for
+    -- multi-line item ID import. Kept small so we don't have to re-flow
+    -- the Add cluster at 420px min-width; the plus glyph plus tooltip is
+    -- enough affordance for an advanced-user power feature.
+    local bulkBtn = CreateFrame("Button", nil, toolbar)
+    bulkBtn:SetSize(24, 22)
+    bulkBtn:SetPoint("LEFT", addBtn, "RIGHT", 6, 0)
+    StyleButton(bulkBtn)
+    local bulkBtnText = bulkBtn:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+    bulkBtnText:SetPoint("CENTER")
+    bulkBtnText:SetText("+")
+    bulkBtnText:SetTextColor(1, 1, 1, 1)
+    bulkBtn:SetScript("OnEnter", function(self)
+        GameTooltip:SetOwner(self, "ANCHOR_TOP")
+        GameTooltip:SetText("Bulk import items", 1, 1, 1)
+        GameTooltip:AddLine("Paste multiple item IDs at once, one per line.", 0.9, 0.9, 0.9, true)
+        GameTooltip:Show()
+    end)
+    bulkBtn:SetScript("OnLeave", function() GameTooltip:Hide() end)
+    bulkBtn:SetScript("OnClick", function()
+        if ADDON.BulkImport and ADDON.BulkImport.Open then
+            ADDON.BulkImport:Open()
+        end
+    end)
+    self.bulkBtn = bulkBtn
 
     local function DoAdd()
         local raw = addBox:GetText()
@@ -1882,7 +1901,8 @@ function MF:Build()
             MF:SetStatus("|cffff8888Item ID must be a number (e.g. 212283)|r")
             return
         end
-        local need = tonumber(countBox:GetText()) or 20
+        -- v1.1: silent default drops from 20 to 1 for zero-friction quick-add.
+        local need = tonumber(countBox:GetText()) or 1
         -- Whole-gold input only. SetNumeric in MakeEditBox already
         -- prevented non-digit keystrokes; convert to copper here since
         -- storage is in copper.
@@ -2005,6 +2025,8 @@ function MF:Build()
             -- so the current Tab keystroke is fully consumed by this
             -- OnKeyDown and doesn't double-hop into the newly-focused
             -- control.
+            -- v1.1: row-body Tab excised. Forward Tab wraps back to
+            -- addBox; Shift+Tab returns to priceBox. No list involvement.
             local shift = IsShiftKeyDown()
             C_Timer.After(0, function()
                 pcall(function()
@@ -2012,11 +2034,7 @@ function MF:Build()
                     if shift then
                         if priceBox then priceBox:SetFocus() end
                     else
-                        -- Forward from Add button goes into the list;
-                        -- wrap back to addBox if the list is empty.
-                        if not MF:TabToFirstRowCell() then
-                            if addBox then addBox:SetFocus() end
-                        end
+                        if addBox then addBox:SetFocus() end
                     end
                 end)
             end)
@@ -2269,25 +2287,18 @@ function MF:Build()
     self.countBox = countBox
     self.priceBox = priceBox
 
-    -- Tab navigation across the add-item form. Matches standard desktop
-    -- form behavior: Tab moves forward through Item -> Target -> Price Cap
-    -- and continues into the first shopping-list row's editable cells
-    -- (QA-7: unified row-major loop). Shift+Tab reverses.
+    -- Tab navigation across the Add cluster only. v1.1 excised row-body
+    -- Tab traversal; the shopping list is click-to-edit. Forward chain:
+    --   addBox -> countBox -> priceBox -> addBtn -> addBox (wrap)
+    -- Shift+Tab is the mirror. addBtn is a Button (not an EditBox), so
+    -- its Tab handling lives in its OnKeyDown above (set up by
+    -- MF:FocusAddButton).
     -- WoW EditBoxes fire OnTabPressed for the Tab key (no modifier check
     -- in the event itself — IsShiftKeyDown() reads live state).
-    -- Forward tab chain: addBox -> countBox -> priceBox -> addBtn -> rows -> (wrap to addBox)
-    -- Reverse chain is the mirror. addBtn is a Button, not an EditBox,
-    -- so its Tab handling lives in its OnKeyDown above (set up by
-    -- MF:FocusAddButton). The row list's reverse wrap now targets addBtn
-    -- instead of priceBox (see MF:TabFromCell) so the button is a full
-    -- Tab-stop citizen.
     addBox:SetScript("OnTabPressed", function(self)
         if IsShiftKeyDown() then
-            -- Shift+Tab from toolbar's first field wraps to the LAST
-            -- editable cell in the list (last row's Price Cap). If the
-            -- list is empty, wrap to the Add button instead so the
-            -- reverse loop still passes through every stop.
-            if not MF:TabToLastRowCell() then MF:FocusAddButton() end
+            -- Shift+Tab from the first field wraps to the Add button.
+            MF:FocusAddButton()
         else
             countBox:SetFocus()
         end
@@ -2299,9 +2310,8 @@ function MF:Build()
         if IsShiftKeyDown() then
             countBox:SetFocus()
         else
-            -- Forward Tab from the toolbar's last editbox now goes to
-            -- the Add button (was: straight into the list). From there
-            -- Tab continues into the row list.
+            -- Forward Tab from the toolbar's last editbox goes to the
+            -- Add button. From there, Tab wraps back to addBox.
             MF:FocusAddButton()
         end
     end)
@@ -2491,6 +2501,7 @@ function MF:Build()
     statusBar:SetPoint("LEFT", 14, 0)
     statusBar:SetJustifyH("LEFT")
     statusBar:SetWordWrap(false)  -- one line; oversized text truncates instead of stacking
+    statusBar:SetMaxLines(1)      -- v1.1: hard single-line clamp so ellipsis kicks in cleanly at min-width
     self.statusBar = statusBar
     self._statusBarNeedsAnchor = true  -- deferred: restockBtn not built yet
 
@@ -2801,9 +2812,18 @@ function MF:Build()
     self.scrollView   = scrollView
     self.dataProvider = dataProvider
 
-    -- Empty-state text (hidden by default)
-    self.emptyText = listHolder:CreateFontString(nil, "OVERLAY", "GameFontDisableLarge")
-    self.emptyText:SetPoint("CENTER")
+    -- Empty-state text (hidden by default). v1.1: onboarding copy is a
+    -- multi-line list ("Add items by: ...") so we constrain to listHolder's
+    -- width minus inset, enable word wrap, and left-justify inside a
+    -- top-anchored region. Overflow-at-min-width fix (v1.0 empty text
+    -- didn't wrap and ran past the frame edge at 420px).
+    self.emptyText = listHolder:CreateFontString(nil, "OVERLAY", "GameFontDisable")
+    self.emptyText:SetPoint("TOPLEFT", listHolder, "TOPLEFT", 16, -18)
+    self.emptyText:SetPoint("TOPRIGHT", listHolder, "TOPRIGHT", -16, -18)
+    self.emptyText:SetJustifyH("LEFT")
+    self.emptyText:SetJustifyV("TOP")
+    self.emptyText:SetWordWrap(true)
+    self.emptyText:SetSpacing(3)
     self.emptyText:SetText(L.EMPTY_LIST or "No items tracked. Add one above.")
     self.emptyText:Hide()
 
@@ -3045,8 +3065,12 @@ end
 --
 -- handlers table: onBuy, onSkip, onStop -- all optional.
 -- ---------------------------------------------------------------------------
-local COUNTDOWN_SECONDS = 3  -- 3s buy-arm delay per feedback (release-spirit
-                             -- Pattern). Skip is live immediately.
+-- v1.1: arm delay reduced from 3s to 1.5s. The label still renders in
+-- whole seconds ("Buy (2s)" -> "Buy (1s)" -> "Buy") via ceil(); the
+-- ticker cadence is 0.5s to match the halved total. Skip is live
+-- immediately, as before.
+local COUNTDOWN_SECONDS = 1.5
+local COUNTDOWN_TICK    = 0.5
 
 function MF:_StopToastCountdown()
     if self._toastTicker then
@@ -3193,7 +3217,7 @@ function MF:ShowArmedToast(plan, handlers)
     self._toastPrimaryTxt:SetTextColor(0.78, 0.78, 0.78, 1)
 
     local remaining = COUNTDOWN_SECONDS
-    self._toastPrimaryTxt:SetText(("Buy (%ds)"):format(remaining))
+    self._toastPrimaryTxt:SetText(("Buy (%ds)"):format(math.ceil(remaining)))
 
     self.confirmToast:Show()
 
@@ -3204,11 +3228,15 @@ function MF:ShowArmedToast(plan, handlers)
         self:_StartToastPulse()
     end
 
-    self._toastTicker = C_Timer.NewTicker(1.0, function()
+    -- Ticker fires every COUNTDOWN_TICK seconds (0.5s in v1.1); when
+    -- remaining is > 0 we display ceil(remaining) so the label ticks
+    -- through whole seconds even though the internal timer is fractional.
+    local totalTicks = math.ceil(COUNTDOWN_SECONDS / COUNTDOWN_TICK)
+    self._toastTicker = C_Timer.NewTicker(COUNTDOWN_TICK, function()
         if self._toastMode ~= "armed" then return end
-        remaining = remaining - 1
+        remaining = remaining - COUNTDOWN_TICK
         if remaining > 0 then
-            self._toastPrimaryTxt:SetText(("Buy (%ds)"):format(remaining))
+            self._toastPrimaryTxt:SetText(("Buy (%ds)"):format(math.ceil(remaining)))
         else
             -- Arm complete: enable, mint-fill on, brighten label.
             self._toastArmReady = true
@@ -3218,7 +3246,7 @@ function MF:ShowArmedToast(plan, handlers)
             self._toastPrimaryFill:Show()
             self:_StopToastCountdown()
         end
-    end, COUNTDOWN_SECONDS)
+    end, totalTicks)
 end
 
 function MF:ShowSummaryToast(summary)
@@ -3260,9 +3288,11 @@ function MF:ShowSummaryToast(summary)
     self._toastPrimaryFill:Hide()
     self._toastPrimaryTxt:SetTextColor(1, 1, 1, 1)
 
-    -- Close countdown: 6s, ticks each second. Matches the Buy countdown
+    -- Close countdown ticks each second. Matches the Buy countdown
     -- pattern so the summary toast feels part of the same UI vocabulary.
-    local SUMMARY_CLOSE_SECONDS = 6
+    -- v1.1: reduced from 6s to 3s. Informational auto-dismiss; the close
+    -- button remains clickable throughout.
+    local SUMMARY_CLOSE_SECONDS = 3
     local remaining = SUMMARY_CLOSE_SECONDS
     self._toastPrimaryTxt:SetText(("Close (%ds)"):format(remaining))
 
@@ -3329,34 +3359,8 @@ end
 -- focus + open to the next frame so the ScrollView has time to spawn or
 -- re-target the Button.
 
--- Open the given row's inline editor for the given cell ("need"|"price").
--- The Open* helpers live inside BuildRow's closure, so we call them by
--- simulating an OnClick on the cell Button -- same code path the user
--- takes with the mouse. This keeps the focus / border / value hide logic
--- in exactly one place per cell.
-local function OpenRowCellEditor(row, cell)
-    if not row then return end
-    -- If the Add button had keyboard focus, drop its ring so we don't
-    -- end up with two 'focused' controls at once.
-    if MF._addBtnFocused then MF:BlurAddButton() end
-    local target = (cell == "need") and row.needCell or row.capCell
-    if target and target:GetScript("OnClick") then
-        target:GetScript("OnClick")(target)
-    end
-end
-
--- Given a data index in the current provider, focus its Nth cell.
---
--- We ALWAYS defer the actual open by one frame via C_Timer.After(0).
--- Reason: when this is called from a Tab keystroke, the *source* editor
--- is losing focus at the same moment, which triggers OnEditFocusLost ->
--- CommitNeedEdit/CommitPriceEdit -> MF:Refresh() -> the DataProvider is
--- replaced and every row Frame is potentially rebound to a different
--- element. Resolving FindFrame(elementData) BEFORE that settles gives a
--- stale Button and the open silently no-ops on the second row.
--- Deferring lets the blur commit + Refresh + rebind complete, then we
--- re-lookup the current elementData (fresh from the new provider) and
--- open its Button.
+-- v1.1: OpenRowCellEditor removed along with the row-body Tab helpers.
+-- Row cells are opened via their own OnClick (mouse) exclusively.
 -- ---------------------------------------------------------------------------
 -- Reorder
 --
@@ -3527,138 +3531,11 @@ function MF:EndRowDrag()
     self:Refresh()
 end
 
-function MF:FocusRowCell(dataIndex, cell)
-    if not self.scrollBox or not self.dataProvider then return end
-    local size = self.dataProvider:GetSize()
-    if size == 0 or dataIndex < 1 or dataIndex > size then return end
-
-    -- Snapshot the itemID at request time so we can re-locate the row
-    -- after any refresh that fires between now and the deferred open.
-    -- Using itemID rather than the elementData table itself because the
-    -- provider gets fully rebuilt across Refresh() calls.
-    local seed = self.dataProvider:Find(dataIndex)
-    if not seed then return end
-    local wantItemID = seed.itemID
-
-    -- Scroll the target index into view first. If it's already visible
-    -- this is a no-op; if it isn't, we need this call BEFORE the defer
-    -- so the ScrollView has a frame's worth of time to spawn the Button.
-    --
-    -- Blizzard signature: ScrollToElementDataIndex(dataIndex, alignment,
-    -- offset, noInterpolation). We were previously passing
-    -- ScrollBoxConstants.NoScrollInterpolation (a BOOLEAN) into the
-    -- `offset` slot, which throws 'attempt to perform arithmetic on
-    -- local offset (a boolean value)' inside ScrollBox.lua:850. Correct
-    -- placement: nil offset, boolean in the fourth slot.
-    self.scrollBox:ScrollToElementDataIndex(dataIndex,
-        ScrollBoxConstants.AlignCenter,
-        nil,
-        ScrollBoxConstants.NoScrollInterpolation)
-
-    C_Timer.After(0, function()
-        if not (self.scrollBox and self.dataProvider) then return end
-        -- Re-resolve the elementData by itemID against the CURRENT
-        -- provider. The row might have moved in the sort order if
-        -- something else refreshed the list, but the itemID is stable.
-        local currentSize = self.dataProvider:GetSize()
-        for i = 1, currentSize do
-            local d = self.dataProvider:Find(i)
-            if d and d.itemID == wantItemID then
-                local frame = self.scrollBox:FindFrame(d)
-                if frame then
-                    OpenRowCellEditor(frame, cell)
-                end
-                return
-            end
-        end
-    end)
-end
-
--- Toolbar boundary jumps: Tab out of Price Cap -> first row's Need;
--- Shift+Tab out of Item -> last row's Price Cap. Return true if the
--- list has any rows and focus was moved, false to let the caller wrap.
--- tab semantics: forward Tab into the list from the toolbar lands
--- on soft-select of the first row (NOT its Need cell). From there:
---   Tab again -> Need cell of row 1 (existing per-row Need/Price chain)
---   Up/Down   -> reorder
---   Enter     -> Need cell
---   Escape    -> clear selection
--- Reverse Tab (Shift+Tab) from the toolbar lands on the last row's
--- price cap as before, so keyboard users who already know the flow
--- aren't slowed down.
--- forward wrap from the toolbar's
--- Add button lands on row 1's Need editor directly. No ring detour.
-function MF:TabToFirstRowCell()
-    if not self.dataProvider or self.dataProvider:GetSize() == 0 then
-        return false
-    end
-    self:FocusRowCell(1, "need")
-    return true
-end
-
--- Reverse Tab from Item field lands
--- on the last row's Cap editor directly. No ring, no scroll-then-paint
--- dance -- ScrollToElementDataIndex followed by FocusRowCell is enough
--- because FocusRowCell uses scrollBox:FindFrame(elementData) which
--- resolves reliably by data reference (unlike EnumerateFrames-based
--- ring painting, which raced with row materialization).
-function MF:TabToLastRowCell()
-    if not self.dataProvider or self.dataProvider:GetSize() == 0 then
-        return false
-    end
-    local size = self.dataProvider:GetSize()
-    self:FocusRowCell(size, "price")
-    return true
-end
-
--- Tab handler called from a row's inline editor. `cell` is "need" or
--- "price" (which cell the user is currently in); `dir` is +1 for forward
--- Tab or -1 for Shift+Tab. Walks the row-major sequence.
---
--- two stops per row (Need, Cap). Row
--- boundaries jump straight to the neighbor row's editor -- no ring
--- detour. This matches how every commercial row-editable UI works
--- (Excel, Sheets, Airtable, Linear): Tab walks editable inputs; the
--- selection indicator is a mouse/arrow-key concept, not a Tab concept.
-function MF:TabFromCell(row, cell, dir)
-    if not row or not row._itemID or not self.dataProvider then return end
-    -- Find this row's data index.
-    local size = self.dataProvider:GetSize()
-    local idx
-    for i = 1, size do
-        local d = self.dataProvider:Find(i)
-        if d and d.itemID == row._itemID then idx = i; break end
-    end
-    if not idx then return end
-
-    if dir > 0 then
-        -- Forward Tab.
-        if cell == "need" then
-            self:FocusRowCell(idx, "price")
-        else -- cell == "price"
-            if idx < size then
-                self:FocusRowCell(idx + 1, "need")
-            else
-                -- End of list wraps forward to addBox.
-                if row.priceEdit and row.priceEdit:HasFocus() then row.priceEdit:ClearFocus() end
-                if self.addBox then self.addBox:SetFocus() end
-            end
-        end
-    else
-        -- Backward Tab.
-        if cell == "price" then
-            self:FocusRowCell(idx, "need")
-        else -- cell == "need"
-            if idx > 1 then
-                self:FocusRowCell(idx - 1, "price")
-            else
-                -- Top of list wraps backward to the Add button.
-                if row.needEdit and row.needEdit:HasFocus() then row.needEdit:ClearFocus() end
-                self:FocusAddButton()
-            end
-        end
-    end
-end
+-- v1.1: MF:FocusRowCell, MF:TabToFirstRowCell, MF:TabToLastRowCell, and
+-- MF:TabFromCell were removed here. Row-body Tab navigation is excised;
+-- the shopping list is click-to-edit. Toolbar Tab now cycles within the
+-- Add cluster (see the OnTabPressed handlers on addBox/countBox/priceBox
+-- and the addBtn OnKeyDown TAB branch).
 
 -- ---------------------------------------------------------------------------
 -- Show / Hide

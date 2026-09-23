@@ -1,5 +1,71 @@
 # Stock Clerk changelog
 
+## v1.1.0
+
+First post-1.0 release. Ships a batch of ten small refinements and
+tightening passes. No new gameplay systems; every change is either
+an onboarding polish, a friction-reduction, a code-hygiene cut, or a
+licensing addition.
+
+### Bulk import (paste multiple item IDs)
+
+A new compact `+` button next to Add opens a paste dialog for
+bulk item entry. Format is one item per line:
+
+* `212283`             — id only (silent default target 1, no cap)
+* `212283 20`          — id + target
+* `212283 20 500`      — id + target + cap in gold
+
+Blank lines and `#` / `//` comment lines are skipped. Invalid lines
+surface an inline error and don't block the rest of the batch. A
+single Refresh runs at the end.
+
+### Empty-list onboarding copy
+
+The empty-state message on a fresh install now spells out the four
+add paths (toolbar quick-add, bulk paste, drag-and-drop, and
+`/clerk add <id-or-name>`) instead of showing a bare title.
+
+### Add cluster default target is 1
+
+With the count field blank, the Add cluster (and `/clerk add` slash
+command and bulk-import lines that omit a target) now stocks 1 copy
+instead of 20. Zero-friction quick-add without a magic number.
+
+### Row-body Tab excised
+
+The shopping list is now click-to-edit only (mouse). Tab / Shift+Tab
+now cycles inside the Add cluster only — Item ID → Target → Price
+Cap → Add Item → wrap. This removes an entire class of focus-
+capture bugs the row-tab traversal was prone to, and the keyboard
+watchdog module that shipped for those bugs is retired.
+
+### Halved countdown timers
+
+Buy-arm delay on the confirmation flyout drops from 3 seconds to
+1.5. The post-buy summary auto-dismiss drops from 6 seconds to 3.
+Skip is still live-immediate; the summary close button remains
+clickable throughout.
+
+### Auto-Restock renamed Express-Restock
+
+The AH-open toggle in Settings and the sidecar dropdown is now
+labelled "Express-Restock on AH open" to better match its
+semantics: it kicks the restock flow when the AH opens, but every
+buy is still user-confirmed via the flyout. Internal identifier
+(DB field `autoRestock`) is unchanged for compatibility.
+
+### MIT license
+
+Added LICENSE at the repo root. Bundled libraries retain their own
+upstream licenses.
+
+### Layout hotfixes
+
+Status footer clamps to a single line with ellipsis so it stops
+vertically pushing the border at min-width. The empty-list message
+font region wraps and left-aligns correctly at 420px.
+
 ## v1.0.0
 
 First stable release. Consolidates the v0.8.0 cleanup pass with the
@@ -149,6 +215,10 @@ Tab / Shift+Tab walks the entire editable surface in row-major
 order: Item ID → Target → Price Cap → Add Item → row 1 Need → row 1
 Cap → row 2 Need → wrap. Inline edits commit on Enter, Tab, or
 click-away. Escape cancels without committing.
+
+*(Note: v1.1.0 excised the row-body portion of this Tab chain.
+The row surface is now click-to-edit only. See the v1.1 entry
+above.)*
 
 ### Left-edge status bar + Have text color
 

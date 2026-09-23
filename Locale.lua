@@ -12,7 +12,7 @@ _G[addonName .. "_L"] = L
 L.ADDON_NAME             = "Stock Clerk"
 L.SLASH_HEADER           = "|cff88ccffStock Clerk|r"
 L.MAIN_TITLE             = "Stock Clerk"
-L.BTN_ADD_ITEM           = "Add Item"
+L.BTN_ADD_ITEM           = "Add"
 L.BTN_CLOSE              = "Close"
 L.COL_ICON               = ""
 L.COL_ITEM               = "Item"
@@ -20,14 +20,14 @@ L.COL_HAVE               = "Have"
 L.COL_NEED               = "Need"
 L.COL_DELTA              = "Short"
 L.COL_ACTIONS            = ""
-L.EMPTY_LIST             = "No consumables tracked for this character yet. Click \"Add Item\" to begin."
+L.EMPTY_LIST             = "No items yet.\n\nAdd items by:\n |cffffffff1.|r Typing an item ID into the Item ID box and pressing Enter\n |cffffffff2.|r Clicking the |cffffffff+|r button to paste multiple item IDs at once\n |cffffffff3.|r Dragging an item from your bags into this window"
 L.PROMPT_ADD_ITEM        = "Enter item name or itemID:"
 L.PROMPT_ADD_COUNT       = "Target count:"
 L.ITEM_NOT_FOUND         = "Item not found or not yet cached. Try opening its tooltip in-game first, then re-add."
 L.SEED_APPLIED           = "Applied recommended lists: %d items across %d categories."
 
 -- v0.6 (PT-2): item ID input box hints
-L.ADDBOX_TOOLTIP         = "Type an item ID, drag an item from bags, or shift-click while focused."
+L.ADDBOX_TOOLTIP         = "Type an item ID, or drag an item from your bags onto this window."
 L.ADDBOX_DROP_ACCEPTED   = "Drop to fill"
 
 -- v0.6 (PT-3): shopping list filter chip

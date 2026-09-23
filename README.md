@@ -40,11 +40,12 @@ to get more?"*
   Stock Clerk window, and it searches for that item. Or use the
   "Restock at AH" button to run a batched restock pass across every
   short item on your list, respecting each item's price cap.
-- **Full keyboard-only entry.** Tab / Shift+Tab walks the entire
-  editable surface in row-major order: Item ID → Target → Price Cap
-  → Add Item → row 1 Need → row 1 Cap → row 2 Need → ... and wraps.
-  Inline edits commit on Enter, Tab, or clicking away. Escape
-  cancels without committing.
+- **Keyboard-friendly quick add.** Tab / Shift+Tab cycles the Add
+  cluster (Item ID → Target → Price Cap → Add Item → wrap). Inline
+  row edits commit on Enter, Tab, or clicking away. Escape cancels
+  without committing. Row cells themselves are click-to-edit (mouse)
+  — the row body is no longer part of the Tab chain, which removes a
+  whole class of focus-capture bugs.
 - **Bank/warband guardrail.** When the restock loop queues an item
   you already own copies of in bank or warband bank, the buy flyout
   says so in amber before you commit gold. No third "withdraw from
@@ -134,5 +135,6 @@ patient model.
 
 ## License
 
-Not yet declared. Treat as all-rights-reserved for now; a permissive
-license may be added in a future release.
+MIT. See [LICENSE](LICENSE) for the full text. The embedded
+LibSharedMedia-3.0 and other bundled libraries retain their own
+upstream licenses.

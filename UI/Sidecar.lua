@@ -133,11 +133,13 @@ local function Build(anchor)
     ahHint:SetWordWrap(true)
     ahHint:SetText("Pop the shopping list open when you visit the AH.")
 
-    -- Auto-Restock on AH open (default OFF).
+    -- Express-Restock on AH open (default OFF). v1.1 rename; internal
+    -- identifier stays StockClerkSidecarAutoRestockCheck / DB field
+    -- autoRestock for compatibility.
     local arCheck = CreateFrame("CheckButton", "StockClerkSidecarAutoRestockCheck", f, "UICheckButtonTemplate")
     arCheck:SetPoint("TOPLEFT", 8, -78)
     arCheck:SetSize(22, 22)
-    _G[arCheck:GetName() .. "Text"]:SetText("Auto-Restock on AH open")
+    _G[arCheck:GetName() .. "Text"]:SetText("Express-Restock on AH open")
     _G[arCheck:GetName() .. "Text"]:SetTextColor(0.9, 0.9, 0.9, 1)
     f._autoRestockCheck = arCheck
 

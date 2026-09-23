@@ -5,7 +5,7 @@
     Toggles:
       - Auto-open at AH (default ON). Pop the shopping list open on
         AH visit.
-      - Auto-Restock (default OFF). Also kicks the restock loop when
+      - Express-Restock (default OFF). Also kicks the restock loop when
         opening the AH, but only if the shortfall count is > 0.
 
     Design notes:
@@ -109,11 +109,12 @@ local function BuildDropdown(anchor)
     ahHint:SetWordWrap(true)
     ahHint:SetText("Pop the shopping list open when you visit the Auction House.")
 
-    -- Auto-Restock toggle (default OFF).
+    -- Express-Restock toggle (default OFF). Internal identifier stays
+    -- StockClerkAutoRestockCheck / DB field autoRestock for compatibility.
     local arCheck = CreateFrame("CheckButton", "StockClerkAutoRestockCheck", f, "UICheckButtonTemplate")
     arCheck:SetPoint("TOPLEFT", 8, -84)
     arCheck:SetSize(22, 22)
-    _G[arCheck:GetName() .. "Text"]:SetText("Auto-Restock on AH open")
+    _G[arCheck:GetName() .. "Text"]:SetText("Express-Restock on AH open")
     _G[arCheck:GetName() .. "Text"]:SetTextColor(0.9, 0.9, 0.9, 1)
     f._autoRestockCheck = arCheck
 

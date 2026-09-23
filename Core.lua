@@ -437,8 +437,10 @@ function StockClerk:OnSlashCommand(msg)
                 self:Print("Couldn't resolve: " .. tostring(name)) -- name holds err msg on fail
                 return
             end
-            ADDON.DB:SetItem(itemID, 20) -- sensible default
-            self:Print(("Added %s (id %d) with target 20. Edit in the UI to change."):format(name, itemID))
+            -- v1.1: silent default 1 for zero-friction quick-add
+            -- (matches the toolbar Add-cluster default).
+            ADDON.DB:SetItem(itemID, 1)
+            self:Print(("Added %s (id %d) with target 1. Edit in the UI to change."):format(name, itemID))
             if ADDON.MainFrame then ADDON.MainFrame:Refresh() end
         end)
         return

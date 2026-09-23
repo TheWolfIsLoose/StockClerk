@@ -69,12 +69,12 @@ local VALID_KINDS = {
     -- shows. Payload is just { text = string } already coloured/formatted
     -- by the caller; the log renderer prints it verbatim.
     status         = true,   -- payload: { text }
-    -- v0.6.1 keyboard-capture watchdog. Emitted by KeyboardWatchdog.lua
-    -- when it detects a suspicious state (hidden focused editbox,
-    -- long-lived propagate=false, EnableKeyboard(true) on a hidden
-    -- frame). Gives the tester a smoking-gun line to share in
-    -- `/clerk log` dumps if the input-capture bug recurs.
-    kbd_stuck      = true,   -- payload: { reason, detail? }
+    -- v0.6.1 keyboard-capture watchdog. Historically emitted by
+    -- KeyboardWatchdog.lua; that module was removed in v1.1 after the
+    -- row-body Tab traversal was excised (the primary bug class it
+    -- watched for is no longer reachable). The event key is retained
+    -- so any old log entries in saved variables still render.
+    kbd_stuck      = true,   -- payload: { reason, detail? }  (legacy)
 }
 
 -- ---------------------------------------------------------------------------
