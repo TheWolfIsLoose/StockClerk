@@ -1,5 +1,41 @@
 # Stock Clerk changelog
 
+## v1.1.1
+
+Point release. Two layout / lifecycle fixes.
+
+### Item name overflowed into Have column
+
+At narrow-window widths, a row's item name would render on top of the
+Have column when the Have text was wide (e.g. a `20 (+134)` stash
+suffix). Root cause: `row.have` right-aligns inside a fixed-width
+`haveCell`, but WoW FontStrings extend LEFTWARD past their parent's
+left edge as the string grows -- so the rendered Have text bled into
+the item name lane. The item name FontString's static `SetPoint(RIGHT,
+row, RIGHT, -250)` didn't account for that.
+
+Fix: re-anchor `row.name`'s RIGHT edge to `row.have`'s LEFT edge with
+an 8px gutter. WoW FontStrings support anchoring to another
+FontString's edges, so `row.name` now shrinks and ellipsizes
+automatically whenever the Have text changes width.
+
+### Orphan tooltip on window auto-close
+
+Hovering the Add box (or any other tooltip-owning widget in the main
+frame -- row grip, Have cell, Last Seen hit-target) and then walking
+away from the Auction House would leave a GameTooltip rectangle
+stranded on screen. The main frame auto-hides on Express-Restock's
+AH-close path, but Blizzard's `GameTooltip` doesn't get an `OnLeave`
+from its owning widget when the widget just disappears without the
+cursor moving -- so the tooltip lingers until the cursor crosses
+another tooltip surface.
+
+Fix: `OnHide` hook on the main frame that walks the current
+`GameTooltip:GetOwner()` chain and calls `GameTooltip:Hide()` if any
+ancestor is the main frame. Cheap (only runs when the frame hides),
+covers every tooltip in the addon (not just the Add box), and doesn't
+require touching any individual widget's `OnEnter`/`OnLeave`.
+
 ## v1.1.0
 
 First post-1.0 release. Ships a batch of ten small refinements and

@@ -477,12 +477,14 @@ local function BuildRow(row)
     -- short/ok state is now signaled by coloring row.have (see below).
     row.name = row:CreateFontString(nil, "OVERLAY", "GameFontNormal")
     row.name:SetPoint("LEFT", row.icon, "RIGHT", 8, 0)
-    -- Tightened right inset (-400 -> -220) so item names get enough
-    -- room at the new 420px main-frame width. Long names ellipsize; no
-    -- word wrap (SetWordWrap(false) below).
-    row.name:SetPoint("RIGHT", row, "RIGHT", -250, 0)  -- clears widened Have column
     row.name:SetJustifyH("LEFT")
     row.name:SetWordWrap(false)
+    -- Right edge is anchored below to row.have's LEFT edge (see haveCell
+    -- setup) so the item name automatically ellipsizes when Have grows
+    -- wide with a `(+N)` stash suffix. Static right inset was insufficient
+    -- because row.have right-aligns inside haveCell and its rendered text
+    -- extends LEFTWARD past haveCell's left border as the string grows,
+    -- colliding with the item name lane.
 
     -- Have column: pure display of the bags-only count, with a dim
     -- (+N bank/warband/reagent) suffix if the stash is non-empty. No
@@ -528,6 +530,15 @@ local function BuildRow(row)
     row.have = row.haveCell:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
     row.have:SetPoint("RIGHT", row.haveCell, "RIGHT", -6, 0)
     row.have:SetJustifyH("RIGHT")
+
+    -- Lane discipline for the item name: anchor its RIGHT edge to the
+    -- LEFT edge of the actual rendered Have fontstring, with an 8px
+    -- gutter. WoW FontStrings support anchoring to another FontString's
+    -- edges; the item name will re-layout whenever row.have's text
+    -- changes width. WITHOUT SetWordWrap(false) (set above) an
+    -- item name too long for the available width would wrap and break
+    -- row height; with SetWordWrap(false) it truncates with an ellipsis.
+    row.name:SetPoint("RIGHT", row.have, "LEFT", -8, 0)
 
     -- Have cell hover: tooltip only, no cell chrome change. Same ANCHOR_TOP
     -- tooltip idiom as Need/Cap, but the content is inventory-derived
@@ -2776,6 +2787,26 @@ function MF:Build()
     grip:SetScript("OnLeave", function() GameTooltip:Hide() end)
 
     f:HookScript("OnShow", function() MF:RefreshRestockBtn() end)
+
+    -- Tooltip orphan sweep. When the main frame hides for any reason
+    -- (Express-Restock triggered by AH close, /clerk toggle, Esc, etc.),
+    -- any GameTooltip currently owned by a child of the main frame will
+    -- otherwise linger on screen -- no OnLeave fires because the owning
+    -- widget just disappears without the cursor moving. Cheap safety net:
+    -- if GameTooltip's owner is anywhere inside the main frame at Hide
+    -- time, hide it. Walks up GetParent because GameTooltip:GetOwner()
+    -- returns the frame the tooltip was anchored to, not necessarily a
+    -- direct child of f.
+    f:HookScript("OnHide", function()
+        local owner = GameTooltip:GetOwner()
+        while owner do
+            if owner == f then
+                GameTooltip:Hide()
+                return
+            end
+            owner = owner.GetParent and owner:GetParent() or nil
+        end
+    end)
 
     -- ---- ScrollBox (list of rows) --------------------------------------
     local listHolder = CreateFrame("Frame", nil, f)
