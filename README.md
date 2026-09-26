@@ -85,7 +85,7 @@ unzip it into `Interface/AddOns/`.
 Releases are cut by CI from the `## vX.Y.Z` heading in
 [CHANGELOG.md](CHANGELOG.md), which holds only the release being cut
 (short, player-facing bullets). Detailed notes for every version,
-including this one, go in [Dev/HISTORY.md](Dev/HISTORY.md).
+including this one, go in [Dev/HISTORY.md](Dev/HISTORY.md). Planned work lives in [Dev/ROADMAP.md](Dev/ROADMAP.md).
 
 - Push to `dev` with a new `-alphaN` / `-betaN` version heading to
   publish a prerelease (CurseForge Alpha/Beta).
