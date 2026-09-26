@@ -126,7 +126,7 @@ local function CommitBatch(entries)
         if e.ok then
             local existed = ADDON.DB.char and ADDON.DB.char.items
                 and ADDON.DB.char.items[e.itemID] ~= nil
-            ADDON.DB:SetItem(e.itemID, e.need, e.maxPriceCopper, e.maxPriceCopper and "user" or nil)
+            ADDON.DB:SetItem(e.itemID, e.need, e.maxPriceCopper)
             if existed then
                 skipped = skipped + 1  -- overwrite still counts as "already there"
             else

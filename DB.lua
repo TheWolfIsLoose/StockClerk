@@ -8,12 +8,6 @@
         [itemID:number] = {
           need        = number,
           maxPrice    = copper,          -- optional; nil = no cap set
-          priceSource = string,          -- optional; PT-1 v0.5. Records
-                                         -- How the current maxPrice was
-                                         -- chosen: "user" (manually typed),
-                                         -- "vendor" (reserved). Purely
-                                         -- metadata; nothing reads it.
-                                         -- Nil is treated as "user".
           addedAt     = timestamp,
           lastPrice   = { copper, seenAt, source },   -- optional; QA-11
           sortOrder   = number,          -- user-arranged list position;
@@ -217,7 +211,6 @@ function DB:GetSortedItems()
             need        = entry.need,
             name        = name,
             maxPrice    = entry.maxPrice,    -- copper, may be nil ("no cap set")
-            priceSource = entry.priceSource, -- "user"/"vendor" or nil
             lastPrice   = entry.lastPrice,   -- { copper, seenAt, source } or nil
             sortOrder   = entry.sortOrder,
         }
@@ -252,10 +245,8 @@ function DB:ReorderItems(orderedIDs)
     return true
 end
 
--- Create-or-update an item entry. `maxPrice` is copper or nil. `source`
--- (priceSource) defaults to "user" when a maxPrice is provided;
--- callers from a vendor path should pass their tag explicitly.
-function DB:SetItem(itemID, need, maxPrice, source)
+-- Create-or-update an item entry. `maxPrice` is copper or nil.
+function DB:SetItem(itemID, need, maxPrice)
     if not itemID or need == nil then return end
     itemID = tonumber(itemID)
     need   = tonumber(need)
@@ -266,10 +257,7 @@ function DB:SetItem(itemID, need, maxPrice, source)
         local existing = self.char.items[itemID]
         if existing then
             existing.need = need
-            if maxPrice ~= nil then
-                existing.maxPrice    = maxPrice
-                existing.priceSource = source or "user"
-            end
+            if maxPrice ~= nil then existing.maxPrice = maxPrice end
         else
             -- New items go to the END of the user's arranged list: the
             -- list is priority order, so silently inserting a newcomer
@@ -283,7 +271,6 @@ function DB:SetItem(itemID, need, maxPrice, source)
             self.char.items[itemID] = {
                 need        = need,
                 maxPrice    = maxPrice, -- copper; nil means "unlimited" / not set
-                priceSource = maxPrice and (source or "user") or nil,
                 addedAt     = time(),
                 sortOrder   = maxOrder + 10,
             }
@@ -305,22 +292,10 @@ function DB:AddCommonConsumables()
     return added
 end
 
--- Update just the maxPrice for an existing item; no-op if the item isn't
--- tracked. Pass nil to clear the cap. `source` is the priceSource
--- tag ("user" / "vendor"); defaults to "user" when omitted
--- because every UI-driven call site is a user edit. Passing nil for
--- maxPriceCopper clears the source tag too -- an unset cap has no source.
-function DB:SetItemMaxPrice(itemID, maxPriceCopper, source)
-    itemID = tonumber(itemID)
-    if not itemID then return end
-    local entry = self.char.items[itemID]
-    if not entry then return end
-    entry.maxPrice = maxPriceCopper
-    if maxPriceCopper == nil then
-        entry.priceSource = nil
-    else
-        entry.priceSource = source or "user"
-    end
+-- Set (or clear, with nil) the cap of a tracked item.
+function DB:SetItemMaxPrice(itemID, maxPriceCopper)
+    local entry = self.char.items[tonumber(itemID)]
+    if entry then entry.maxPrice = maxPriceCopper end
 end
 
 -- Stamp the most-recent observed unit price for an item. Sources:

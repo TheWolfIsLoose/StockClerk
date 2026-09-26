@@ -211,7 +211,7 @@ assert(row.priceEdit:IsShown() and row.priceEdit._text == "50", "cap prefill: " 
 assert(row.capCell._priceEditActive == true)
 row.priceEdit._text = "75"
 row.priceEdit.scripts.OnEnterPressed(row.priceEdit)
-assert(#calls == 1 and calls[1][1] == "cap" and calls[1][3] == 750000 and calls[1][4] == "user", "cap commit")
+assert(#calls == 1 and calls[1][1] == "cap" and calls[1][3] == 750000, "cap commit")
 assert(not row.priceEdit:IsShown() and row.cap:IsShown() and refreshes == 1 and emits[#emits] == "cap_change")
 -- Same value again: no DB write, no refresh
 row.capCell.scripts.OnClick(row.capCell); row.priceEdit.scripts.OnEnterPressed(row.priceEdit)

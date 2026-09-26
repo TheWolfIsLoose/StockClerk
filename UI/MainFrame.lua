@@ -936,7 +936,7 @@ local function BuildRow(row)
             local maxPriceCopper = (priceGold and priceGold > 0) and (priceGold * 10000) or nil
             if maxPriceCopper == r._maxPrice then return false end
             local oldMax = r._maxPrice
-            ADDON.DB:SetItemMaxPrice(r._itemID, maxPriceCopper, "user")
+            ADDON.DB:SetItemMaxPrice(r._itemID, maxPriceCopper)
             r._maxPrice = maxPriceCopper
             local name = r.name:GetText() or ("item:" .. r._itemID)
             if maxPriceCopper then
@@ -1705,7 +1705,7 @@ function MF:Build()
                 MF:SetStatus(("|cffff8888Unknown item ID: %d|r"):format(itemID))
                 return
             end
-            ADDON.DB:SetItem(resolvedID, need, maxPriceCopper, "user")
+            ADDON.DB:SetItem(resolvedID, need, maxPriceCopper)
             ADDON.Inventory:Invalidate()
             if ADDON.Log then
                 ADDON.Log:Emit("add", resolvedID, {
@@ -2700,7 +2700,6 @@ function MF:_RefreshNow()
             name        = it.name,
             need        = it.need,
             maxPrice    = it.maxPrice,
-            priceSource = it.priceSource, -- PT-1: "user"/"vendor"/"template" or nil; reserved for row-level UI in Wave 2
             lastPrice   = it.lastPrice,   -- { copper, seenAt, source }; feeds the Last Seen column
             _index      = i,
         })
