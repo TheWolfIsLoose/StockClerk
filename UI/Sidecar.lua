@@ -226,10 +226,6 @@ local function FormatEntry(entry)
         return ("|cffcccccc[%s]|r auto %s"):format(when, pay.on and "ON" or "OFF")
     elseif kind == "status" then
         return ("|cff888888[%s]|r %s"):format(when, pay.text or "")
-    elseif kind == "kbd_stuck" then
-        -- Keyboard-capture watchdog. Alarm red so it stands out in
-        -- the recent activity list if the bug ever recurs on a tester.
-        return ("|cff888888[%s]|r |cffff6666[KBD] %s|r"):format(when, tostring(pay.reason or "unknown"))
     else
         return ("|cff888888[%s]|r %s|r"):format(when, kind)
     end

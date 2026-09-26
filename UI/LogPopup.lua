@@ -49,7 +49,6 @@ local TAGS = {
     auto_refuse   = "[AUTO-BLOCK]",
     bank_pull     = "[BANK]",
     status        = "[STATUS]",
-    kbd_stuck     = "[KBD]",
 }
 
 -- -------------------------------------------------------------------------
@@ -108,13 +107,6 @@ local function FormatLine(entry)
         local text = tostring(pay.text or "")
         text = text:gsub("|c%x%x%x%x%x%x%x%x", ""):gsub("|r", "")
         extra = " " .. text
-    elseif entry.kind == "kbd_stuck" then
-        -- Keyboard-capture watchdog. Reason is the key field for
-        -- diagnosis; detail is a fuller human-readable sentence.
-        extra = " reason=" .. tostring(pay.reason or "unknown")
-        if pay.detail then
-            extra = extra .. " -- " .. tostring(pay.detail)
-        end
     end
 
     return ("%s %s%s%s"):format(when, tag, who, extra)

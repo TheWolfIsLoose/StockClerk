@@ -1296,13 +1296,7 @@ function MF:Build()
     -- gives the item list more headroom, which is always fine. Removing
     -- the ceiling (previously 1200x1200) lets 4K users pull the window
     -- as tall as they want without hitting an arbitrary cap.
-    if f.SetResizeBounds then
-        f:SetResizeBounds(420, 400)  -- min-only; no max args = unbounded
-    else
-        f:SetMinResize(420, 400)
-        -- SetMaxResize on legacy clients: pass huge values as a soft cap
-        f:SetMaxResize(4096, 4096)
-    end
+    f:SetResizeBounds(420, 400)  -- min-only; no max = unbounded
     f:EnableMouse(true)
     -- Re-enable keyboard on the root frame. VERIFIED NEEDED, do not remove:
     -- (a) previous experiment broke typing into toolbar EditBoxes
@@ -1585,10 +1579,6 @@ function MF:Build()
         ADDON.Sidecar:Toggle(self)
     end)
     MF._hamburgerBtn = hamburgerBtn
-    -- Back-compat aliases so existing code that pokes at _cogBtn / _logBtn
-    -- still finds a real frame during the phased v0.7 rollout.
-    MF._cogBtn = hamburgerBtn
-    MF._logBtn = hamburgerBtn
 
     -- ---- Toolbar (add item + controls) ---------------------------------
     -- Sits directly under the header. No fill; the labels + editboxes
