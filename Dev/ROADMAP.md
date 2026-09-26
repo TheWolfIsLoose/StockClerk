@@ -270,6 +270,64 @@ Your list, caps and settings carry over unchanged.
 
 ---
 
+## v1.2.0-beta2 — Ponytail sweep + UI/UX consistency pass
+
+Goal: less code and more usable space before stable v1.2.0. No new
+features.
+
+**Design intent (Decided):** Stock Clerk should feel like a real-life
+shopping list: efficient, "pocket-sized", minimal without being
+brutalist. Every pixel and every control has to earn its place.
+
+1. **Ponytail sweep of the whole addon.** Run `/ponytail-audit` over the
+   repo, then work the ranked list: dead code, reinvented stdlib, one-use
+   abstractions, over-long comments, leftover v0.x scaffolding.
+   `UI/MainFrame.lua` (~3.3k lines) is the main target. Keep behaviour
+   identical; the smoke test must stay green.
+2. **UI/UX consistency audit.** Every control, font, spacing value,
+   colour, hover state and tooltip checked against one set of rules:
+   - Same button style everywhere (fill, border, hover highlight,
+     pressed state); icon buttons drawn the same way (hamburger, funnel,
+     plus, close).
+   - One spacing scale and one font scale; consistent label casing and
+     tone in tooltips and footer messages.
+   - Look for real-estate gains: default window size, toolbar (Item ID /
+     Target / Cap / Add / +), column widths, the side panel's settings
+     block and feed, header height, footer.
+3. Write the rules down (short section in the README or a `Dev/STYLE.md`)
+   so later features follow them.
+4. In-game review → `v1.2.0-beta2`, then stable `v1.2.0`.
+
+---
+
+## v1.3.0 — Activity log: useful to players, usable for support
+
+**Question to answer first:** is the activity log doing anything useful?
+It has never clearly told the player, in plain terms, what happened and
+what Stock Clerk did.
+
+What we want it to be:
+
+- **For players:** a readable history of what happened ("Bought 20 Light's
+  Potential for 412g", "Pulled 5 Flask of the Shattered Sun from your
+  warband bank", "Skipped Liquid Luster: above your 30g cap").
+- **For support:** when someone reports a problem, the same log should be
+  enough to see what went on, without shipping dev tools or asking them
+  to turn on debug output.
+
+To decide:
+
+- Which events are worth a line at all; drop the noise (status echoes,
+  searches, internal loop start/stop).
+- Plain-language wording for every entry, one style for the side panel
+  feed and `/clerk log`.
+- An easy way for a player to hand over the log (copyable text in the
+  log window), and how much detail it needs for support without
+  becoming a debug dump.
+- Or: cut it down to the side panel feed and drop the full log window.
+
+---
+
 ## v1.3 candidate — Deposit surplus (depends on 1.2 usage)
 
 Only after Restock from Bank has proven reliable in the field.
