@@ -17,7 +17,14 @@ this plan. `main` is still v1.1.1. No 1.2 feature code written yet.
 
 First up, in one focused session with the player in-game: the bank-API
 probe (task 2 below). **2026-09-26: probe built and pushed to `dev`**
-(`Dev/BankProbe.lua`); waiting on the in-game run.
+(`Dev/BankProbe.lua`). **Warband results (12.1.0, 2026-09-26):** split to
+an empty slot, split onto a partial stack and whole stack via
+`UseContainerItem` all work for addons; no blocked actions. Banker
+interaction type is `Banker` (8). Three moves in one frame: only 1 lands
+(item locks), so the executor must go one move at a time, waiting for
+each to land: 300-550ms per move, 3s timeout is ample. A whole-stack
+`UseContainerItem` merged onto an existing bag stack by itself. Character
+bank not yet exercised (had no stock) — rerun with ~20 there to confirm.
 
 - **Run it:** `update.bat dev`, `/reload`, open the bank (open it *after*
   the reload), then `/clerk bankprobe <itemID> scan` (moves nothing),
