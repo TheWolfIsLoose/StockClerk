@@ -3110,7 +3110,24 @@ end
 -- feedback, which otherwise lasts only until the next status overwrites the
 -- footer. Empty strings are still
 -- passed to the footer (to clear it) but skipped in the log.
+-- Action messages (logged) stay on the footer for STATUS_HOLD seconds;
+-- Refresh's "N tracked | N short" summary (skipLog) waits behind them
+-- instead of overwriting them on the next redraw, then takes over.
+local STATUS_HOLD = 8
 function MF:SetStatus(text, skipLog)
+    if skipLog then
+        self._summary = text
+        if self._holdUntil and GetTime() < self._holdUntil then return end
+    else
+        local holdUntil = GetTime() + STATUS_HOLD
+        self._holdUntil = holdUntil
+        C_Timer.After(STATUS_HOLD, function()
+            if self._holdUntil == holdUntil and self._summary and self.statusBar then
+                self._holdUntil = nil
+                self.statusBar:SetText(self._summary)
+            end
+        end)
+    end
     if self.statusBar then self.statusBar:SetText(text or "") end
     if not skipLog and text and text ~= "" and ADDON.Log and ADDON.Log.Emit then
         ADDON.Log:Emit("status", nil, { text = text })

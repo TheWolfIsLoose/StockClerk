@@ -274,4 +274,18 @@ ADDON.Log:Emit("status", nil, { text = "x" })
 assert(sc == 0 and lp == 1, ("status: sidecar %d, logpopup %d"):format(sc, lp))
 ADDON.Log:Emit("buy_success", 42, { qty = 1 })
 assert(sc == 1 and lp == 2, ("buy: sidecar %d, logpopup %d"):format(sc, lp))
+do -- Footer: an action message survives a redraw's summary, then yields to it
+  local bar = { SetText = function(self, t) self.t = t end }
+  local mf, hold = ADDON.MainFrame, timers
+  local saved = mf.statusBar; mf.statusBar = bar
+  local n0 = #timers
+  mf:SetStatus("Added 12 items")
+  mf:SetStatus("5 items tracked", true)
+  assert(bar.t == "Added 12 items", "summary overwrote action message")
+  timers[n0 + 1]()
+  assert(bar.t == "5 items tracked", "summary did not return after hold")
+  mf:SetStatus("6 items tracked", true)
+  assert(bar.t == "6 items tracked", "summary blocked after hold")
+  mf.statusBar = saved
+end
 io.stdout:write("perf/inventory OK\n")
