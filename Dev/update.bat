@@ -3,108 +3,104 @@ REM Stock Clerk - one-click updater  [DEV ONLY, DO NOT SHIP]
 REM
 REM Excluded from packaged releases via .pkgmeta (Dev/ is ignored).
 REM
-REM What this does: hard-syncs the local clone to origin/main, or to
-REM another branch if one is given: `update.bat dev` tracks alpha builds.
-REM Any local file changes are discarded (the user does not edit the
-REM addon folder by hand -- edits happen on the dev workstation and
-REM come down through git). SavedVariables live in WTF/, not here,
-REM so they are unaffected.
+REM Hard-syncs the addon folder to a GitHub branch: main by default, or
+REM `update.bat dev` for alpha builds. Local file changes are discarded
+REM (edits happen on the dev workstation and come down through git).
+REM SavedVariables live in WTF\, not here, so they are unaffected.
 REM
-REM Double-click to run (main), or run `update.bat dev` from a prompt.
+REM Self-heals a zip / CurseForge install (no .git) into a git checkout.
+REM Runs from a temp copy so git can rewrite this file mid-sync safely.
 REM Type /reload in WoW when it finishes.
-REM
-REM Works whether this file lives at the addon root (legacy) or inside
-REM Dev/ (current layout). Finds the addon root by looking for
-REM StockClerk.toc.
 
 setlocal EnableExtensions
-set BRANCH=%~1
-if "%BRANCH%"=="" set BRANCH=main
+
+REM ---- Re-launch from %TEMP% (cmd reads .bat files as it runs them) ----
+if not "%SC_UPDATE_TMP%"=="1" (
+    set "SC_UPDATE_SELF=%~dp0"
+    set "SC_UPDATE_TMP=1"
+    copy /y "%~f0" "%TEMP%\stockclerk_update.bat" >nul
+    call "%TEMP%\stockclerk_update.bat" %*
+    exit /b
+)
+
+REM ---- Branch: default main; accept "origin/dev" as "dev" -------------
+set "BRANCH=%~1"
+if "%BRANCH%"=="" set "BRANCH=main"
+if /i "%BRANCH:~0,7%"=="origin/" set "BRANCH=%BRANCH:~7%"
 
 REM ---- Locate the addon root ------------------------------------------
-set ROOT=%~dp0
-if not exist "%ROOT%StockClerk.toc" set ROOT=%~dp0..\
+set "ROOT=%SC_UPDATE_SELF%"
+if not exist "%ROOT%StockClerk.toc" set "ROOT=%SC_UPDATE_SELF%..\"
 if not exist "%ROOT%StockClerk.toc" (
     echo *** Could not find StockClerk.toc.
-    echo *** This script must live at the addon root or one level below.
+    echo *** This script must live at the addon root or in its Dev folder.
     pause
     exit /b 1
 )
 cd /d "%ROOT%"
 
-REM ---- Self-heal: make sure this folder is a git checkout -------------
-REM A CurseForge / zip install replaces the folder and drops .git; turn
-REM it back into a clone in place instead of failing.
+echo ====================================================
+echo   Stock Clerk - Sync to latest (%BRANCH%)
+echo ====================================================
+echo.
+
 where git >nul 2>nul
 if errorlevel 1 (
-    echo *** Git is not installed or not on PATH. Install it from https://git-scm.com
+    echo *** Git is not installed or not on PATH. Get it from https://git-scm.com
     pause
     exit /b 1
 )
+
+REM ---- Self-heal: turn a zip / CurseForge install into a checkout -----
 if not exist ".git" (
-    echo This folder is not a git checkout ^(zip or CurseForge install^).
-    echo Converting it into one...
+    echo This folder is not a git checkout, converting it into one...
     git init -q
-    git remote add origin https://github.com/TheWolfIsLoose/StockClerk.git
     echo.
 )
-
-echo ====================================================
-echo   Stock Clerk - Sync to latest (origin/%BRANCH%)
-echo ====================================================
-echo.
+REM Always (re)point origin at the repo, in case it was missing or old.
+git remote remove origin >nul 2>nul
+git remote add origin https://github.com/TheWolfIsLoose/StockClerk.git
 
 REM ---- Show current version -------------------------------------------
-set BEFORE=
-for /f "delims=" %%h in ('git log -1 --format^=%%h 2^>nul') do set BEFORE=%%h
-if "%BEFORE%"=="" (echo Current: none) else echo Current: %BEFORE%
+set "BEFORE="
+for /f "delims=" %%h in ('git log -1 --format^=%%h 2^>nul') do set "BEFORE=%%h"
+if "%BEFORE%"=="" (echo Current: none) else (echo Current: %BEFORE%)
 echo.
 
-REM ---- Fetch --------------------------------------------------------
-echo Fetching from GitHub...
-git fetch origin
+REM ---- Fetch the branch -----------------------------------------------
+echo Fetching %BRANCH% from GitHub...
+git fetch origin %BRANCH%
 if errorlevel 1 (
-    echo *** git fetch failed. Check your network / auth.
+    echo *** git fetch failed. Check the branch name "%BRANCH%" and your network.
     pause
     exit /b 1
 )
 
-REM ---- Hard-sync to origin/%BRANCH% ---------------------------------
-REM checkout -f -B: discards any local edits and points a local branch of
-REM                 the same name at origin/%BRANCH% (works on a fresh
-REM                 init too, and keeps `git status` showing the branch).
-REM clean -fd:   removes files git doesn't know about (e.g. old
-REM              update.bat at root after it moved to Dev/).
-REM             -f = force, -d = also directories.
-echo Syncing to origin/%BRANCH%...
-git checkout -q -f -B %BRANCH% origin/%BRANCH%
+REM ---- Hard-sync: point a local branch of the same name at it --------
+REM reset --hard discards local edits; clean -fd removes files git
+REM doesn't know about (-f force, -d directories too).
+git symbolic-ref HEAD refs/heads/%BRANCH%
+git reset -q --hard FETCH_HEAD
 if errorlevel 1 (
-    echo *** Sync failed. Does the branch "%BRANCH%" exist on GitHub?
+    echo *** git reset failed.
     pause
     exit /b 1
 )
-git clean -fd
-if errorlevel 1 (
-    echo *** git clean failed.
-    pause
-    exit /b 1
-)
+git clean -fdq
 
-REM ---- Report -------------------------------------------------------
-for /f "delims=" %%h in ('git log -1 --format^=%%h') do set AFTER=%%h
-
+REM ---- Report ---------------------------------------------------------
+for /f "delims=" %%h in ('git log -1 --format^=%%h') do set "AFTER=%%h"
 echo.
 if "%BEFORE%"=="" (
-    echo Installed: %AFTER%  ^(%BRANCH%^)
+    echo Installed: %AFTER% on %BRANCH%
 ) else if "%BEFORE%"=="%AFTER%" (
-    echo Already at %AFTER%. Nothing new.
+    echo Already at %AFTER% on %BRANCH%. Nothing new.
 ) else (
-    echo Updated: %BEFORE%  -^>  %AFTER%
+    echo Updated: %BEFORE% -^> %AFTER% on %BRANCH%
     echo.
     echo --- New commits ---
-    git log --oneline %BEFORE%..%AFTER%
+    git log --oneline %BEFORE%..%AFTER% 2>nul
 )
-
 echo.
 echo Done. Type /reload in WoW to load the new version.
 echo.
