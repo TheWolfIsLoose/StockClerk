@@ -78,7 +78,7 @@ IsLoggedIn = function() return false end
 print = function(...) end
 UISpecialFrames = {}
 SlashCmdList = {}
-Enum = { PlayerInteractionType = { Auctioneer = 21 } }
+Enum = { PlayerInteractionType = { Auctioneer = 21, Banker = 8 } }
 
 local ADDON_NAME = "StockClerk"
 local function load(rel)
@@ -274,19 +274,35 @@ ADDON.Log:Emit("status", nil, { text = "x" })
 assert(sc == 0 and lp == 1, ("status: sidecar %d, logpopup %d"):format(sc, lp))
 ADDON.Log:Emit("buy_success", 42, { qty = 1 })
 assert(sc == 1 and lp == 2, ("buy: sidecar %d, logpopup %d"):format(sc, lp))
-do -- Footer: an action message survives a redraw's summary, then yields to it
+do -- Footer keeps the last action through redraws; the short count is on the button
+  local mf = ADDON.MainFrame
   local bar = { SetText = function(self, t) self.t = t end }
-  local mf, hold = ADDON.MainFrame, timers
-  local saved = mf.statusBar; mf.statusBar = bar
-  local n0 = #timers
-  mf:SetStatus("Added 12 items")
-  mf:SetStatus("5 items tracked", true)
-  assert(bar.t == "Added 12 items", "summary overwrote action message")
-  timers[n0 + 1]()
-  assert(bar.t == "5 items tracked", "summary did not return after hold")
-  mf:SetStatus("6 items tracked", true)
-  assert(bar.t == "6 items tracked", "summary blocked after hold")
-  mf.statusBar = saved
+  local saved, sb, cdp, gii = mf.statusBar, mf.scrollBox, CreateDataProvider, C_Item.GetItemInfo
+  mf.statusBar, mf.scrollBox = bar, { SetDataProvider = function() end }
+  CreateDataProvider = function() return { Insert = function() end } end
+  C_Item.GetItemInfo = gii or function() end
+  mf:SetStatus("Added 12 items"); mf:_RefreshNow()
+  assert(bar.t == "Added 12 items", "redraw overwrote the footer: " .. tostring(bar.t))
+  assert(mf.restockBtn._label:GetText() == "Restock at AH (1)", "button count: " .. tostring(mf.restockBtn._label:GetText()))
+  mf.statusBar, mf.scrollBox, CreateDataProvider, C_Item.GetItemInfo = saved, sb, cdp, gii
+end
+do -- Bank: auto-open when set, close only what we opened, track bankOpen
+  local mf = ADDON.MainFrame
+  assert(ADDON.DB:Settings().autoOpenAtBank == true, "autoOpenAtBank default")
+  mf.frame._shown = false
+  fire("PLAYER_INTERACTION_MANAGER_FRAME_SHOW", 8)
+  assert(mf.frame._shown and ADDON.bankOpen, "did not auto-open at bank")
+  fire("PLAYER_INTERACTION_MANAGER_FRAME_HIDE", 8)
+  assert(not mf.frame._shown and not ADDON.bankOpen, "did not close with bank")
+  mf:Toggle()                                        -- user opens it by hand
+  fire("PLAYER_INTERACTION_MANAGER_FRAME_SHOW", 8); fire("PLAYER_INTERACTION_MANAGER_FRAME_HIDE", 8)
+  assert(mf.frame._shown, "closed a window the user opened")
+  mf.frame._shown = false
+  ADDON.DB:Settings().autoOpenAtBank = false
+  fire("PLAYER_INTERACTION_MANAGER_FRAME_SHOW", 8)
+  assert(not mf.frame._shown and ADDON.bankOpen, "opened with the setting off")
+  fire("PLAYER_INTERACTION_MANAGER_FRAME_HIDE", 8)
+  ADDON.DB:Settings().autoOpenAtBank = true
 end
 do -- Filter chip: shows only short items (items 111 need 5, 42 need 30; bags hold 7)
   local mf, shown = ADDON.MainFrame, nil

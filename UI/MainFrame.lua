@@ -2672,28 +2672,17 @@ function MF:_RefreshNow()
         -- log exists to preserve (code-review v0.2.0..HEAD finding 3).
         -- Friendlier empty-state copy when the list is non-empty
         -- but the filter has hidden everything.
-        if stuckOnly then
-            self.emptyText:SetText("|cff888888Nothing is short. Click the filter icon to see the full list.|r")
-            self.emptyText:Show()
-            self:SetStatus("|cff4ade80Nothing short|r (filter active)", true)
-        else
-            self.emptyText:SetText(L.EMPTY_LIST)
-            self.emptyText:Show()
-            self:SetStatus("0 items tracked", true)
-        end
+        self.emptyText:SetText(stuckOnly
+            and "|cff888888Nothing is short. Click the filter icon to see the full list.|r"
+            or  L.EMPTY_LIST)
+        self.emptyText:Show()
+        self:RefreshRestockBtn()
         return
     end
     self.emptyText:Hide()
 
     local newProvider = CreateDataProvider()
-    local shortCount = 0
     for i, it in ipairs(items) do
-        -- GetCount returns bags-only, matching what the row displays.
-        -- Shortfall is thus "my bags are below target", not "my total
-        -- across everything is below target" — aligned with the metric
-        -- shown to the user.
-        local have = ADDON.Inventory:GetCount(it.itemID) or 0
-        if have < it.need then shortCount = shortCount + 1 end
         newProvider:Insert({
             itemID      = it.itemID,
             name        = it.name,
@@ -2711,17 +2700,9 @@ function MF:_RefreshNow()
     self.scrollBox:SetDataProvider(newProvider, ScrollBoxConstants.RetainScrollPosition)
     self.dataProvider = newProvider
 
-    if shortCount > 0 then
-        self:SetStatus(("|cff98FF98%d items tracked|r  |cff888888|||r  |cfff87171%d short|r"):format(#items, shortCount), true)
-    else
-        self:SetStatus(("|cff98FF98%d items tracked|r  |cff888888|||r  |cff4ade80all stocked|r"):format(#items), true)
-    end
-
-    -- Pass nil so the button routes through Loop:PreviewShortfallCount
-    -- (effective-have) instead of reusing this raw-bags count. Two
-    -- shortCounts (display-vs-behavior) may disagree when the ledger
-    -- holds unlooted purchases; that's the whole point of unifying the
-    -- button's decision with the loop's.
+    -- The footer is feedback only (last action); the short count lives on
+    -- the Restock button, computed by Loop:PreviewShortfallCount so the
+    -- number matches what a click will actually buy.
     self:RefreshRestockBtn()
 end
 
@@ -2764,7 +2745,7 @@ function MF:RefreshRestockBtn(shortCount)
     local ahOpen  = AuctionHouseFrame and AuctionHouseFrame:IsShown()
     local canStart = ahOpen and shortCount > 0
     if btn._label then
-        btn._label:SetText("Restock at AH")
+        btn._label:SetText(shortCount > 0 and ("Restock at AH (%d)"):format(shortCount) or "Restock at AH")
         if canStart then
             btn._label:SetTextColor(1, 1, 1, 1)
         else
@@ -2805,14 +2786,37 @@ end
 -- Callable from OnAuctionHouseShow (auto-open path) or from a manual
 -- /clerk-open-while-AH-is-already-up path, so the behavior is symmetric.
 function MF:DockToAHIfOpen()
-    local f  = self.frame
-    local ah = _G.AuctionHouseFrame
-    if not (f and ah and ah:IsShown()) then return end
+    self:DockTo(_G.AuctionHouseFrame)
+end
+
+-- Put the window back where it was before DockTo (or at the saved
+-- position if the snapshot was lost). No-op when not docked.
+function MF:Undock()
+    local f = self.frame
+    if not (self._docked and f) then return end
+    local pre = self._preDockPos
+    if not (pre and pre.point) then pre = ADDON.DB.char.uiPos end
+    f:ClearAllPoints()
+    if pre and pre.point then
+        f:SetPoint(pre.point, UIParent, pre.point, pre.x or 0, pre.y or 0)
+    else
+        f:SetPoint("CENTER")
+    end
+    self._docked = false
+    self._preDockPos = nil
+end
+
+-- Dock to the right edge of `host` (AH or bank frame) if it's showing.
+-- Bag addons that replace the bank window leave BankFrame hidden: then
+-- we just stay where we are.
+function MF:DockTo(host)
+    local f = self.frame
+    if not (f and f:IsShown() and host and host:IsShown()) then return end
     if self._docked then return end -- already docked, don't overwrite _preDockPos
     local point, _, _, x, y = f:GetPoint()
     self._preDockPos = { point = point, x = x, y = y }
     f:ClearAllPoints()
-    f:SetPoint("TOPLEFT", ah, "TOPRIGHT", 1, 0)
+    f:SetPoint("TOPLEFT", host, "TOPRIGHT", 1, 0)
     self._docked = true
     if ADDON.Sidecar and ADDON.Sidecar:IsShown() then
         ADDON.Sidecar:Toggle()  -- hide
@@ -3100,24 +3104,8 @@ end
 -- feedback, which otherwise lasts only until the next status overwrites the
 -- footer. Empty strings are still
 -- passed to the footer (to clear it) but skipped in the log.
--- Action messages (logged) stay on the footer for STATUS_HOLD seconds;
--- Refresh's "N tracked | N short" summary (skipLog) waits behind them
--- instead of overwriting them on the next redraw, then takes over.
-local STATUS_HOLD = 8
+-- Footer = feedback: the last action message stays until the next one.
 function MF:SetStatus(text, skipLog)
-    if skipLog then
-        self._summary = text
-        if self._holdUntil and GetTime() < self._holdUntil then return end
-    else
-        local holdUntil = GetTime() + STATUS_HOLD
-        self._holdUntil = holdUntil
-        C_Timer.After(STATUS_HOLD, function()
-            if self._holdUntil == holdUntil and self._summary and self.statusBar then
-                self._holdUntil = nil
-                self.statusBar:SetText(self._summary)
-            end
-        end)
-    end
     if self.statusBar then self.statusBar:SetText(text or "") end
     if not skipLog and text and text ~= "" and ADDON.Log and ADDON.Log.Emit then
         ADDON.Log:Emit("status", nil, { text = text })
@@ -3300,6 +3288,9 @@ function MF:Show(fromAH)
     self:Build()
     if fromAH ~= nil then
         self.openedByAH = fromAH and true or false
+        -- An explicit manual open (Toggle passes false) means the user now
+        -- owns the window: closing the bank mustn't close it either.
+        if not fromAH then self.openedByBank = false end
     end
     self.frame:Show()
     self:Refresh()

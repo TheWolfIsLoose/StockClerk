@@ -199,8 +199,11 @@ what they don't want and restocks from the AH or the bank.
 3. ~~Load `Data/Consumables.lua` from the TOC; Sidecar button; retire
    `Dev/RecommendedLists.lua` and `/clerk seed` → `v1.2.0-alpha1`.~~
    **Done 2026-09-26.**
-3b. "Auto-open at Bank" Sidecar toggle (default ON) + bank open/close
-   detection (`Banker` interaction type 8, confirmed by the probe).
+3b. ~~"Auto-open at Bank" Sidecar toggle (default ON) + bank open/close
+   detection (`Banker` interaction type 8, confirmed by the probe).~~
+   **Done 2026-09-26:** docks to `BankFrame` when it's showing (stays put
+   if a bag addon replaced it); closes with the bank only if it opened
+   itself; `ADDON.bankOpen` tracks the banker. Shared `MF:DockTo/Undock`.
 4. `BankRestock.lua` planner + smoke tests for the move math.
 5. Executor, bank open/close detection, footer button, log kind,
    Sidecar feed, "Auto-open at Bank" toggle → `v1.2.0-alpha2`.
@@ -234,8 +237,13 @@ Your list, caps and settings carry over unchanged.
 
 - ~~Filter chip should show only items you're short on.~~ **Done
   2026-09-26:** replaced "stuck above cap" outright (bags below target).
-- Footer action messages now hold 8s before the tracked/short summary
-  returns (was overwritten on the next redraw). Done 2026-09-26.
+- **Footer redesign (Decided + done 2026-09-26):** the footer is
+  feedback only; the last action message stays until the next one (no
+  more "N tracked | N short" summary, which duplicated the red rows and
+  kept overwriting feedback). The short count moved onto the button:
+  "Restock at AH (3)". Feature A's button follows suit ("Restock from
+  Bank (2)"), and when nothing has happened yet at a banker the footer
+  shows a hint: "2 short items can come from your bank."
 
 ### Open questions
 
@@ -272,6 +280,8 @@ Carried from the legacy backlog; not committed to a release.
   (cross-character restocking).
 - Gold/silver/copper cap input; "no cap" as an explicit checkbox.
 - Minimap icon to open Stock Clerk, with a settings option to hide it.
+- Footer hint at the AH: "3 short, about 1,240g at last seen prices"
+  (estimated restock cost; skip stale prices).
 
 The full pre-1.0 backlog text is in git history (`Dev/NOTES.md`, removed
 in the commit that added this roadmap).

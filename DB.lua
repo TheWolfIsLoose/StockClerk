@@ -23,6 +23,7 @@
       char.uiPos = { point, x, y }           -- last MainFrame position
       global.settings  = {
         autoOpenAtAH     = bool,       -- default TRUE. Pops SC on AH visit.
+        autoOpenAtBank   = bool,       -- default TRUE. Pops SC at a banker.
         autoRestock      = bool,       -- default FALSE. If TRUE, opening the
                                        -- AH also fires the restock loop when
                                        -- there's a shortfall to work through.
@@ -81,6 +82,7 @@ DB.defaults = {
     global = {
         settings  = {
             autoOpenAtAH     = true,      -- open SC docked to the AH on visit.
+            autoOpenAtBank   = true,      -- same at a banker (v1.2).
                                           -- Design ended up here: users who
                                           -- track a shopping list generally
                                           -- WANT it up when they're at the AH.

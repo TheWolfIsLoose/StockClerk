@@ -83,18 +83,33 @@ local function Build(anchor)
     ahHint:SetWordWrap(true)
     ahHint:SetText("Pop the shopping list open when you visit the AH.")
 
+    -- Auto-open at Bank (default ON).
+    local bankCheck = CreateFrame("CheckButton", "StockClerkSidecarBankCheck", f, "UICheckButtonTemplate")
+    bankCheck:SetPoint("TOPLEFT", 8, -78)
+    bankCheck:SetSize(22, 22)
+    _G[bankCheck:GetName() .. "Text"]:SetText("Auto-open at Bank")
+    _G[bankCheck:GetName() .. "Text"]:SetTextColor(0.9, 0.9, 0.9, 1)
+    f._bankCheck = bankCheck
+
+    local bankHint = f:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
+    bankHint:SetPoint("TOPLEFT", 30, -100)
+    bankHint:SetPoint("RIGHT", -8, 0)
+    bankHint:SetJustifyH("LEFT")
+    bankHint:SetWordWrap(true)
+    bankHint:SetText("Open the list at a banker too.")
+
     -- Express-Restock on AH open (default OFF). v1.1 rename; internal
     -- identifier stays StockClerkSidecarAutoRestockCheck / DB field
     -- autoRestock for compatibility.
     local arCheck = CreateFrame("CheckButton", "StockClerkSidecarAutoRestockCheck", f, "UICheckButtonTemplate")
-    arCheck:SetPoint("TOPLEFT", 8, -78)
+    arCheck:SetPoint("TOPLEFT", 8, -124)
     arCheck:SetSize(22, 22)
     _G[arCheck:GetName() .. "Text"]:SetText("Express-Restock on AH open")
     _G[arCheck:GetName() .. "Text"]:SetTextColor(0.9, 0.9, 0.9, 1)
     f._autoRestockCheck = arCheck
 
     local arHint = f:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
-    arHint:SetPoint("TOPLEFT", 30, -100)
+    arHint:SetPoint("TOPLEFT", 30, -146)
     arHint:SetPoint("RIGHT", -8, 0)
     arHint:SetJustifyH("LEFT")
     arHint:SetWordWrap(true)
@@ -102,7 +117,7 @@ local function Build(anchor)
 
     -- One click: add this expansion's staples (Data/Consumables.lua).
     local ccBtn = CreateFrame("Button", nil, f, "UIPanelButtonTemplate")
-    ccBtn:SetPoint("TOPLEFT", 12, -134)
+    ccBtn:SetPoint("TOPLEFT", 12, -180)
     ccBtn:SetPoint("RIGHT", -12, 0)
     ccBtn:SetHeight(22)
     ccBtn:SetText("Add common consumables")
@@ -111,29 +126,29 @@ local function Build(anchor)
     local divider = f:CreateTexture(nil, "OVERLAY", nil, 6)
     divider:SetColorTexture(0, 0, 0, 1)
     divider:SetHeight(1)
-    divider:SetPoint("TOPLEFT", 8, -168)
-    divider:SetPoint("TOPRIGHT", -8, -168)
+    divider:SetPoint("TOPLEFT", 8, -214)
+    divider:SetPoint("TOPRIGHT", -8, -214)
 
     -- ---- Activity feed section --------------------------------------
     local feedTitle = f:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-    feedTitle:SetPoint("TOPLEFT", 12, -176)
+    feedTitle:SetPoint("TOPLEFT", 12, -222)
     feedTitle:SetText("|cff98FF98Recent Activity|r")
 
     -- "log" hint anchored to feedTitle's right so the user can find the
     -- full log dump.
     local feedHint = f:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
-    feedHint:SetPoint("TOPRIGHT", -12, -180)
+    feedHint:SetPoint("TOPRIGHT", -12, -226)
     feedHint:SetText("|cff6a6a6a/clerk log|r")
 
     -- Scrollframe hosts the feed rows. Simple, no fancy pooling -- the
     -- panel is bounded and refreshes on Emit, so ~30 rows is the ceiling.
     local scrollBg = f:CreateTexture(nil, "BACKGROUND")
     scrollBg:SetColorTexture(Palette.bgDark[1], Palette.bgDark[2], Palette.bgDark[3], 0.6)
-    scrollBg:SetPoint("TOPLEFT", 8, -198)
+    scrollBg:SetPoint("TOPLEFT", 8, -244)
     scrollBg:SetPoint("BOTTOMRIGHT", -8, 8)
 
     local scrollFrame = CreateFrame("ScrollFrame", "StockClerkSidecarScroll", f, "UIPanelScrollFrameTemplate")
-    scrollFrame:SetPoint("TOPLEFT", 10, -200)
+    scrollFrame:SetPoint("TOPLEFT", 10, -246)
     scrollFrame:SetPoint("BOTTOMRIGHT", -28, 10)  -- -28 leaves room for the scrollbar
 
     local feedContent = CreateFrame("Frame", nil, scrollFrame)
@@ -145,6 +160,9 @@ local function Build(anchor)
     -- ---- Wire behavior ----------------------------------------------
     ahCheck:SetScript("OnClick", function(self)
         ADDON.DB:Settings().autoOpenAtAH = self:GetChecked() and true or false
+    end)
+    bankCheck:SetScript("OnClick", function(self)
+        ADDON.DB:Settings().autoOpenAtBank = self:GetChecked() and true or false
     end)
     arCheck:SetScript("OnClick", function(self)
         ADDON.DB:Settings().autoRestock = self:GetChecked() and true or false
@@ -224,6 +242,7 @@ function Sidecar:Refresh()
 
     -- Settings widgets
     f._ahCheck:SetChecked(s.autoOpenAtAH and true or false)
+    f._bankCheck:SetChecked(s.autoOpenAtBank and true or false)
     if f._autoRestockCheck then
         f._autoRestockCheck:SetChecked(s.autoRestock and true or false)
     end

@@ -155,15 +155,21 @@ function StockClerk:OnItemInfoReceived(itemID, success)
     end
 end
 
+-- Banker (8) is what the 12.1 bank probe saw for both the character and
+-- warband bank.
 function StockClerk:OnInteractionShow(interactionType)
     if interactionType == Enum.PlayerInteractionType.Auctioneer then
         self:OnAuctionHouseShow()
+    elseif interactionType == Enum.PlayerInteractionType.Banker then
+        self:OnBankShow()
     end
 end
 
 function StockClerk:OnInteractionHide(interactionType)
     if interactionType == Enum.PlayerInteractionType.Auctioneer then
         self:OnAuctionHouseClosed()
+    elseif interactionType == Enum.PlayerInteractionType.Banker then
+        self:OnBankClosed()
     end
 end
 
@@ -235,35 +241,40 @@ function StockClerk:OnAuctionHouseClosed()
         ADDON.MainFrame:RefreshRestockBtn()
     end
 
-    -- Restore the floating position if we docked to the AH. Do this
-    -- BEFORE the Hide() below so if the user re-opens the main frame
-    -- later it comes up where they left it, not glued to a hidden AH.
-    if ADDON.MainFrame and ADDON.MainFrame._docked then
-        local f = ADDON.MainFrame.frame
-        local pre = ADDON.MainFrame._preDockPos
-        if f and pre and pre.point then
-            f:ClearAllPoints()
-            f:SetPoint(pre.point, UIParent, pre.point, pre.x or 0, pre.y or 0)
-        elseif f then
-            -- Fall back to the saved uiPos if we lost the pre-dock snapshot
-            -- (shouldn't happen, but a re-anchor beats an orphaned frame).
-            local pos = ADDON.DB.char.uiPos
-            f:ClearAllPoints()
-            if pos and pos.point then
-                f:SetPoint(pos.point, UIParent, pos.point, pos.x or 0, pos.y or 0)
-            else
-                f:SetPoint("CENTER")
-            end
+    -- Undock BEFORE hiding so a later reopen comes up where the user left
+    -- it; close only when WE opened it.
+    local mf = ADDON.MainFrame
+    if mf then
+        mf:Undock()
+        if mf.openedByAH then
+            mf.openedByAH = false
+            mf:Hide()
         end
-        ADDON.MainFrame._docked = false
-        ADDON.MainFrame._preDockPos = nil
     end
+end
 
-    -- Close on AH close only when WE opened it. If the user has since
-    -- interacted with the window, leave it alone.
-    if ADDON.MainFrame and ADDON.MainFrame.openedByAH then
-        ADDON.MainFrame.openedByAH = false
-        ADDON.MainFrame:Hide()
+-- Bank: same auto-open/dock/close pattern as the AH. ADDON.bankOpen is
+-- the source of truth for "at a banker" (Restock from Bank, v1.2).
+function StockClerk:OnBankShow()
+    ADDON.bankOpen = true
+    local mf = ADDON.MainFrame
+    if not mf then return end
+    if ADDON.DB:Settings().autoOpenAtBank and not (mf.frame and mf.frame:IsShown()) then
+        mf.openedByBank = true
+        mf:Show()
+    end
+    -- BankFrame shows in the same event burst; dock on the next frame.
+    C_Timer.After(0, function() mf:DockTo(_G.BankFrame) end)
+end
+
+function StockClerk:OnBankClosed()
+    ADDON.bankOpen = false
+    local mf = ADDON.MainFrame
+    if not mf then return end
+    mf:Undock()
+    if mf.openedByBank then
+        mf.openedByBank = false
+        mf:Hide()
     end
 end
 
