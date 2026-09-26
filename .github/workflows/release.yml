@@ -1,6 +1,11 @@
 name: Release
 
-# Fires on every pushed tag. Handles two things automatically:
+# Fires on every pushed tag, and on pushes to dev / main. On a branch push
+# the version comes from the top `## vX.Y.Z` heading in CHANGELOG.md; if
+# that tag doesn't exist yet the workflow creates it, then releases.
+# Prerelease versions (-alpha/-beta/-preview/-rc) only ship from dev,
+# stable versions only from main. Existing tags are never re-released.
+# Then, for the tag:
 #   1. Packages the addon (BigWigsMods packager, same tool CurseForge
 #      uses internally) so the zip attached to the GitHub Release is
 #      structurally identical to what CF publishes.
@@ -19,6 +24,9 @@ on:
   push:
     tags:
       - 'v*'
+    branches:
+      - dev
+      - main
 
 permissions:
   contents: write
@@ -32,10 +40,44 @@ jobs:
         with:
           fetch-depth: 0
 
+      - name: Resolve tag
+        id: tag
+        run: |
+          if [ "${GITHUB_REF_TYPE}" = "tag" ]; then
+            echo "tag=${GITHUB_REF_NAME}" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          TAG=$(grep -m1 -oE '^## v[0-9][^ ]*' CHANGELOG.md | cut -c4-)
+          if [ -z "$TAG" ]; then
+            echo "No '## vX.Y.Z' heading in CHANGELOG.md; nothing to release."
+            echo "skip=true" >> "$GITHUB_OUTPUT"; exit 0
+          fi
+          if git rev-parse -q --verify "refs/tags/$TAG" >/dev/null; then
+            echo "$TAG already exists; nothing to release."
+            echo "skip=true" >> "$GITHUB_OUTPUT"; exit 0
+          fi
+          PRE=false
+          [[ "$TAG" =~ -(alpha|beta|preview|rc) ]] && PRE=true
+          if [ "$GITHUB_REF_NAME" = "dev" ] && [ "$PRE" = false ]; then
+            echo "$TAG is a stable version; stable releases ship from main only."
+            echo "skip=true" >> "$GITHUB_OUTPUT"; exit 0
+          fi
+          if [ "$GITHUB_REF_NAME" = "main" ] && [ "$PRE" = true ]; then
+            echo "$TAG is a prerelease; prereleases ship from dev only."
+            echo "skip=true" >> "$GITHUB_OUTPUT"; exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898333+github-actions[bot]@users.noreply.github.com"
+          git tag -a "$TAG" -m "$TAG"
+          # Pushed with GITHUB_TOKEN, so it does not re-trigger this workflow.
+          git push origin "$TAG"
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+
       - name: Extract release notes from CHANGELOG
+        if: steps.tag.outputs.skip != 'true'
         id: notes
         run: |
-          TAG="${GITHUB_REF_NAME}"
+          TAG="${{ steps.tag.outputs.tag }}"
           echo "Building release notes for tag: $TAG"
           # Strip leading 'v' for CHANGELOG section header match.
           SECTION="${TAG#v}"
@@ -52,9 +94,10 @@ jobs:
           head -5 /tmp/release-notes.md
 
       - name: Detect prerelease
+        if: steps.tag.outputs.skip != 'true'
         id: prerelease
         run: |
-          TAG="${GITHUB_REF_NAME}"
+          TAG="${{ steps.tag.outputs.tag }}"
           if [[ "$TAG" == *"-alpha"* || "$TAG" == *"-beta"* || "$TAG" == *"-preview"* || "$TAG" == *"-rc"* ]]; then
             echo "prerelease=true" >> "$GITHUB_OUTPUT"
           else
@@ -62,6 +105,7 @@ jobs:
           fi
 
       - name: Package addon (BigWigsMods packager)
+        if: steps.tag.outputs.skip != 'true'
         # Packages the addon following .pkgmeta rules, producing a zip
         # in .release/ that matches CurseForge's own build output.
         uses: BigWigsMods/packager@master
@@ -72,10 +116,11 @@ jobs:
           args: -d -w -a
 
       - name: Create GitHub Release
+        if: steps.tag.outputs.skip != 'true'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          TAG="${GITHUB_REF_NAME}"
+          TAG="${{ steps.tag.outputs.tag }}"
           PRERELEASE_FLAG=""
           if [ "${{ steps.prerelease.outputs.prerelease }}" = "true" ]; then
             PRERELEASE_FLAG="--prerelease"
