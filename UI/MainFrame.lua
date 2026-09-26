@@ -560,7 +560,7 @@ local function BuildRow(row)
     -- exactly like the Price Cap cell — transparent at rest, dark fill +
     -- brand border fade in on hover, click opens an inline editor in place.
     row.needCell = CreateFrame("Button", nil, row)
-    row.needCell:SetSize(42, 20)  -- v0.7: 56 -> 42 for compressed layout
+    row.needCell:SetSize(42, 20)
     row.needCell:SetPoint("RIGHT", row, "RIGHT", -160, 0)  -- accounting-columns edge
     row.needCell:RegisterForClicks("LeftButtonUp", "RightButtonUp")
     row.needCell:SetFrameLevel(row:GetFrameLevel() + 2)
@@ -595,7 +595,7 @@ local function BuildRow(row)
     -- hunting for it inside the count string. Wider than the Need cell (72
     -- vs 56) to comfortably hold 4-digit gold values like "9999g".
     row.capCell = CreateFrame("Button", nil, row)
-    row.capCell:SetSize(50, 20)  -- v0.7: 72 -> 50 for compressed layout
+    row.capCell:SetSize(50, 20)
     row.capCell:SetPoint("RIGHT", row, "RIGHT", -100, 0)  -- accounting-columns edge
     row.capCell:RegisterForClicks("LeftButtonUp", "RightButtonUp")
     row.capCell:SetFrameLevel(row:GetFrameLevel() + 2)
@@ -639,7 +639,7 @@ local function BuildRow(row)
     row.needEdit:SetNumeric(true)
     row.needEdit:SetMaxLetters(5)
     row.needEdit:SetJustifyH("CENTER")
-    row.needEdit:SetSize(42, 20)  -- v0.7: matches compressed needCell
+    row.needEdit:SetSize(42, 20)
     row.needEdit:SetPoint("CENTER", row.needCell, "CENTER")
     -- Explicitly single-line so Enter routes to OnEnterPressed rather
     -- than being consumed as a newline. Do NOT call EnableKeyboard(true)
@@ -683,7 +683,7 @@ local function BuildRow(row)
     row.priceEdit:SetMultiLine(false)
     row.priceEdit:SetMaxLetters(7)  -- 9,999,999g cap on the input field
     row.priceEdit:SetJustifyH("CENTER")
-    row.priceEdit:SetSize(50, 20)  -- v0.7: matches compressed capCell
+    row.priceEdit:SetSize(50, 20)
     row.priceEdit:SetPoint("CENTER", row.capCell, "CENTER")
     row.priceEditBg:SetPoint("TOPLEFT",     row.priceEdit, "TOPLEFT",     -4, 2)
     row.priceEditBg:SetPoint("BOTTOMRIGHT", row.priceEdit, "BOTTOMRIGHT",  4, -2)
@@ -699,7 +699,7 @@ local function BuildRow(row)
     -- the value updates automatically on every AH search (row-click or
     -- restock loop). Tooltip on hover: "1250g -- 2h ago via loop".
     row.lastSeen = row:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-    row.lastSeen:SetPoint("RIGHT", row, "RIGHT", -30, 0)  -- v0.7: shifted right of trash
+    row.lastSeen:SetPoint("RIGHT", row, "RIGHT", -30, 0)
     row.lastSeen:SetWidth(60)  -- widened for #g#s (was 38)
     row.lastSeen:SetJustifyH("RIGHT")
     -- Invisible mouse target sized to the column so tooltips still work.
@@ -1284,7 +1284,7 @@ function MF:Build()
     -- black bottom borders, not stacked backdrops. All of this is the
     -- ElvUI/atrocityEssentials aesthetic verbatim.
     local f = CreateFrame("Frame", "StockClerkFrame", UIParent, "BackdropTemplate")
-    f:SetSize(420, 400)  -- v0.7: shopping-list shape, down from 680x500
+    f:SetSize(420, 400)
     f:SetFrameStrata("HIGH")
     f:SetToplevel(true)
     f:SetClampedToScreen(true)
@@ -1529,7 +1529,7 @@ function MF:Build()
     -- Uses a font-string "×" since we don't have the atrocity texture; the
     -- shape is functionally the same and it snaps to pixels cleanly.
     local closeX = CreateFrame("Button", nil, header)
-    closeX:SetSize(36, 28)  -- v0.7: enlarged from 28x22 for easier click targeting
+    closeX:SetSize(36, 28)
     closeX:SetPoint("RIGHT", header, "RIGHT", -4, 0)
     local closeXText = closeX:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
     closeXText:SetPoint("CENTER")
@@ -1632,7 +1632,7 @@ function MF:Build()
     priceEB:SetPoint("LEFT", countEB, "RIGHT", 12, 0)
 
     local addBtn = CreateFrame("Button", nil, toolbar)
-    addBtn:SetSize(72, 22)  -- v0.7: 96 -> 72 for compressed toolbar
+    addBtn:SetSize(72, 22)
     addBtn:SetPoint("LEFT", priceEB, "RIGHT", 10, -6)
     StyleButton(addBtn)
     local addBtnText = addBtn:CreateFontString(nil, "OVERLAY", "GameFontNormal")
