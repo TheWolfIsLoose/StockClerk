@@ -306,7 +306,7 @@ function StockClerk:OnSlashCommand(msg)
 
     if cmd == "help" or cmd == "?" then
         for _, key in ipairs({ "HELP_TITLE", "HELP_OPEN", "HELP_SHORT", "HELP_ADD", "HELP_LOG",
-                               "HELP_PENDING", "HELP_DUMP", "HELP_RESET", "HELP_DEBUG", "HELP_SEED" }) do
+                               "HELP_PENDING", "HELP_DUMP", "HELP_RESET", "HELP_DEBUG" }) do
             self:Print(L[key])
         end
         return
@@ -374,17 +374,6 @@ function StockClerk:OnSlashCommand(msg)
         end
         table.sort(rows)
         self:Print("|cffff8888Pending delivery:|r " .. table.concat(rows, ", "))
-        return
-    end
-
-    if cmd == "seed" then
-        if ADDON.RecommendedLists and ADDON.RecommendedLists.Apply then
-            local added, categories = ADDON.RecommendedLists:Apply()
-            self:Print(L.SEED_APPLIED:format(added, categories))
-            if ADDON.MainFrame then ADDON.MainFrame:Refresh() end
-        else
-            self:Print("Recommended lists module not loaded (release build strips it).")
-        end
         return
     end
 

@@ -10,6 +10,34 @@ or, where it had no entry, from that version's GitHub release notes.
 > There is no v1.1.2 stable: the v1.1.2 alphas are the start of v1.2.0
 > (efficiency pass). v1.2.0 plan: `Dev/ROADMAP.md`.
 
+## v1.2.0-alpha1 (2026-09-26)
+
+First v1.2 prerelease: the v1.1.2 efficiency pass plus Feature B.
+
+### New: Add common consumables
+
+- Side panel button (under the AH toggles) adds every item in
+  `Data/Consumables.lua` that isn't already tracked, target 1. Tracked
+  items keep their target and cap. Re-clicking re-adds anything removed
+  since (removals aren't remembered, by design). Footer reports the count;
+  one `status` log entry for the batch.
+- `Data/Consumables.lua` is now loaded from the TOC (13 Midnight items).
+  Edit that file to change the list; no code change needed.
+
+### Removed
+
+- Dev-only `Dev/RecommendedLists.lua` and `/clerk seed` (replaced by the
+  button). The `debugSeeded` setting default is gone; old saved values
+  are ignored.
+
+### Dev
+
+- `Dev/BankProbe.lua` (`/clerk bankprobe <itemID> [scan]`, debug builds
+  only): bank-API spike for Feature A. Results in `Dev/ROADMAP.md`.
+- `Dev/update.bat` self-heals a zip/CurseForge install into a git
+  checkout, runs from a temp copy, syncs via fetch + reset.
+- Smoke test covers the consumables merge.
+
 ## v1.1.2-alpha2 (2026-09-26)
 
 Second cleanup pass. Stock Clerk now has no library dependencies.

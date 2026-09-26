@@ -91,7 +91,6 @@ DB.defaults = {
                                           -- default because it commits the
                                           -- user to a purchase flow they
                                           -- didn't explicitly ask for.
-            debugSeeded      = false,     -- so /clerk seed only runs once by default
             lastPriceTTL     = 24 * 3600, -- QA-11; 24h before Last Seen dims
         },
     },
@@ -288,6 +287,20 @@ function DB:SetItem(itemID, need, maxPrice, source)
             }
         end
     end
+end
+
+-- "Add common consumables": adds every Data/Consumables.lua item that isn't
+-- tracked yet, with target 1. Tracked items are never touched. Returns the
+-- number added.
+function DB:AddCommonConsumables()
+    local added = 0
+    for _, itemID in ipairs(ADDON.CommonConsumables or {}) do
+        if not self.char.items[itemID] then
+            self:SetItem(itemID, 1)
+            added = added + 1
+        end
+    end
+    return added
 end
 
 -- Update just the maxPrice for an existing item; no-op if the item isn't

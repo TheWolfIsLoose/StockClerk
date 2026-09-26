@@ -11,6 +11,7 @@
 
 Locale.lua
 DB.lua
+Data\Consumables.lua
 Log.lua
 ItemResolver.lua
 Inventory.lua
@@ -24,6 +25,5 @@ UI\Sidecar.lua
 UI\LogPopup.lua
 
 #@debug@
-Dev\RecommendedLists.lua
 Dev\BankProbe.lua
 #@end-debug@

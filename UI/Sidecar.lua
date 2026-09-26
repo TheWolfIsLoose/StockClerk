@@ -100,33 +100,40 @@ local function Build(anchor)
     arHint:SetWordWrap(true)
     arHint:SetText("Also start the restock loop when the AH opens (if anything is short).")
 
+    -- One click: add this expansion's staples (Data/Consumables.lua).
+    local ccBtn = CreateFrame("Button", nil, f, "UIPanelButtonTemplate")
+    ccBtn:SetPoint("TOPLEFT", 12, -134)
+    ccBtn:SetPoint("RIGHT", -12, 0)
+    ccBtn:SetHeight(22)
+    ccBtn:SetText("Add common consumables")
+
     -- ---- Divider -----------------------------------------------------
     local divider = f:CreateTexture(nil, "OVERLAY", nil, 6)
     divider:SetColorTexture(0, 0, 0, 1)
     divider:SetHeight(1)
-    divider:SetPoint("TOPLEFT", 8, -136)
-    divider:SetPoint("TOPRIGHT", -8, -136)
+    divider:SetPoint("TOPLEFT", 8, -168)
+    divider:SetPoint("TOPRIGHT", -8, -168)
 
     -- ---- Activity feed section --------------------------------------
     local feedTitle = f:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-    feedTitle:SetPoint("TOPLEFT", 12, -144)
+    feedTitle:SetPoint("TOPLEFT", 12, -176)
     feedTitle:SetText("|cff98FF98Recent Activity|r")
 
     -- "log" hint anchored to feedTitle's right so the user can find the
     -- full log dump.
     local feedHint = f:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
-    feedHint:SetPoint("TOPRIGHT", -12, -148)
+    feedHint:SetPoint("TOPRIGHT", -12, -180)
     feedHint:SetText("|cff6a6a6a/clerk log|r")
 
     -- Scrollframe hosts the feed rows. Simple, no fancy pooling -- the
     -- panel is bounded and refreshes on Emit, so ~30 rows is the ceiling.
     local scrollBg = f:CreateTexture(nil, "BACKGROUND")
     scrollBg:SetColorTexture(Palette.bgDark[1], Palette.bgDark[2], Palette.bgDark[3], 0.6)
-    scrollBg:SetPoint("TOPLEFT", 8, -166)
+    scrollBg:SetPoint("TOPLEFT", 8, -198)
     scrollBg:SetPoint("BOTTOMRIGHT", -8, 8)
 
     local scrollFrame = CreateFrame("ScrollFrame", "StockClerkSidecarScroll", f, "UIPanelScrollFrameTemplate")
-    scrollFrame:SetPoint("TOPLEFT", 10, -168)
+    scrollFrame:SetPoint("TOPLEFT", 10, -200)
     scrollFrame:SetPoint("BOTTOMRIGHT", -28, 10)  -- -28 leaves room for the scrollbar
 
     local feedContent = CreateFrame("Frame", nil, scrollFrame)
@@ -141,6 +148,14 @@ local function Build(anchor)
     end)
     arCheck:SetScript("OnClick", function(self)
         ADDON.DB:Settings().autoRestock = self:GetChecked() and true or false
+    end)
+    ccBtn:SetScript("OnClick", function()
+        local n  = ADDON.DB:AddCommonConsumables()
+        local mf = ADDON.MainFrame
+        if mf.frame and mf.frame:IsShown() then mf:Refresh() end
+        mf:SetStatus(n > 0
+            and ("Added %d items. Remove any you don't need with the red X on each row."):format(n)
+            or  "All the common consumables are already on your list.")
     end)
 
     Sidecar.frame = f

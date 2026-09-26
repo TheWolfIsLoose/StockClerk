@@ -119,6 +119,16 @@ assert(st.autoOpenAtAH == false, "saved setting lost")
 assert(st.autoRestock == false and st.lastPriceTTL == 86400, "defaults not filled")
 assert(#ADDON.DB.global.log == 1 and ADDON.DB.char.items[111].need == 5, "saved data lost")
 assert(ADDON.DB.char.pendingBuys and ADDON.DB.char.ui, "char defaults not filled")
+do -- "Add common consumables": adds the rest at target 1, never touches tracked items
+  local items, list = ADDON.DB.char.items, ADDON.CommonConsumables
+  local seen = {}; for _, id in ipairs(list) do assert(not seen[id], "duplicate consumable " .. id); seen[id] = true end
+  items[list[1]] = { need = 7, maxPrice = 99, sortOrder = 5 }
+  assert(ADDON.DB:AddCommonConsumables() == #list - 1, "common consumables count")
+  assert(items[list[1]].need == 7 and items[list[1]].maxPrice == 99, "tracked item was overwritten")
+  assert(items[list[2]].need == 1, "new item target")
+  assert(ADDON.DB:AddCommonConsumables() == 0, "second click added duplicates")
+  for _, id in ipairs(list) do items[id] = nil end
+end
 do local out = {}; local op = print; print = function(m) out[#out + 1] = m end
    SlashCmdList.STOCKCLERK("help"); print = op
    assert(out[1] and out[1]:find("StockClerk", 1, true), "slash /clerk help did not print") end

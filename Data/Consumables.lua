@@ -5,9 +5,6 @@
     of 1; items already on the player's list are left untouched.
     The itemID fixes the quality; the "(Rank N)" notes are just labels
     (commodities are Rank 1 or Rank 2).
-
-    Not loaded yet: add to StockClerk.toc when the v1.2 feature is built
-    (see Dev/ROADMAP.md).
 --]]
 
 local addonName = ...

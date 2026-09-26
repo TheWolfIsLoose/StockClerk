@@ -104,9 +104,13 @@ shortfall.
 - Rows update live as bags change (existing bag-event refresh).
 - **Decided:** one click pulls everything; no per-item confirm. Moving
   your own items costs nothing and is reversible, unlike an AH buy.
-- **Decided:** the main window auto-docks/opens at the bank the same way
-  it does at the AH, behind a new Sidecar toggle "Auto-open at Bank"
-  (default OFF). W2-B from the legacy backlog.
+- **Decided (2026-09-26):** the main window opens at the bank the same
+  way it does at the AH, behind a new Sidecar toggle "Auto-open at Bank",
+  **default ON** for now. Without it the only way in at the bank is the
+  slash command. Build it right after Feature B (before the executor).
+- **Decided:** progress and the summary go in the footer + Sidecar log
+  only. No center-screen text (many players hide it with UI addons) and
+  no separate popup (the window is open whenever the button is).
 
 **Behavior rules**
 - Target = `need − have`, where *have* is the same "effective have" the
@@ -192,8 +196,11 @@ what they don't want and restocks from the AH or the bank.
    2026-09-26:** stable, feels as good or slightly better. It rides along
    in `v1.2.0-alpha1`.
 2. In-game spike for Feature A's container calls (see above).
-3. Load `Data/Consumables.lua` from the TOC; Sidecar button; retire
-   `Dev/RecommendedLists.lua` and `/clerk seed` → `v1.2.0-alpha1`.
+3. ~~Load `Data/Consumables.lua` from the TOC; Sidecar button; retire
+   `Dev/RecommendedLists.lua` and `/clerk seed` → `v1.2.0-alpha1`.~~
+   **Done 2026-09-26.**
+3b. "Auto-open at Bank" Sidecar toggle (default ON) + bank open/close
+   detection (`Banker` interaction type 8, confirmed by the probe).
 4. `BankRestock.lua` planner + smoke tests for the move math.
 5. Executor, bank open/close detection, footer button, log kind,
    Sidecar feed, "Auto-open at Bank" toggle → `v1.2.0-alpha2`.
@@ -257,6 +264,7 @@ Carried from the legacy backlog; not committed to a release.
 - Per-item "count bank toward Have" mode; warband shopper/quartermaster
   (cross-character restocking).
 - Gold/silver/copper cap input; "no cap" as an explicit checkbox.
+- Minimap icon to open Stock Clerk, with a settings option to hide it.
 
 The full pre-1.0 backlog text is in git history (`Dev/NOTES.md`, removed
 in the commit that added this roadmap).
