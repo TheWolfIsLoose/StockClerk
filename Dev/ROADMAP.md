@@ -135,9 +135,6 @@ what they don't want and restocks from the AH or the bank.
 
 ### Open questions
 
-- **Consumables list (Open):** `241304` is listed as both Light's
-  Potential and Silvermoon Healing Potion; one ID is wrong. The healing
-  potion line is commented out in the file until confirmed.
 - **Re-clicking "Add common consumables" (Decided):** re-adds any listed
   item you've since removed. The addon doesn't remember removals.
 
