@@ -4,7 +4,8 @@ name: Release
 # the version comes from the top `## vX.Y.Z` heading in CHANGELOG.md; if
 # that tag doesn't exist yet the workflow creates it, then releases.
 # Prerelease versions (-alpha/-beta/-preview/-rc) only ship from dev,
-# stable versions only from main. Existing tags are never re-released.
+# stable versions only from main. A tag that exists but has no published
+# release (e.g. a failed run) is released from its tagged commit.
 # Then, for the tag:
 #   1. Packages the addon (BigWigsMods packager, same tool CurseForge
 #      uses internally) so the zip attached to the GitHub Release is
@@ -42,6 +43,8 @@ jobs:
 
       - name: Resolve tag
         id: tag
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           if [ "${GITHUB_REF_TYPE}" = "tag" ]; then
             echo "tag=${GITHUB_REF_NAME}" >> "$GITHUB_OUTPUT"
@@ -53,8 +56,16 @@ jobs:
             echo "skip=true" >> "$GITHUB_OUTPUT"; exit 0
           fi
           if git rev-parse -q --verify "refs/tags/$TAG" >/dev/null; then
-            echo "$TAG already exists; nothing to release."
-            echo "skip=true" >> "$GITHUB_OUTPUT"; exit 0
+            DRAFT=$(gh release view "$TAG" --json isDraft -q .isDraft 2>/dev/null || echo none)
+            if [ "$DRAFT" = "false" ]; then
+              echo "$TAG is already released; nothing to do."
+              echo "skip=true" >> "$GITHUB_OUTPUT"; exit 0
+            fi
+            # Tag exists but its release is missing or a leftover draft from
+            # a failed run: release it from the tagged commit.
+            [ "$DRAFT" = "true" ] && gh release delete "$TAG" --yes
+            git checkout -q "$TAG"
+            echo "tag=$TAG" >> "$GITHUB_OUTPUT"; exit 0
           fi
           PRE=false
           [[ "$TAG" =~ -(alpha|beta|preview|rc) ]] && PRE=true
@@ -128,8 +139,14 @@ jobs:
           # Attach any zip the packager produced (usually a single file
           # in .release/).
           ZIP_FILES=(.release/*.zip)
-          gh release create "$TAG" \
-            "${ZIP_FILES[@]}" \
-            --title "Stock Clerk $TAG" \
-            --notes-file /tmp/release-notes.md \
-            $PRERELEASE_FLAG
+          # On failure, surface gh's message as a public annotation so it can
+          # be read from the run summary without the (sign-in only) logs.
+          if ! OUT=$(gh release create "$TAG" \
+              "${ZIP_FILES[@]}" \
+              --title "Stock Clerk $TAG" \
+              --notes-file /tmp/release-notes.md \
+              $PRERELEASE_FLAG 2>&1); then
+            echo "::error title=gh release create::${OUT//$'\n'/%0A}"
+            exit 1
+          fi
+          echo "$OUT"
