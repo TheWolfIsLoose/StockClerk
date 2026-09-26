@@ -206,8 +206,8 @@ what they don't want and restocks from the AH or the bank.
    itself; `ADDON.bankOpen` tracks the banker. Shared `MF:DockTo/Undock`.
 4. ~~`BankRestock.lua` planner + smoke tests for the move math.~~ Done.
 5. ~~Executor, bank open/close detection, footer button, log kind,
-   Sidecar feed, "Auto-open at Bank" toggle~~ **Done 2026-09-26**, pending
-   the in-game test → `v1.2.0-alpha2`. Built differently from the plan:
+   Sidecar feed, "Auto-open at Bank" toggle~~ **Done 2026-09-26**, shipped
+   as `v1.2.0-beta1` (straight from alpha1; no alpha2). Built differently from the plan:
    - One footer button that switches by location ("Restock from Bank (N)"
      at a banker, "Restock at AH (N)" elsewhere) instead of two buttons.
    - The executor re-plans from live bag/bank state before every move
@@ -215,7 +215,16 @@ what they don't want and restocks from the AH or the bank.
      ones by split + place, always onto a slot the planner sized exactly.
    - No docking at the bank (Baganator and similar replace the bank
      window); the list floats where the user left it.
-6. README feature bullets (done); field test → `v1.2.0-beta1`.
+6. ~~README feature bullets~~ done; field test of `v1.2.0-beta1`.
+
+   **Caveat, not yet tested in-game (2026-09-26):** Restock from Bank with
+   bags nearly full, and the bank closing (or any unexpected exit) while a
+   pull is running. Expected: the planner stops when no bag slot fits and
+   reports "bags are full"; `OnBankClosed` stops the run with "bank
+   closed", clears the cursor, and the item mid-move either lands or stays
+   in the bank. If a report comes in about items left on the cursor, a
+   pull that never ends, or split stacks in odd places, start with
+   `BankRestock:_Step` / `Stop` and the per-move timeout.
    Deferred: the AH guardrail "Restock from Bank first" hint (see Later:
    AH and bank open together).
 7. Stable: CHANGELOG `## v1.2.0` (draft below), detailed entry at the

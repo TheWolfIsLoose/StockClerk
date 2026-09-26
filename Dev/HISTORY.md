@@ -10,6 +10,55 @@ or, where it had no entry, from that version's GitHub release notes.
 > There is no v1.1.2 stable: the v1.1.2 alphas are the start of v1.2.0
 > (efficiency pass). v1.2.0 plan: `Dev/ROADMAP.md`.
 
+## v1.2.0-beta1 (2026-09-26)
+
+Feature-complete v1.2. Goes straight from alpha1 to beta: every feature
+worked first time in-game (no v1.2.0-alpha2).
+
+### New: Restock from Bank
+
+- `BankRestock.lua`. At a banker the footer button reads "Restock from
+  Bank (N)" (N = short items with copies in the bank or warband bank).
+- Pulls exactly the shortfall, using the AH loop's "have" (bags + mail in
+  flight). Character bank first, then warband. Tops up existing bag
+  stacks of the item, then empty slots in regular bags (profession bags
+  and the reagent bag are skipped); stops when bags are full.
+- Executor re-plans from live state before every move and does one move
+  at a time: whole stack = pickup + place, partial = split + place, each
+  onto a slot the planner sized exactly. 3s per-move timeout. Aborts on
+  bank close, combat or timeout; clears the cursor on any stop.
+- Footer summary ("Pulled 3 items from the bank. 1 still short, restock
+  at the AH."), one `bank_pull` log entry per item (Sidecar feed, log
+  popup), and a bank-open footer hint when something can be pulled.
+- `PlanPulls` is pure and covered by the smoke test.
+- Untested in-game: nearly full bags, and the bank closing mid-pull (see
+  the caveat in `Dev/ROADMAP.md`).
+
+### New: Auto-open at Bank
+
+- Sidecar toggle, default ON. Opens on the `Banker` interaction (type 8,
+  confirmed by the probe for both banks); closes with the bank only if it
+  opened itself. No docking at the bank: bag addons (Baganator etc.)
+  replace the bank window, so the list floats where the user left it.
+  AH docking unchanged (`MF:Undock` now shared).
+
+### Changed
+
+- Filter chip shows only short items (bags below target). Was "stuck
+  above cap"; saved on/off state carries over.
+- Footer is feedback only: the last action message stays until the next
+  one. The "N tracked | N short" summary is gone (it overwrote feedback on
+  every redraw); the short count moved onto the Restock button.
+- Bulk-import "+" is a 22x22 square with a drawn plus. It and the Restock
+  button keep the shared hover highlight (their tooltip scripts now hook
+  instead of replacing it).
+
+### Dev
+
+- Probe results and decisions recorded in `Dev/ROADMAP.md`.
+- Smoke tests: bank auto-open/close, footer survives redraws, button
+  count, short-items filter, bank planner.
+
 ## v1.2.0-alpha1 (2026-09-26)
 
 First v1.2 prerelease: the v1.1.2 efficiency pass plus Feature B.
