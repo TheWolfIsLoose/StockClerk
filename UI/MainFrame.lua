@@ -1655,21 +1655,30 @@ function MF:Build()
     -- multi-line item ID import. Kept small so we don't have to re-flow
     -- the Add cluster at 420px min-width; the plus glyph plus tooltip is
     -- enough affordance for an advanced-user power feature.
+    -- Square (22x22, same height as Add) with a drawn plus: the font "+"
+    -- sat small and off-centre. Two crossed bars, like the header's drawn
+    -- hamburger/funnel icons, turning brand mint on hover.
     local bulkBtn = CreateFrame("Button", nil, toolbar)
-    bulkBtn:SetSize(24, 22)
+    bulkBtn:SetSize(22, 22)
     bulkBtn:SetPoint("LEFT", addBtn, "RIGHT", 6, 0)
     StyleButton(bulkBtn)
-    local bulkBtnText = bulkBtn:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-    bulkBtnText:SetPoint("CENTER")
-    bulkBtnText:SetText("+")
-    bulkBtnText:SetTextColor(1, 1, 1, 1)
-    bulkBtn:SetScript("OnEnter", function(self)
+    local plusBars = {}
+    for i, size in ipairs({ { 10, 2 }, { 2, 10 } }) do
+        local bar = bulkBtn:CreateTexture(nil, "OVERLAY", nil, 7)
+        bar:SetColorTexture(1, 1, 1, 0.9)
+        bar:SetSize(size[1], size[2])
+        bar:SetPoint("CENTER")
+        plusBars[i] = bar
+    end
+    local function tintPlus(c) for _, bar in ipairs(plusBars) do bar:SetColorTexture(c[1], c[2], c[3], 1) end end
+    bulkBtn:HookScript("OnEnter", function(self)  -- Hook, not Set: keeps StyleButton's hover wash
+        tintPlus(Palette.brand)
         GameTooltip:SetOwner(self, "ANCHOR_TOP")
         GameTooltip:SetText("Bulk import items", 1, 1, 1)
         GameTooltip:AddLine("Paste multiple item IDs at once, one per line.", 0.9, 0.9, 0.9, true)
         GameTooltip:Show()
     end)
-    bulkBtn:SetScript("OnLeave", function() GameTooltip:Hide() end)
+    bulkBtn:HookScript("OnLeave", function() GameTooltip:Hide(); tintPlus({ 1, 1, 1 }) end)
     bulkBtn:SetScript("OnClick", function()
         if ADDON.BulkImport and ADDON.BulkImport.Open then
             ADDON.BulkImport:Open()
@@ -2275,7 +2284,7 @@ function MF:Build()
     -- this button prevents accidental confirms from rapid double-clicks on
     -- "Restock at AH" during arm.
     local restockBtn = CreateFrame("Button", nil, footer)
-    restockBtn:SetSize(140, 22)
+    restockBtn:SetSize(160, 22)  -- fits "Restock from Bank (12)"
     restockBtn:SetPoint("RIGHT", closeBtn, "LEFT", -8, 0)
 
     -- Now that restockBtn exists, anchor statusBar's right edge to its
@@ -2293,8 +2302,9 @@ function MF:Build()
     restockBtnText:SetText("Restock at AH")
 
     restockBtn:SetScript("OnClick", function()
-        local loop = ADDON.RestockLoop
-        if not loop then return end
+        local loop, br = ADDON.RestockLoop, ADDON.BankRestock
+        if br:IsActive() then br:Stop("stopped by you"); return end
+        if ADDON.bankOpen and not loop:IsActive() then br:Start(); return end
         if loop:IsActive() then
             loop:Stop("user_stop")
         else
@@ -2302,12 +2312,24 @@ function MF:Build()
         end
     end)
 
-    restockBtn:SetScript("OnEnter", function(self)
+    restockBtn:HookScript("OnEnter", function(self)  -- Hook, not Set: keeps StyleButton's hover wash
         GameTooltip:SetOwner(self, "ANCHOR_TOP")
         local loop = ADDON.RestockLoop
-        if loop and loop:IsActive() then
+        if ADDON.BankRestock:IsActive() then
+            GameTooltip:SetText("Stop pulling", 1, 1, 1)
+            GameTooltip:AddLine("Stops after the item currently moving.", 0.7, 0.7, 0.7, true)
+        elseif loop and loop:IsActive() then
             GameTooltip:SetText("Stop restock", 1, 1, 1)
             GameTooltip:AddLine("Ends the current walk. Any armed buy is discarded.", 0.7, 0.7, 0.7, true)
+        elseif ADDON.bankOpen then
+            GameTooltip:SetText("Restock from Bank", 1, 1, 1)
+            GameTooltip:AddLine("Moves exactly what you're short from your bank, then your warband bank, into your bags.", 0.7, 0.7, 0.7, true)
+            local reason = MF:_RestockDisabledReason()
+            if reason then
+                GameTooltip:AddLine(" ", 1, 1, 1)
+                GameTooltip:AddLine(("Unavailable: %s"):format(reason),
+                    Palette.short[1], Palette.short[2], Palette.short[3], true)
+            end
         else
             GameTooltip:SetText("Restock at AH", 1, 1, 1)
             GameTooltip:AddLine("Walks your shortlist and prompts for each buy.", 0.7, 0.7, 0.7, true)
@@ -2322,7 +2344,7 @@ function MF:Build()
         end
         GameTooltip:Show()
     end)
-    restockBtn:SetScript("OnLeave", function() GameTooltip:Hide() end)
+    restockBtn:HookScript("OnLeave", function() GameTooltip:Hide() end)
 
     -- Motion scripts must be enabled explicitly for OnEnter/OnLeave to fire
     -- while the button is Disabled(). Without this, hovering the greyed
@@ -2732,6 +2754,28 @@ function MF:RefreshRestockBtn(shortCount)
     local btn  = self.restockBtn
     local muted = Palette.textMuted
 
+    if ADDON.BankRestock:IsActive() then
+        btn._label:SetText("Stop pulling")
+        btn._label:SetTextColor(1, 1, 1, 1)
+        btn:Enable(); btn:EnableMouse(true)
+        return
+    end
+
+    -- At a banker the same button restocks from the bank; the count is
+    -- short items that have copies there.
+    if ADDON.bankOpen and not (loop and loop:IsActive()) then
+        local n = ADDON.BankRestock:PullableCount()
+        btn._label:SetText(n > 0 and ("Restock from Bank (%d)"):format(n) or "Restock from Bank")
+        if n > 0 then
+            btn._label:SetTextColor(1, 1, 1, 1)
+            btn:Enable(); btn:EnableMouse(true)
+        else
+            btn._label:SetTextColor(muted[1], muted[2], muted[3], 1)
+            btn:Disable(); btn:EnableMouse(true)
+        end
+        return
+    end
+
     if loop and loop:IsActive() then
         if btn._label then
             btn._label:SetText("Stop restock")
@@ -2764,6 +2808,12 @@ end
 function MF:_RestockDisabledReason()
     local loop = ADDON.RestockLoop
     if loop and loop:IsActive() then return nil end
+    if ADDON.bankOpen then
+        if ADDON.BankRestock:PullableCount() == 0 then
+            return "Nothing you're short on is in your bank or warband bank."
+        end
+        return nil
+    end
     if not (AuctionHouseFrame and AuctionHouseFrame:IsShown()) then
         return "Auction House isn't open."
     end
@@ -2785,11 +2835,7 @@ end
 -- currently shown. No-op if the AH isn't up or the frame isn't shown.
 -- Callable from OnAuctionHouseShow (auto-open path) or from a manual
 -- /clerk-open-while-AH-is-already-up path, so the behavior is symmetric.
-function MF:DockToAHIfOpen()
-    self:DockTo(_G.AuctionHouseFrame)
-end
-
--- Put the window back where it was before DockTo (or at the saved
+-- Put the window back where it was before docking to the AH (or at the saved
 -- position if the snapshot was lost). No-op when not docked.
 function MF:Undock()
     local f = self.frame
@@ -2806,12 +2852,9 @@ function MF:Undock()
     self._preDockPos = nil
 end
 
--- Dock to the right edge of `host` (AH or bank frame) if it's showing.
--- Bag addons that replace the bank window leave BankFrame hidden: then
--- we just stay where we are.
-function MF:DockTo(host)
-    local f = self.frame
-    if not (f and f:IsShown() and host and host:IsShown()) then return end
+function MF:DockToAHIfOpen()
+    local f, host = self.frame, _G.AuctionHouseFrame
+    if not (f and host and host:IsShown()) then return end
     if self._docked then return end -- already docked, don't overwrite _preDockPos
     local point, _, _, x, y = f:GetPoint()
     self._preDockPos = { point = point, x = x, y = y }

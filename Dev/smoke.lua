@@ -241,6 +241,7 @@ io.stdout:write("row editors OK\n")
 
 -- Inventory: bags 3, bank 4, legacy reagent 1 (folds into bank), warband 2
 C_Item = C_Item ~= Stub and C_Item or {}
+C_Item.GetItemInfo = function() end
 C_Item.GetItemCount = function(id, bank, _, reagent, account)
   return 3 + (bank and 4 or 0) + (reagent and 1 or 0) + (account and 2 or 0)
 end
@@ -315,5 +316,21 @@ do -- Filter chip: shows only short items (items 111 need 5, 42 need 30; bags ho
   C_Item.GetItemInfo = gii
   assert(shown and #shown.n == 1 and shown.n[1] == 42, "filter should show only the short item: " .. (shown and table.concat(shown.n, ",") or "nothing shown"))
   ADDON.DB:SetStuckOnly(false); mf.scrollBox = sb; CreateDataProvider = origCDP
+end
+do -- Restock from Bank planner: exact amounts, char bank first, top up stacks, bag space
+  local plan, max20 = ADDON.BankRestock.PlanPulls, function() return 20 end
+  local sources = { { bag = 6, slot = 1, itemID = 1, count = 10 }, { bag = 7, slot = 1, itemID = 2, count = 50 },
+                    { bag = 12, slot = 1, itemID = 1, count = 30 } }
+  local bags = { { bag = 0, slot = 1, itemID = 1, count = 15 }, { bag = 0, slot = 2 } }
+  local m, still = plan({ { itemID = 1, short = 12 } }, sources, bags, max20)
+  local got = {}
+  for _, x in ipairs(m) do got[#got + 1] = ("%d.%d>%d.%d x%d%s"):format(x.fromBag, x.fromSlot, x.toBag, x.toSlot, x.count, x.whole and "w" or "") end
+  got = table.concat(got, " ")
+  assert(got == "6.1>0.1 x5 6.1>0.2 x5w 12.1>0.2 x2" and still == 0, "plan: " .. got)
+  assert(sources[1].count == 10 and bags[2].itemID == nil, "planner mutated its inputs")
+  m, still = plan({ { itemID = 1, short = 3 } }, sources, { { bag = 0, slot = 1, itemID = 1, count = 20 } }, max20)
+  assert(#m == 0 and still == 1, "full bags must plan nothing")
+  m, still = plan({ { itemID = 3, short = 3 } }, sources, bags, max20)
+  assert(#m == 0 and still == 1, "item not in bank must plan nothing")
 end
 io.stdout:write("perf/inventory OK\n")

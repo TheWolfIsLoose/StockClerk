@@ -255,6 +255,8 @@ end
 
 -- Bank: same auto-open/dock/close pattern as the AH. ADDON.bankOpen is
 -- the source of truth for "at a banker" (Restock from Bank, v1.2).
+-- No docking at the bank: bag addons (Baganator etc.) replace the bank
+-- window, so the list floats wherever the user left it.
 function StockClerk:OnBankShow()
     ADDON.bankOpen = true
     local mf = ADDON.MainFrame
@@ -263,15 +265,19 @@ function StockClerk:OnBankShow()
         mf.openedByBank = true
         mf:Show()
     end
-    -- BankFrame shows in the same event burst; dock on the next frame.
-    C_Timer.After(0, function() mf:DockTo(_G.BankFrame) end)
+    if mf.RefreshRestockBtn then mf:RefreshRestockBtn() end
+    local n = ADDON.BankRestock:PullableCount()
+    if n > 0 then
+        mf:SetStatus(("%d short item%s can come from your bank."):format(n, n == 1 and "" or "s"), true)
+    end
 end
 
 function StockClerk:OnBankClosed()
     ADDON.bankOpen = false
+    ADDON.BankRestock:Stop("bank closed")
     local mf = ADDON.MainFrame
     if not mf then return end
-    mf:Undock()
+    if mf.RefreshRestockBtn then mf:RefreshRestockBtn() end
     if mf.openedByBank then
         mf.openedByBank = false
         mf:Hide()

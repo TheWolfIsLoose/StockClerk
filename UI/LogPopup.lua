@@ -47,6 +47,7 @@ local TAGS = {
     loop_stop     = "[LOOP-STOP]",
     auto_toggle   = "[AUTO]",
     auto_refuse   = "[AUTO-BLOCK]",
+    bank_pull     = "[BANK]",
     status        = "[STATUS]",
     kbd_stuck     = "[KBD]",
 }
@@ -71,6 +72,8 @@ local function FormatLine(entry)
     local extra = ""
     if entry.kind == "buy_success" then
         extra = (" qty=%d spent=%dg"):format(pay.qty or 0, math.floor((pay.spentCopper or 0)/10000))
+    elseif entry.kind == "bank_pull" then
+        extra = (" qty=%d"):format(pay.qty or 0)
     elseif entry.kind == "buy_fail" or entry.kind == "buy_skip" then
         extra = " reason=" .. tostring(pay.reason or "?")
     elseif entry.kind == "buy_attempt" then

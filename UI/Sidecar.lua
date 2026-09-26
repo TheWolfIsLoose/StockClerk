@@ -34,6 +34,7 @@ local FEED_KINDS = {
     auto_refuse = true,
     loop_start  = true,
     loop_stop   = true,
+    bank_pull   = true,
 }
 
 -- -------------------------------------------------------------------------
@@ -200,6 +201,8 @@ local function FormatEntry(entry)
     if kind == "buy_success" then
         local g = math.floor((pay.spentCopper or 0) / 10000)
         return ("|cff98FF98[%s] [BUY]|r %sx%s (%dg)"):format(when, itemLink or "?", pay.qty or "?", g)
+    elseif kind == "bank_pull" then
+        return ("|cff98FF98[%s] [BANK]|r %sx%s from bank"):format(when, itemLink or "?", pay.qty or "?")
     elseif kind == "cap_change" then
         local from = pay.fromCopper and math.floor(pay.fromCopper / 10000) .. "g" or "unset"
         local to   = pay.toCopper   and math.floor(pay.toCopper   / 10000) .. "g" or "unset"

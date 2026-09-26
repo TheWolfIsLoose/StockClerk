@@ -12,8 +12,7 @@
 
 Keep your consumables stocked. Set a target count for every flask,
 potion and reagent you want on hand; Stock Clerk shows what you're short
-on and restocks it from the Auction House, one confirmed purchase at a
-time.
+on and restocks it from your bank or the Auction House.
 
 Retail only (Midnight). No library dependencies.
 
@@ -22,13 +21,17 @@ Retail only (Midnight). No library dependencies.
 - **Per-character shopping list.** Each character has its own items and
   targets. Add items by typing an item ID, by dragging an item from your
   bags onto the Item ID box, or paste a whole list at once with the **+**
-  button.
+  button. **Add common consumables** in the side panel fills a fresh list
+  with this expansion's staples.
 - **Have / Need / Cap / Last Seen.** Have counts your bags; copies in
   your bank or warband bank show as a dim `(+N)`. Hover it for the
   breakdown.
 - **Price caps.** Give any item a max gold per unit and Stock Clerk
   won't buy it above that. Items with no cap buy at the going price;
   the confirm step flags them with an amber "No cap set".
+- **Restock from Bank.** At a banker, one click moves exactly what
+  you're short from your bank, then your warband bank, into your bags.
+  No gold spent, never more than you need.
 - **Auction House restock.** At the AH, click a row to search for that
   item, or press **Restock at AH** to walk every short item in list
   order. Each purchase waits for you to press **Buy** (after a short
@@ -37,10 +40,13 @@ Retail only (Midnight). No library dependencies.
   bank, the confirm step says so before you spend gold.
 - **Mail-aware.** Purchases waiting in your mailbox count toward your
   targets, so nothing gets bought twice.
-- **Activity log.** A side panel shows recent purchases and cap
-  changes; `/clerk log` opens the full history.
-- **Optional automation.** Open the window automatically at the AH, and
-  optionally start a restock pass as soon as you arrive.
+- **Short-items filter.** The funnel icon hides everything you already
+  have enough of.
+- **Activity log.** A side panel shows recent purchases, bank pulls and
+  cap changes; `/clerk log` opens the full history.
+- **Optional automation.** Open the window automatically at the AH or
+  the bank, and optionally start an AH restock pass as soon as you
+  arrive.
 
 Drag the grip on a row's left edge to reorder; list order is restock
 order.

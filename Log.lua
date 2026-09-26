@@ -64,6 +64,7 @@ local VALID_KINDS = {
     loop_stop      = true,   -- payload: { reason, spentCopper, touched, stillShort }
     auto_toggle    = true,   -- payload: { on }
     auto_refuse    = true,   -- payload: { reason, qty?, plannedSpendCopper? }
+    bank_pull      = true,   -- payload: { qty }  (moved bank/warband -> bags)
     -- "status" is a passthrough of MF:SetStatus's human-readable footer
     -- message so the sidecar mirrors the same feedback stream the footer
     -- shows. Payload is just { text = string } already coloured/formatted
