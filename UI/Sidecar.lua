@@ -11,13 +11,8 @@
       * Top section: Settings (auto-purchase toggle, default cap, budget,
         auto-open at AH).
       * Hairline 1px divider
-      * Bottom section: Recent Activity feed (last ~30 entries, newest
-        first). Two-tier filtering will land in Phase D; this initial
-        build shows every entry uncoloured for parity.
-
-    Persistence:
-      * char.ui.sidecar_open  boolean, remembered per character so the
-        panel stays open across reloads/sessions when the user prefers it
+      * Bottom section: Recent Activity feed (newest first): buys, cap
+        changes and restock start/stop. `/clerk log` shows everything.
 ]]
 
 local addonName = ...
@@ -30,6 +25,16 @@ local Palette = ADDON.MainFrame.Palette
 local ApplyFill, AddBlackBorder = ADDON.MainFrame.ApplyFill, ADDON.MainFrame.AddBlackBorder
 
 local WIDTH = 260
+
+-- Log kinds the activity feed shows.
+local FEED_KINDS = {
+    buy_success = true,
+    buy_fail    = true,
+    cap_change  = true,
+    auto_refuse = true,
+    loop_start  = true,
+    loop_stop   = true,
+}
 
 -- -------------------------------------------------------------------------
 -- Build the Sidecar panel lazily.
@@ -221,21 +226,13 @@ function Sidecar:Refresh()
         raw = ADDON.Log:Query()  -- newest-first
     end
 
-    local BASIC_KINDS = {
-        buy_success = true,
-        buy_fail    = true,
-        cap_change  = true,
-        auto_refuse = true,
-        loop_start  = true,
-        loop_stop   = true,
-    }
     local CAP_DEBOUNCE_SEC = 10
 
     local entries = {}
     local lastCapByItem = {}  -- itemID -> ts of last kept cap_change
     for i = 1, #raw do
         local e = raw[i]
-        if BASIC_KINDS[e.kind] then
+        if FEED_KINDS[e.kind] then
             if e.kind == "cap_change" and e.itemID then
                 local prev = lastCapByItem[e.itemID]
                 -- Raw is newest-first, so "prev" is a NEWER kept entry;
@@ -290,10 +287,6 @@ function Sidecar:Toggle(anchorButton)
 
     if f:IsShown() then
         f:Hide()
-        if ADDON.DB and ADDON.DB.db and ADDON.DB.db.char then
-            ADDON.DB.db.char.ui = ADDON.DB.db.char.ui or {}
-            ADDON.DB.db.char.ui.sidecar_open = false
-        end
         return
     end
 
@@ -309,11 +302,6 @@ function Sidecar:Toggle(anchorButton)
 
     self:Refresh()
     f:Show()
-
-    if ADDON.DB and ADDON.DB.db and ADDON.DB.db.char then
-        ADDON.DB.db.char.ui = ADDON.DB.db.char.ui or {}
-        ADDON.DB.db.char.ui.sidecar_open = true
-    end
 end
 
 function Sidecar:Hide()
@@ -336,7 +324,9 @@ do
         local origEmit = ADDON.Log.Emit
         ADDON.Log.Emit = function(self, kind, itemID, payload)
             origEmit(self, kind, itemID, payload)
-            if Sidecar.frame and Sidecar.frame:IsShown() then
+            -- Only kinds the feed shows; status messages (most emits)
+            -- would rebuild the feed for no visible change.
+            if FEED_KINDS[kind] and Sidecar.frame and Sidecar.frame:IsShown() then
                 -- Guard: avoid recursive refresh if a Refresh() call ends
                 -- up emitting its own log entry (nothing today does, but
                 -- cheap insurance for future changes).

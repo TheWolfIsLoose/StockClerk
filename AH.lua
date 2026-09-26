@@ -80,7 +80,7 @@ end
 -- where results is a sorted-by-price array of
 --   { unitPrice = copper, quantity = N, owners = {...} }
 -- Or (false, errorString) on failure/timeout.
--- priceSource lets QA-11's StampLastPrice attribute the observation to a
+-- priceSource lets StampLastPrice attribute the observation to a
 -- source ("click" from a row left-click, "loop" from the restock loop's
 -- per-item search). Optional; defaults to "unknown" if omitted.
 function AH:SearchItem(itemID, callback, priceSource)
@@ -146,7 +146,7 @@ function AH:BuyUpTo(itemID, quantity, maxUnitPrice, callback)
     end
 
     -- Step 1: run a fresh search so we're working from live data. Tag the
-    -- search with priceSource="loop" so QA-11's stamp attributes correctly.
+    -- search with priceSource="loop" so the stamp attributes correctly.
     self:SearchItem(itemID, function(ok, resultsOrErr)
         if not ok then
             if callback then callback(false, "search failed: " .. tostring(resultsOrErr)) end
@@ -236,7 +236,7 @@ function AH:OnCommoditySearchUpdated(itemID)
     ADDON.Debug("AH", "search results in for id=" .. itemID)
     local results = GatherResults(itemID)
 
-    -- QA-11: piggyback the search result to stamp the cheapest unit price
+    -- Piggyback the search result to stamp the cheapest unit price
     -- as this item's lastPrice. Source "click" vs "loop" is tracked by the
     -- caller through AH.state.priceSource (see SearchItem). Free data --
     -- no extra query, no rate-limit budget consumed.
@@ -253,7 +253,7 @@ function AH:OnCommoditySearchUpdated(itemID)
         end
     end
 
-    -- QA-13: audit trail. Zero listings still logged (0 listings is
+    -- Audit trail. Zero listings still logged (0 listings is
     -- useful signal -- server is empty for that item right now).
     if ADDON.Log then
         ADDON.Log:Emit("ah_search", itemID, {

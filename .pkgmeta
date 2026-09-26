@@ -1,25 +1,6 @@
-# Stock Clerk - BigWigsMods packager config
-# https://github.com/BigWigsMods/packager
-#
-# RELEASE POLICY (updated 2026-09-18):
-#   StockClerk publishes to CurseForge via CF's Automatic Packaging
-#   webhook. The .toc carries `X-Curse-Project-ID: 1700292`; CF listens
-#   for GitHub release events on this repo and packages the tag.
-#
-#   IMPORTANT: CF's webhook fires on GitHub RELEASE events, not on plain
-#   tag pushes. Tagging without publishing a release is a no-op for CF.
-#
-#   Channel routing: tag suffix decides the CF release type.
-#     v1.0.0            -> Release channel (Stable)
-#     v1.0.0-beta1      -> Beta channel
-#     v1.0.0-alpha1     -> Alpha channel
-#   Testers opt in via the CurseForge app's Release Type filter.
-#
-#   Wago is not wired up (no X-Wago-ID in the .toc). CF-only for now.
-#
-# This file ALSO drives local release.sh -d -l builds if release.sh is
-# checked in, so we can verify the packaged zip contents against ignore
-# rules before publishing. `ignore:` entries are stripped from the zip.
+# Stock Clerk - BigWigsMods packager config.
+# Used by .github/workflows/release.yml and by CurseForge's own packager.
+# Release process: see "Releasing" in README.md.
 
 package-as: StockClerk
 
@@ -27,25 +8,11 @@ manual-changelog:
   filename: CHANGELOG.md
   markup-type: markdown
 
-# Dev-only files that must never appear in packaged releases.
-# Comments MUST be on their own line here — inline `# ...` after a list
-# entry silently breaks the ignore rule for that entry in the BigWigsMods
-# packager, which is why an earlier dry-run leaked update.bat / Dev / README.
-#
-# Dev docs, notes, and utilities live under Dev/, so the single `Dev`
-# entry covers them. The remaining entries are repo-root files that
-# git/packager/GitHub need at build time but don't belong in the
-# shipped zip:
-#   README.md    -- GitHub renders this as the repo landing page, so
-#                   it has to live at root; irrelevant to end-users
-#                   of the shipped addon.
-#   .gitignore   -- git-only.
-#   .pkgmeta     -- this file; packager-only.
-#   .github      -- CI/hooks if we ever add them.
+# Stripped from the packaged zip. Keep comments on their own lines: an
+# inline `# ...` after an entry silently breaks that entry.
 ignore:
   - README.md
   - Dev
-  - notes
   - .assets
   - .github
   - .gitignore

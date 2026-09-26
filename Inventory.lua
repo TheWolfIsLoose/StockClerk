@@ -10,9 +10,8 @@
                           includeAccountBank)
 
     That single call rolls up bags + (optionally) bank + reagent bank +
-    warband/account bank. As of retail 11.2 the reagent bank was removed
-    (items were folded into the main bank tabs), so includeReagentBank is
-    a harmless no-op on live but we leave it on for pre-11.2 servers.
+    warband/account bank. Retail 11.2 removed the reagent bank, so
+    "bank" below means bank + any legacy reagent-bank count.
 
     Metric choice:
       The visible row count is BAG COUNT ONLY. Rationale: bag<->bank and
@@ -21,9 +20,9 @@
       Bags-only reacts to every transaction the user makes on the fly,
       matching how they think about "do I have enough to raid tonight?"
 
-      GetBreakdown() exposes bags / bank / reagent / warband separately
-      for the row's `(+N in bank)` annotation and for the tooltip. It's
-      four C_Item.GetItemCount calls, still O(1) per item, cached.
+      GetBreakdown() exposes bags / bank / warband separately for the
+      row's `(+N)` annotation and the tooltip: at most three
+      C_Item.GetItemCount calls, cached.
 
     Caching:
       We memoize breakdowns per itemID and invalidate on BAG_UPDATE_DELAYED,
@@ -42,12 +41,12 @@ function INV:Invalidate()
 end
 
 -- Returns a fully-populated breakdown for the item:
---   { bags = N, bank = N, reagent = N, warband = N, total = N }
+--   { bags = N, bank = N, warband = N, total = N }
 -- All fields are "just this container," not cumulative, so the caller
 -- can decide how to display them.
 function INV:GetBreakdown(itemID)
     if not itemID then
-        return { bags = 0, bank = 0, reagent = 0, warband = 0, total = 0 }
+        return { bags = 0, bank = 0, warband = 0, total = 0 }
     end
 
     local cached = self.cache[itemID]
@@ -58,10 +57,9 @@ function INV:GetBreakdown(itemID)
     --
     -- Fast path: two calls answer the common question "does this item
     -- live anywhere besides bags?" If total == bags there's no stash,
-    -- and we can skip the two extra calls that decompose stash into
-    -- bank/reagent/warband. Rows without stashed copies (the common
-    -- case for actively-consumed items) do 2 calls instead of 4. The
-    -- expensive account-bank variant is only hit on the slow path.
+    -- and we skip the extra call that splits the stash into bank vs
+    -- warband. Rows without stashed copies (the common case for actively
+    -- consumed items) do 2 calls instead of 3.
     local bagsOnly    = C_Item.GetItemCount(itemID) or 0
     local plusWarband = C_Item.GetItemCount(itemID, true, false, true, true) or 0
 
@@ -70,28 +68,23 @@ function INV:GetBreakdown(itemID)
         breakdown = {
             bags    = bagsOnly,
             bank    = 0,
-            reagent = 0,
             warband = 0,
             total   = bagsOnly,
         }
     else
-        -- Full decomposition needed for the (+N: bank/reagent/warband) suffix.
-        local plusBank    = C_Item.GetItemCount(itemID, true) or 0
-        local plusReagent = C_Item.GetItemCount(itemID, true, false, true) or 0
+        local plusBank = C_Item.GetItemCount(itemID, true, false, true) or 0
         breakdown = {
             bags    = bagsOnly,
             bank    = plusBank    - bagsOnly,
-            reagent = plusReagent - plusBank,
-            warband = plusWarband - plusReagent,
+            warband = plusWarband - plusBank,
             total   = plusWarband,
         }
     end
     self.cache[itemID] = breakdown
 
     if ADDON.debug then
-        print(("|cff98FF98[SC:debug]|r GetBreakdown(%d): bags=%d bank=%d reagent=%d warband=%d ⇒ total=%d"):format(
-            itemID, breakdown.bags, breakdown.bank,
-            breakdown.reagent, breakdown.warband, breakdown.total))
+        print(("|cff98FF98[SC:debug]|r GetBreakdown(%d): bags=%d bank=%d warband=%d ⇒ total=%d"):format(
+            itemID, breakdown.bags, breakdown.bank, breakdown.warband, breakdown.total))
     end
 
     return breakdown

@@ -1,7 +1,7 @@
 --[[
     Stock Clerk - Core.lua
-    Addon entry point. Creates the AceAddon object, registers slash
-    commands, and routes game events to the appropriate module.
+    Addon entry point. Registers slash commands and routes game events
+    to the appropriate module. No libraries: one event frame + SlashCmdList.
 
     Load order (from TOC): Locale -> DB -> ItemResolver -> Inventory -> Core.
     Modules attach themselves to ADDON.<Name>; Core wires them together
@@ -46,31 +46,40 @@ function ADDON.MoneyText(copper, precision)
     return table.concat(parts, " ")
 end
 
--- Create the AceAddon object with the mixins we need.
--- AceConsole gives us self:RegisterChatCommand and self:Print.
--- AceEvent gives us self:RegisterEvent.
-local StockClerk = LibStub("AceAddon-3.0"):NewAddon(
-    ADDON, addonName, "AceConsole-3.0", "AceEvent-3.0"
-)
+local StockClerk = ADDON
 
--- ---------------------------------------------------------------------------
--- Lifecycle
--- ---------------------------------------------------------------------------
-function StockClerk:OnInitialize()
-    -- Databases first — anything else may want to read from them.
-    ADDON.DB:Initialize()
-
-    -- Slash commands. All three route to the same handler.
-    self:RegisterChatCommand("clerk", "OnSlashCommand")
-    self:RegisterChatCommand("sc",    "OnSlashCommand")
-    self:RegisterChatCommand("stock", "OnSlashCommand")
-
-    self:Print(L.ADDON_NAME .. " loaded. Type |cffffff00/clerk|r to open.")
+function ADDON:Print(msg)
+    print("|cff33ff99StockClerk|r: " .. tostring(msg))
 end
 
-function StockClerk:OnEnable()
-    -- Item cache resolution — bounces through ItemResolver:OnItemInfoReceived.
-    self:RegisterEvent("GET_ITEM_INFO_RECEIVED", "OnItemInfoReceived")
+-- One frame dispatches every game event to its handler: fn(...) gets the
+-- event payload (the event name itself is dropped).
+local handlers = {}
+local eventFrame = CreateFrame("Frame")
+eventFrame:SetScript("OnEvent", function(_, event, ...) handlers[event](...) end)
+local function On(event, fn)
+    handlers[event] = fn
+    eventFrame:RegisterEvent(event)
+end
+
+-- ---------------------------------------------------------------------------
+-- Lifecycle: SavedVariables are ready at our ADDON_LOADED; the world (and
+-- item/bag APIs) at PLAYER_LOGIN.
+-- ---------------------------------------------------------------------------
+On("ADDON_LOADED", function(name)
+    if name ~= addonName then return end
+    eventFrame:UnregisterEvent("ADDON_LOADED")
+    ADDON.DB:Initialize()
+
+    SLASH_STOCKCLERK1, SLASH_STOCKCLERK2, SLASH_STOCKCLERK3 = "/clerk", "/sc", "/stock"
+    SlashCmdList.STOCKCLERK = function(msg) StockClerk:OnSlashCommand(msg) end
+
+    StockClerk:Print(L.ADDON_NAME .. " loaded. Type |cffffff00/clerk|r to open.")
+end)
+
+On("PLAYER_LOGIN", function()
+    -- Item cache resolution -- bounces through ItemResolver:OnItemInfoReceived.
+    On("GET_ITEM_INFO_RECEIVED", function(...) StockClerk:OnItemInfoReceived(...) end)
 
     -- Inventory invalidation, debounced 0.25s so bursts collapse into one call.
     -- Retail 11.2 (Ghosts of K'aresh) removed the reagent bank; personal
@@ -93,7 +102,7 @@ function StockClerk:OnEnable()
         "BANK_TABS_CHANGED",
         "BANKFRAME_OPENED",
     }) do
-        self:RegisterEvent(event, function()
+        On(event, function()
             if invPending then return end
             invPending = true
             C_Timer.After(0.25, flushInventory)
@@ -108,10 +117,10 @@ function StockClerk:OnEnable()
     -- listen for BOTH events for maximum coverage across client builds:
     --   PLAYER_INTERACTION_MANAGER_FRAME_SHOW (arg1 == Auctioneer)
     --   AUCTION_HOUSE_SHOW (fallback / legacy)
-    self:RegisterEvent("PLAYER_INTERACTION_MANAGER_FRAME_SHOW", "OnInteractionShow")
-    self:RegisterEvent("PLAYER_INTERACTION_MANAGER_FRAME_HIDE", "OnInteractionHide")
-    self:RegisterEvent("AUCTION_HOUSE_SHOW",   "OnAuctionHouseShow")
-    self:RegisterEvent("AUCTION_HOUSE_CLOSED", "OnAuctionHouseClosed")
+    On("PLAYER_INTERACTION_MANAGER_FRAME_SHOW", function(t) StockClerk:OnInteractionShow(t) end)
+    On("PLAYER_INTERACTION_MANAGER_FRAME_HIDE", function(t) StockClerk:OnInteractionHide(t) end)
+    On("AUCTION_HOUSE_SHOW",   function() StockClerk:OnAuctionHouseShow() end)
+    On("AUCTION_HOUSE_CLOSED", function() StockClerk:OnAuctionHouseClosed() end)
 
     -- AH commodity search + buy events go straight to AH.lua's handler of
     -- the same name (event payload passed through). AH.lua filters by
@@ -124,33 +133,35 @@ function StockClerk:OnEnable()
         COMMODITY_PURCHASE_SUCCEEDED     = "OnCommodityPurchaseSucceeded",
         COMMODITY_PURCHASE_FAILED        = "OnCommodityPurchaseFailed",
     }) do
-        self:RegisterEvent(event, function(_, ...) ADDON.AH[method](ADDON.AH, ...) end)
+        On(event, function(...) ADDON.AH[method](ADDON.AH, ...) end)
     end
 
-    -- PT-4 mail-delivery gate: RestockLoop reconciles its persisted
+    -- Mail-delivery gate: RestockLoop reconciles its persisted
     -- pendingBuys ledger against actual mail contents on each inbox refresh.
-    self:RegisterEvent("MAIL_INBOX_UPDATE", function() ADDON.RestockLoop:_OnMailInboxUpdate() end)
-end
+    On("MAIL_INBOX_UPDATE", function() ADDON.RestockLoop:_OnMailInboxUpdate() end)
+end)
 
 -- ---------------------------------------------------------------------------
 -- Event handlers (thin — delegate to modules)
 -- ---------------------------------------------------------------------------
-function StockClerk:OnItemInfoReceived(_, itemID, success)
+function StockClerk:OnItemInfoReceived(itemID, success)
     ADDON.ItemResolver:OnItemInfoReceived(itemID, success)
-    -- A newly-cached item may have appeared in our list; refresh the UI
-    -- if the window is currently open (frame is non-nil while shown).
-    if ADDON.MainFrame and ADDON.MainFrame.frame then
-        ADDON.MainFrame:Refresh()
+    -- This event fires for every item any addon asks about (thousands
+    -- during an AH scan). Repaint only when it's one of ours and the
+    -- window is showing; MF:Show() refreshes on open anyway.
+    local mf = ADDON.MainFrame
+    if ADDON.DB:GetItems()[itemID] and mf.frame and mf.frame:IsShown() then
+        mf:Refresh()
     end
 end
 
-function StockClerk:OnInteractionShow(_, interactionType)
+function StockClerk:OnInteractionShow(interactionType)
     if interactionType == Enum.PlayerInteractionType.Auctioneer then
         self:OnAuctionHouseShow()
     end
 end
 
-function StockClerk:OnInteractionHide(_, interactionType)
+function StockClerk:OnInteractionHide(interactionType)
     if interactionType == Enum.PlayerInteractionType.Auctioneer then
         self:OnAuctionHouseClosed()
     end
@@ -274,20 +285,13 @@ function StockClerk:OnSlashCommand(msg)
         return
     end
 
-    -- QA-13: `/clerk log` opens the log popup (v0.7). `/clerk log clear`
-    -- is a quick shortcut for the popup's Clear Log button.
-    -- LogPopup is the sole log surface as of v0.8; the retired LogFrame
-    -- fallback was removed (its file was deleted from the TOC).
+    -- `/clerk log` opens the log popup; `/clerk log clear` empties the log.
     if cmd == "log" then
         local sub = (rest or ""):match("^(%S+)") or ""
         if sub:lower() == "clear" then
             if ADDON.Log and ADDON.Log.Clear then
                 ADDON.Log:Clear()
                 self:Print("Activity log cleared.")
-                if ADDON.LogPopup and ADDON.LogPopup.Refresh and ADDON.LogPopup.frame
-                        and ADDON.LogPopup.frame:IsShown() then
-                    ADDON.LogPopup:Refresh()
-                end
                 if ADDON.Sidecar and ADDON.Sidecar:IsShown() then
                     ADDON.Sidecar:Refresh()
                 end
@@ -300,20 +304,11 @@ function StockClerk:OnSlashCommand(msg)
         return
     end
 
-    -- `/clerk auto` slash command removed.
-    -- Was the entry point for enabling/disabling silent auto-buys, which
-    -- WoW's commodity API prohibits. Restock is user-driven via the
-    -- toolbar Restock button (Phase B will add a keybind).
-
-
     if cmd == "help" or cmd == "?" then
-        self:Print(L.HELP_TITLE)
-        self:Print(L.HELP_OPEN)
-        self:Print(L.HELP_SHORT)
-        self:Print(L.HELP_SEED)
-        self:Print(L.HELP_RESET)
-        self:Print(L.HELP_DUMP)
-        self:Print(L.HELP_PENDING)
+        for _, key in ipairs({ "HELP_TITLE", "HELP_OPEN", "HELP_SHORT", "HELP_ADD", "HELP_LOG",
+                               "HELP_PENDING", "HELP_DUMP", "HELP_RESET", "HELP_DEBUG", "HELP_SEED" }) do
+            self:Print(L[key])
+        end
         return
     end
 
@@ -334,7 +329,7 @@ function StockClerk:OnSlashCommand(msg)
         self:Print(("Tracking %d items:"):format(#sorted))
         for _, it in ipairs(sorted) do
             local bd = ADDON.Inventory:GetBreakdown(it.itemID)
-            local stashed = bd.bank + bd.reagent + bd.warband
+            local stashed = bd.bank + bd.warband
             if stashed > 0 then
                 self:Print(("  [%d] %s — %d / %d  (+%d elsewhere)"):format(
                     it.itemID, it.name, bd.bags, it.need, stashed))
@@ -352,15 +347,8 @@ function StockClerk:OnSlashCommand(msg)
         return
     end
 
-    -- `/clerk budget` removed along with
-    -- the daily-auto-budget subsystem. Was daily-spend inspection +
-    -- test-only reset; no analogue needed since restock is now
-    -- user-driven and the user's gold is their own accounting.
-
-
-    -- PT-4: mail-delivery ledger inspection + test-only wipe. Parallels
-    -- /clerk budget: prints what's currently pending on-hand confirmation,
-    -- and `clear` empties it (bypasses the auto-pass gate for testing).
+    -- Mail-delivery ledger inspection; `clear` empties it (bypasses the
+    -- auto-pass gate for testing).
     if cmd == "pending" then
         local sub = (rest or ""):match("^(%S+)") or ""
         sub = sub:lower()
@@ -408,8 +396,7 @@ function StockClerk:OnSlashCommand(msg)
                 self:Print("Couldn't resolve: " .. tostring(name)) -- name holds err msg on fail
                 return
             end
-            -- v1.1: silent default 1 for zero-friction quick-add
-            -- (matches the toolbar Add-cluster default).
+            -- Default target 1 (matches the toolbar Add-cluster default).
             ADDON.DB:SetItem(itemID, 1)
             self:Print(("Added %s (id %d) with target 1. Edit in the UI to change."):format(name, itemID))
             if ADDON.MainFrame then ADDON.MainFrame:Refresh() end

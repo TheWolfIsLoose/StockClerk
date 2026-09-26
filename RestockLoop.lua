@@ -86,7 +86,7 @@ end
 -- (short = need - have) never sees the purchase, and every press of
 -- "Restock at AH" re-buys everything it just bought.
 --
--- change (PT-4): PERSISTED on char.pendingBuys (was session-only in
+-- change: PERSISTED on char.pendingBuys (was session-only in
 -- v0.4). Two reasons: (1) the ledger closes the repeat-press gate, and
 -- if a user buys then logs out, the gate must remain closed on next
 -- login until on-hand confirmation; (2) mailbox reconciliation needs the
@@ -238,16 +238,18 @@ function Loop:PreviewShortfallCount()
     local n = 0
     if not ADDON.DB then return 0 end
     local seen = {}
-    for _, it in ipairs(ADDON.DB:GetSortedItems()) do
-        local have  = self:_EffectiveHave(it.itemID)
-        local short = it.need - have
+    -- Order doesn't matter for a count, so walk the raw table rather than
+    -- GetSortedItems (which sorts and resolves every item name).
+    for itemID, entry in pairs(ADDON.DB:GetItems()) do
+        local have  = self:_EffectiveHave(itemID)
+        local short = entry.need - have
         if short > 0 then
             n = n + 1
-            if ADDON.debug and self._previewLast[it.itemID] ~= short then
-                ADDON.Debug("Loop", ("preview: id=%d name=%s need=%d effHave=%d short=%d"):format(
-                    it.itemID, tostring(it.name), it.need, have, short))
+            if ADDON.debug and self._previewLast[itemID] ~= short then
+                ADDON.Debug("Loop", ("preview: id=%d need=%d effHave=%d short=%d"):format(
+                    itemID, entry.need, have, short))
             end
-            seen[it.itemID] = short
+            seen[itemID] = short
         end
     end
     -- Drop stale memo entries so items that transitioned short -> stocked
@@ -365,7 +367,7 @@ function Loop:Advance()
         plan.maxPrice = item.maxPrice
         plan.capSource = "item"
 
-        -- Bank/warband guardrail (v0.8): attach a stash breakdown to
+        -- Bank/warband guardrail: attach a stash breakdown to
         -- the plan so the flyout can warn the user before spending gold
         -- on something they already own (elsewhere). Bags is folded out
         -- of the breakdown -- Advance's `have` above IS the bags count,
@@ -375,7 +377,7 @@ function Loop:Advance()
         local bd = ADDON.Inventory and ADDON.Inventory.GetBreakdown
                     and ADDON.Inventory:GetBreakdown(item.itemID)
         if bd then
-            plan.stashBank    = (bd.bank or 0) + (bd.reagent or 0)
+            plan.stashBank    = bd.bank or 0
             plan.stashWarband = bd.warband or 0
             plan.hasStash     = (plan.stashBank + plan.stashWarband) > 0
         else

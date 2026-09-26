@@ -395,7 +395,7 @@ local function BuildRow(row)
     row.separator:SetPoint("BOTTOMLEFT",  row, "BOTTOMLEFT",  0, 0)
     row.separator:SetPoint("BOTTOMRIGHT", row, "BOTTOMRIGHT", 0, 0)
 
-    -- Grip handle (v0.4). Three dim horizontal lines, EnableMouse'd for
+    -- Grip handle. Three dim horizontal lines, EnableMouse'd for
     -- the drag-to-reorder path. Sits at the far left; icon & name shift
     -- right by GRIP_W to make room. Rendered with three FontString
     -- em-dashes rather than a texture asset so it needs no atlas file
@@ -480,7 +480,7 @@ local function BuildRow(row)
     -- colliding with the item name lane.
 
     -- Have column: pure display of the bags-only count, with a dim
-    -- (+N bank/warband/reagent) suffix if the stash is non-empty. No
+    -- (+N bank/warband) suffix if the stash is non-empty. No
     -- cell chrome and no click affordance — this value only comes from
     -- inventory, the user never edits it here.
     --
@@ -488,7 +488,7 @@ local function BuildRow(row)
     -- ("you're short") and mint when have>=need ("stocked"). This
     -- is also the row's status signal; see InitializeRow for the logic.
     --
-    -- Column layout (v0.7 accounting-style: each numeric column right-
+    -- Column layout (accounting-style: each numeric column right-
     -- aligns on its own right edge; headers right-align above matching
     -- that edge. 14px gutters between columns so the labels can't
     -- visually collide even at narrow widths):
@@ -541,9 +541,8 @@ local function BuildRow(row)
         local bags = (bd and bd.bags) or (r._have or 0)
         GameTooltip:SetText(("Have: %d in bags"):format(bags), 1, 1, 1)
         if bd then
-            local bankTotal = (bd.bank or 0) + (bd.reagent or 0)
-            if bankTotal > 0 then
-                GameTooltip:AddLine(("+%d in bank (this character)"):format(bankTotal), 0.78, 0.78, 0.78)
+            if (bd.bank or 0) > 0 then
+                GameTooltip:AddLine(("+%d in bank (this character)"):format(bd.bank), 0.78, 0.78, 0.78)
             end
             if (bd.warband or 0) > 0 then
                 GameTooltip:AddLine(("+%d in warband bank (account-wide)"):format(bd.warband), 0.78, 0.78, 0.78)
@@ -581,7 +580,7 @@ local function BuildRow(row)
 
     -- FontString is parented to the CELL (not the row) so it inherits the
     -- cell's higher FrameLevel and draws ABOVE the cell's fill texture,
-    -- rather than underneath it. Fixes QA-6: at idle the cell fill is
+    -- rather than underneath it. At idle the cell fill is
     -- alpha 0.35 (value shows through by luck), but on hover the fill
     -- goes to full opacity and previously eclipsed the value entirely.
     -- Right-align inside the cell (accounting style). SetPoint anchors
@@ -695,7 +694,7 @@ local function BuildRow(row)
     end)
     row.priceEdit:Hide()
 
-    -- Last Seen column (QA-11): dim display of the most recently observed
+    -- Last Seen column: dim display of the most recently observed
     -- unit price, or an em-dash if we've never seen it. Not clickable --
     -- the value updates automatically on every AH search (row-click or
     -- restock loop). Tooltip on hover: "1250g -- 2h ago via loop".
@@ -812,7 +811,7 @@ local function BuildRow(row)
            and AuctionHouseFrame and AuctionHouseFrame:IsShown() then
             local id = self._itemID
             MF:SetStatus(("Searching AH for %s..."):format(self.name:GetText() or ("item:" .. id)))
-            -- "click" source tag lets QA-11 attribute this lastPrice stamp
+            -- "click" source tag lets StampLastPrice attribute this lastPrice stamp
             -- to the user's manual row click vs the restock loop's auto search.
             ADDON.AH:SearchItem(id, function(ok, results)
                 if not ok then
@@ -823,7 +822,7 @@ local function BuildRow(row)
                 if cheapest then
                     MF:SetStatus(("Cheapest: %s / unit (%d listings)"):format(
                         MoneyText(cheapest), #results))
-                    -- QA-11: row list refresh so the Last Seen column
+                    -- Row list refresh so the Last Seen column
                     -- picks up the new stamp immediately.
                     MF:Refresh()
                 else
@@ -1051,13 +1050,13 @@ local function InitializeRow(row, data)
     end
 
     -- The row's main count is BAGS ONLY — what the character can actually
-    -- use right now. Non-bag storage (bank/reagent/warband) is folded into
+    -- use right now. Non-bag storage (bank/warband) is folded into
     -- a dim `(+N elsewhere)` annotation appended to the count line so the
     -- user always sees where the rest of their stockpile lives without
     -- the primary metric being invariant to bag<->bank moves.
     local bd     = ADDON.Inventory:GetBreakdown(data.itemID)
     local have   = bd.bags
-    local stashed = bd.bank + bd.reagent + bd.warband
+    local stashed = bd.bank + bd.warband
 
     row._have      = have
     row._breakdown = bd
@@ -1068,8 +1067,7 @@ local function InitializeRow(row, data)
     --
     -- status-via-color: the primary bags-count gets a semantic
     -- color prefix based on have-vs-need (red when short, mint when
-    -- stocked, default when no target). This replaces the dedicated
-    -- Status pill from earlier versions. The (+N stash: bank/reagent)
+    -- stocked, default when no target). The (+N) stash
     -- suffix stays gray -- it's ancillary info that shouldn't compete
     -- with the short/stocked signal.
     local haveColor = ""
@@ -1077,7 +1075,7 @@ local function InitializeRow(row, data)
     if data.need and data.need > 0 then
         local short = data.need - have
         if short > 0 then
-            haveColor    = "|cffe5624a"  -- muted red, was Status pill's short color
+            haveColor    = "|cffe5624a"  -- muted red, "short"
             haveColorEnd = "|r"
         else
             haveColor    = "|cff98FF98"  -- brand mint, "stocked"
@@ -1087,8 +1085,7 @@ local function InitializeRow(row, data)
     -- Suffix is quantity-only: "N (+M)". Storage-source detail (which
     -- container has how many) lives in the haveCell hover tooltip so the
     -- row itself stays compact and can't overflow into the Item column
-    -- at narrow widths. Simplified in v0.8.0 (was
-    -- "(+M: X bank, Y reagent, Z warband)" inline).
+    -- at narrow widths.
     local haveText = haveColor .. tostring(have) .. haveColorEnd
     if stashed > 0 then
         haveText = haveText .. ("  |cff888888(+%d)|r"):format(stashed)
@@ -1105,7 +1102,7 @@ local function InitializeRow(row, data)
     --
     -- When auto-purchase is ON but this item has no cap set, we swap the
     -- em-dash for a dim "skip" so the user can at-a-glance see which
-    -- rows an auto run will pass over (QA-10 visual affordance).
+    -- rows an auto run will pass over.
     -- Plain text, not a glyph: WoW's stock fonts lack most symbol glyphs.
     --
     -- Cap tint is binary: red when last-seen > cap (a buy would be
@@ -1127,7 +1124,7 @@ local function InitializeRow(row, data)
         row.cap:SetText("|cff555555\226\128\148|r") -- em-dash for a real "unset" glyph
     end
 
-    -- Last Seen column (QA-11): read char.items[id].lastPrice off the
+    -- Last Seen column: read char.items[id].lastPrice off the
     -- flattened row entry (DB:GetSortedItems includes it; the provider
     -- Insert in Refresh must carry it through or this column can never
     -- paint -- code-review v0.2.0..HEAD finding 1).
@@ -1308,7 +1305,7 @@ function MF:Build()
     end
     f:EnableMouse(true)
     -- Re-enable keyboard on the root frame. VERIFIED NEEDED, do not remove:
-    -- (a) previous experiment (v0.3) broke typing into toolbar EditBoxes
+    -- (a) previous experiment broke typing into toolbar EditBoxes
     --     entirely when this was removed;
     -- (b) the OnKeyDown handler below (soft-select nav) needs the root
     --     frame to receive raw keystrokes when no editbox has focus.
@@ -1347,7 +1344,7 @@ function MF:Build()
     f:SetScript("OnKeyDown", function(self, key)
         local consumed = false
 
-        -- QA-10 kill-switch: Escape stops an active auto-purchase loop.
+        -- Escape stops an active auto-purchase loop.
         if key == "ESCAPE" and ADDON.RestockLoop and ADDON.RestockLoop:IsActive() then
             consumed = true
             pcall(function() ADDON.RestockLoop:Stop("user_esc") end)
@@ -1492,7 +1489,7 @@ function MF:Build()
     title:SetText("|cff98FF98Stock|r|cffFFFFFFClerk|r")
     title:SetShadowOffset(0, 0)
 
-    -- Version string (v0.7). Sits immediately to the right of the title,
+    -- Version string. Sits immediately to the right of the title,
     -- baseline-aligned, in a smaller/muted font so it reads as metadata
     -- rather than part of the wordmark. Pre-release builds (-alpha, -beta)
     -- get an amber tint so the tester can see at a glance they're not on
@@ -1618,7 +1615,7 @@ function MF:Build()
     -- Wider containers (100 / 110) give the labels comfortable slack too.
     -- The 6th argument is a PLACEHOLDER (ghost text), not an initial value.
     -- Boxes start empty; the hints disappear the moment the user focuses.
-    -- v1.1: countBox empty falls back to 1 (was 20 pre-v1.1) so quick-add
+    -- countBox empty falls back to 1 (was 20 pre-v1.1) so quick-add
     -- is zero-friction — type an ID, hit Enter, get 1. Users edit the
     -- target inline afterward if they want more. priceBox empty means
     -- "no cap" — unchanged.
@@ -1628,7 +1625,7 @@ function MF:Build()
     -- itemIDs (rank 1/2/3 craft variants, event duplicates), and there's
     -- no addon-facing enumerate-by-name endpoint to disambiguate.
     -- Numeric-only input avoids the ambiguity entirely.
-    -- v0.7: compact widths for the 420px main-frame layout. Item ID box
+    -- Compact widths for the 420px main-frame layout. Item ID box
     -- shrunk 240 -> 130 (item IDs are 5-7 digits; 130 comfortably fits
     -- 8-digit input and the placeholder "e.g. 212283"). Target 100 -> 60,
     -- Price Cap 120 -> 80. "Price Cap / Unit" label shortened to "Cap"
@@ -1653,7 +1650,7 @@ function MF:Build()
     addBtnText:SetText(L.BTN_ADD_ITEM or "Add")
     addBtnText:SetTextColor(1, 1, 1, 1)
 
-    -- v1.1: Bulk-import button. Icon-only compact button (24x22) placed to
+    -- Bulk-import button. Icon-only compact button (24x22) placed to
     -- the right of Add Item. Opens a modal popup with a paste area for
     -- multi-line item ID import. Kept small so we don't have to re-flow
     -- the Add cluster at 420px min-width; the plus glyph plus tooltip is
@@ -1692,7 +1689,7 @@ function MF:Build()
             MF:SetStatus("|cffff8888Item ID must be a number (e.g. 212283)|r")
             return
         end
-        -- v1.1: silent default drops from 20 to 1 for zero-friction quick-add.
+        -- Silent default drops from 20 to 1 for zero-friction quick-add.
         local need = tonumber(countBox:GetText()) or 1
         -- Whole-gold input only. SetNumeric in MakeEditBox already
         -- prevented non-digit keystrokes; convert to copper here since
@@ -2391,7 +2388,7 @@ function MF:Build()
     titleFS:SetTextColor(1, 1, 1, 1)
     titleFS:SetWordWrap(false)   -- truncate long titles, don't wrap into sub
 
-    -- Bank/warband stash lines (v0.8 guardrail). Sit between title and
+    -- Bank/warband stash lines. Sit between title and
     -- sub when the item has copies in bank or warband. Amber-tinted so
     -- they read as a soft warning; hidden by default and re-anchored in
     -- ShowArmedToast based on which sources have >0 copies.
@@ -2647,7 +2644,7 @@ function MF:_RefreshNow()
 
     local items = ADDON.DB:GetSortedItems()
 
-    -- (PT-3): apply the "stuck above cap" filter if the chip is on.
+    -- Apply the "stuck above cap" filter if the chip is on.
     -- Definition of "stuck": item has a cap AND a fresh (non-stale)
     -- lastPrice that EXCEEDS the cap. Items without a cap, without any
     -- lastPrice, or with only stale prices are excluded from the filtered
@@ -2683,7 +2680,7 @@ function MF:_RefreshNow()
         -- repaint would flood the activity log's status history with
         -- "N items tracked" lines and bury the buy/expense entries the
         -- log exists to preserve (code-review v0.2.0..HEAD finding 3).
-        -- v0.6: friendlier empty-state copy when the list is non-empty
+        -- Friendlier empty-state copy when the list is non-empty
         -- but the filter has hidden everything.
         if stuckOnly then
             self.emptyText:SetText("|cff888888No items currently priced above cap. Click the filter chip to see the full list.|r")
@@ -2841,7 +2838,7 @@ end
 --
 -- handlers table: onBuy, onSkip, onStop -- all optional.
 -- ---------------------------------------------------------------------------
--- v1.1: arm delay reduced from 3s to 1.5s. The label still renders in
+-- Arm delay reduced from 3s to 1.5s. The label still renders in
 -- whole seconds ("Buy (2s)" -> "Buy (1s)" -> "Buy") via ceil(); the
 -- ticker cadence is 0.5s to match the halved total. Skip is live
 -- immediately, as before.
@@ -2856,7 +2853,7 @@ function MF:_StopToastCountdown()
 end
 
 -- ---------------------------------------------------------------------------
--- Bank/warband guardrail pulse (v0.8): retints the toast's 4 border textures
+-- Bank/warband guardrail pulse: retints the toast's 4 border textures
 -- between mint (rest) and amber (warn) on a 0.5s cadence to draw the user's
 -- eye toward the stash lines before they commit gold. Runs until Buy or
 -- Skip is pressed (or the toast is hidden).
@@ -2912,7 +2909,7 @@ function MF:ShowArmedToast(plan, handlers)
     self._toastTitle:SetPoint("TOPLEFT", 10, -6)
     self._toastTitle:SetPoint("RIGHT", -160, 0)
 
-    -- Bank/warband guardrail (v0.8): if the item has copies stashed in
+    -- Bank/warband guardrail: if the item has copies stashed in
     -- bank or warband, insert stash lines between title and sub with
     -- amber-tinted "you already have some" copy, and start the pulse.
     -- Each source (bank/warband) gets its own line so the retrievability
@@ -3066,7 +3063,7 @@ function MF:ShowSummaryToast(summary)
 
     -- Close countdown ticks each second. Matches the Buy countdown
     -- pattern so the summary toast feels part of the same UI vocabulary.
-    -- v1.1: reduced from 6s to 3s. Informational auto-dismiss; the close
+    -- reduced from 6s to 3s. Informational auto-dismiss; the close
     -- button remains clickable throughout.
     local SUMMARY_CLOSE_SECONDS = 3
     local remaining = SUMMARY_CLOSE_SECONDS

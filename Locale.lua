@@ -25,11 +25,11 @@ L.PROMPT_ADD_COUNT       = "Target count:"
 L.ITEM_NOT_FOUND         = "Item not found or not yet cached. Try opening its tooltip in-game first, then re-add."
 L.SEED_APPLIED           = "Applied recommended lists: %d items across %d categories."
 
--- v0.6 (PT-2): item ID input box hints
+-- Item ID input box hints
 L.ADDBOX_TOOLTIP         = "Type an item ID, or drag an item from your bags onto this window."
 L.ADDBOX_DROP_ACCEPTED   = "Drop to fill"
 
--- v0.6 (PT-3): shopping list filter chip
+-- Shopping list filter chip
 L.FILTER_STUCK_ONLY      = "Show only: stuck above cap"
 L.FILTER_STUCK_TOOLTIP   = "Hide items whose most recent seen price is at or under your cap. Only items priced above your cap remain visible."
 
@@ -40,4 +40,7 @@ L.HELP_SHORT             = "  /sc, /stock |cff888888— aliases|r"
 L.HELP_SEED              = "  /clerk seed |cff888888— apply dev recommended lists (debug builds only)|r"
 L.HELP_RESET             = "  /clerk reset |cffff8888— wipe this character's list|r"
 L.HELP_DUMP              = "  /clerk dump |cff888888— print current list to chat|r"
+L.HELP_LOG               = "  /clerk log [clear] |cff888888— open or clear the activity log|r"
+L.HELP_DEBUG             = "  /clerk debug |cff888888— toggle diagnostic chat output|r"
+L.HELP_ADD               = "  /clerk <item ID or link> |cff888888— add an item with target 1|r"
 L.HELP_PENDING           = "  /clerk pending [clear] |cff888888— show items awaiting mail delivery; 'clear' resets the mail-in-flight ledger|r"

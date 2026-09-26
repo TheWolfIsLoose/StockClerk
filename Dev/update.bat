@@ -3,19 +3,23 @@ REM Stock Clerk - one-click updater  [DEV ONLY, DO NOT SHIP]
 REM
 REM Excluded from packaged releases via .pkgmeta (Dev/ is ignored).
 REM
-REM What this does: hard-syncs the local clone to origin/main.
+REM What this does: hard-syncs the local clone to origin/main, or to
+REM another branch if one is given: `update.bat dev` tracks alpha builds.
 REM Any local file changes are discarded (the user does not edit the
 REM addon folder by hand -- edits happen on the dev workstation and
 REM come down through git). SavedVariables live in WTF/, not here,
 REM so they are unaffected.
 REM
-REM Double-click to run. Type /reload in WoW when it finishes.
+REM Double-click to run (main), or run `update.bat dev` from a prompt.
+REM Type /reload in WoW when it finishes.
 REM
 REM Works whether this file lives at the addon root (legacy) or inside
 REM Dev/ (current layout). Finds the addon root by looking for
 REM StockClerk.toc.
 
 setlocal EnableExtensions
+set BRANCH=%~1
+if "%BRANCH%"=="" set BRANCH=main
 
 REM ---- Locate the addon root ------------------------------------------
 set ROOT=%~dp0
@@ -29,7 +33,7 @@ if not exist "%ROOT%StockClerk.toc" (
 cd /d "%ROOT%"
 
 echo ====================================================
-echo   Stock Clerk - Sync to latest (origin/main)
+echo   Stock Clerk - Sync to latest (origin/%BRANCH%)
 echo ====================================================
 echo.
 
@@ -47,13 +51,13 @@ if errorlevel 1 (
     exit /b 1
 )
 
-REM ---- Hard-sync to origin/main -------------------------------------
-REM reset --hard: discards any local edits + moves HEAD to origin/main.
+REM ---- Hard-sync to origin/%BRANCH% ---------------------------------
+REM reset --hard: discards any local edits + moves HEAD to the branch.
 REM clean -fd:   removes files git doesn't know about (e.g. old
 REM              update.bat at root after it moved to Dev/).
 REM             -f = force, -d = also directories.
-echo Syncing to origin/main...
-git reset --hard origin/main
+echo Syncing to origin/%BRANCH%...
+git reset --hard origin/%BRANCH%
 if errorlevel 1 (
     echo *** git reset failed.
     pause

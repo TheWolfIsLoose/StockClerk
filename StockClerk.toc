@@ -9,8 +9,6 @@
 ## X-Category: Inventory
 ## X-Curse-Project-ID: 1700292
 
-Libs\Libs.xml
-
 Locale.lua
 DB.lua
 Log.lua
@@ -18,8 +16,6 @@ ItemResolver.lua
 Inventory.lua
 AH.lua
 Core.lua
-
-
 RestockLoop.lua
 
 UI\MainFrame.lua

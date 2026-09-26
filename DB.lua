@@ -1,6 +1,6 @@
 --[[
     Stock Clerk - DB.lua
-    Owns the AceDB-3.0 database schema and provides read/write helpers
+    Owns the SavedVariables schema and provides read/write helpers
     for the per-character consumable list.
 
     Schema:
@@ -31,7 +31,7 @@
       global.log      = array of entries (see Log.lua)
 
     We keep the on-disk shape stable across versions; any new field lives
-    inside `defaults` so AceDB fills it in on load without a migration.
+    inside `defaults` so Initialize fills it in on load without a migration.
 --]]
 
 local addonName = ...
@@ -58,7 +58,7 @@ DB.defaults = {
         uiPos = { point = "CENTER", x = 0, y = 0 },
         -- AutoSpend deleted. Was the
         -- daily budget tracker. No budget = no tracker.
-        -- (PT-3): per-character UI state. Filter toggle for the
+        -- Per-character UI state. Filter toggle for the
         -- shopping-list view. `stuckOnly = true` means the list hides
         -- every row except items whose most recent observed unit price
         -- exceeds their price cap (i.e. "currently priced out"). Per-
@@ -67,7 +67,7 @@ DB.defaults = {
         -- globally would be surprising.
         ui = { stuckOnly = false },
 
-        -- Mail-delivery ledger (PT-4). Persisted per-character because
+        -- Mail-delivery ledger. Persisted per-character because
         -- auction mail is delivered to the buying character, not the
         -- warband. Keys are itemID (as number, keyed by lua so beware
         -- SavedVariables stringifies these on write -- see the load
@@ -100,27 +100,29 @@ DB.defaults = {
 -- ---------------------------------------------------------------------------
 -- Init (called from Core.lua on OnInitialize)
 -- ---------------------------------------------------------------------------
-function DB:Initialize()
-    -- AceDB-3.0 wraps the two SavedVariables tables declared in the TOC.
-    -- It handles per-character scoping automatically via the `char` profile.
-    self.db = LibStub("AceDB-3.0"):New("StockClerkDB", self.defaults, true)
-
-    -- AceDB only manages the "global" SV; the PerCharacter SV needs manual
-    -- initialization. We mirror the char defaults into StockClerkCharDB.
-    _G.StockClerkCharDB = _G.StockClerkCharDB or {}
-    for k, v in pairs(self.defaults.char) do
-        if _G.StockClerkCharDB[k] == nil then
-            -- Shallow copy is fine — nested tables are simple
-            if type(v) == "table" then
-                _G.StockClerkCharDB[k] = CopyTable(v)
-            else
-                _G.StockClerkCharDB[k] = v
-            end
+-- Fill missing keys from defaults, recursing into tables the saved data
+-- already has so new settings appear for existing users.
+local function ApplyDefaults(saved, defaults)
+    for k, v in pairs(defaults) do
+        if saved[k] == nil then
+            saved[k] = type(v) == "table" and CopyTable(v) or v
+        elseif type(v) == "table" and type(saved[k]) == "table" then
+            ApplyDefaults(saved[k], v)
         end
     end
-    self.char = _G.StockClerkCharDB
+    return saved
+end
 
-    -- SortOrder migration (v0.4): pre-priority users have no sortOrder on
+function DB:Initialize()
+    -- StockClerkDB (account-wide) keeps settings + log under `.global`,
+    -- the layout AceDB used before v1.1.2, so existing data loads as-is.
+    StockClerkDB = StockClerkDB or {}
+    StockClerkDB.global = ApplyDefaults(StockClerkDB.global or {}, self.defaults.global)
+    self.global = StockClerkDB.global
+    StockClerkCharDB = ApplyDefaults(StockClerkCharDB or {}, self.defaults.char)
+    self.char = StockClerkCharDB
+
+    -- SortOrder migration: pre-priority users have no sortOrder on
     -- any item. Stamp everyone in the current alphabetical readout so the
     -- upgrade never visibly reshuffles an existing list.
     local needsOrder = false
@@ -141,7 +143,7 @@ function DB:Initialize()
         end
     end
 
-    -- PT-4: pendingBuys hygiene. Two responsibilities:
+    -- pendingBuys hygiene. Two responsibilities:
     --   1. Normalize keys back to numbers. SavedVariables preserves
     --      the lua type of table keys inside a table serialized as-is,
     --      but a defaults-migration path or a hand-edit can leave
@@ -174,7 +176,7 @@ function DB:Initialize()
 end
 
 -- ---------------------------------------------------------------------------
--- v0.6: shopping-list "stuck above cap" filter toggle (PT-3)
+-- Shopping-list "stuck above cap" filter toggle
 --
 -- Persisted per-character on char.ui.stuckOnly. Getter/setter live here
 -- so MainFrame doesn't touch the raw table shape.
@@ -250,7 +252,7 @@ function DB:ReorderItems(orderedIDs)
 end
 
 -- Create-or-update an item entry. `maxPrice` is copper or nil. `source`
--- (PT-1 priceSource) defaults to "user" when a maxPrice is provided;
+-- (priceSource) defaults to "user" when a maxPrice is provided;
 -- callers from a vendor path should pass their tag explicitly.
 function DB:SetItem(itemID, need, maxPrice, source)
     if not itemID or need == nil then return end
@@ -289,7 +291,7 @@ function DB:SetItem(itemID, need, maxPrice, source)
 end
 
 -- Update just the maxPrice for an existing item; no-op if the item isn't
--- tracked. Pass nil to clear the cap. `source` is the PT-1 priceSource
+-- tracked. Pass nil to clear the cap. `source` is the priceSource
 -- tag ("user" / "vendor"); defaults to "user" when omitted
 -- because every UI-driven call site is a user edit. Passing nil for
 -- maxPriceCopper clears the source tag too -- an unset cap has no source.
@@ -306,7 +308,7 @@ function DB:SetItemMaxPrice(itemID, maxPriceCopper, source)
     end
 end
 
--- QA-11: stamp the most-recent observed unit price for an item. Sources:
+-- Stamp the most-recent observed unit price for an item. Sources:
 --   "click"  - piggybacked on a left-click AH search from the row list
 --   "loop"   - piggybacked on the restock loop's per-item search
 --   "manual" - user-initiated re-price (reserved for future)
@@ -339,5 +341,5 @@ end
 -- Settings passthrough
 -- ---------------------------------------------------------------------------
 function DB:Settings()
-    return self.db.global.settings
+    return self.global.settings
 end

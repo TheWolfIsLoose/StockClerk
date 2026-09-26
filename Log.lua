@@ -81,10 +81,10 @@ local VALID_KINDS = {
 -- Internal: get / create the backing table on StockClerkDB.global.log.
 -- ---------------------------------------------------------------------------
 local function GetBuffer()
-    -- DB.lua wires AceDB and exposes .db; global.log is created lazily on
+    -- global.log is created lazily on
     -- first write rather than seeded in defaults so we don't force a table
     -- allocation on install for users who never open the log.
-    local g = ADDON.DB and ADDON.DB.db and ADDON.DB.db.global
+    local g = ADDON.DB.global
     if not g then return nil end
     if not g.log then g.log = {} end
     return g.log
@@ -126,13 +126,7 @@ function Log:Emit(kind, itemID, payload)
     while #buf > self.MAX_ENTRIES do
         table.remove(buf, 1)
     end
-
-    -- Live LogPopup refresh, if the popup is currently open. (v0.6
-    -- LogFrame surface was retired in v0.8; LogPopup replaced it in v0.7.)
-    if ADDON.LogPopup and ADDON.LogPopup.frame and ADDON.LogPopup.frame:IsShown()
-            and ADDON.LogPopup.Refresh then
-        ADDON.LogPopup:Refresh()
-    end
+    -- The LogPopup and Sidecar repaint via their own Emit hooks.
 end
 
 -- ---------------------------------------------------------------------------

@@ -1,5 +1,38 @@
 # Stock Clerk changelog
 
+## v1.1.2-alpha2
+
+Second cleanup pass. Stock Clerk now has no library dependencies.
+Your list, settings and activity log carry over unchanged.
+
+### No more libraries
+
+- Removed the last of Ace3 (AceAddon, AceEvent, AceConsole, AceDB,
+  CallbackHandler, LibStub). Events, slash commands and saved settings
+  are now handled directly in about 40 lines.
+
+### Faster at the Auction House
+
+- The list no longer rebuilds every time the game loads info for an
+  item that isn't on your list, or while the window is closed. AH
+  scanning addons trigger this thousands of times.
+- The side panel no longer redraws for status messages it doesn't show.
+- The activity log popup redraws once per new entry instead of twice.
+- The Restock button's shortfall count no longer sorts the list.
+- One fewer item-count call per stashed item (the reagent bank is gone
+  since 11.2; any legacy reagent count now shows as bank).
+
+### Fixes
+
+- `/clerk help` lists every command.
+- Removed a "remember side panel open" setting that never took effect.
+
+### Repo
+
+- README rewritten for players, with a Releasing section; unused images,
+  a duplicate logo and stale design docs removed; `Dev/update.bat dev`
+  tracks alpha builds; `Dev/smoke.lua` added as a runnable check.
+
 ## v1.1.2-alpha1
 
 Cleanup release. No new features; everything the player sees should
