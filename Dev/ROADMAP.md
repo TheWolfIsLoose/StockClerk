@@ -89,8 +89,8 @@ interaction type(s). The plan above assumes yes; if Blizzard has
 restricted it, the fallback is a "highlight what to grab" mode that
 lights up the right bank slots for you to click.
 
-**Out of scope for 1.2:** depositing surplus back to the bank; pulling
-from other characters' banks; one-button "bank then AH" (the AH loop
+**Out of scope for 1.2:** depositing surplus (see v1.3 candidate below);
+one-button "bank then AH" (the AH loop
 already works off the bag count once the pull is done).
 
 ### Feature B: "Add Common Consumables"
@@ -102,16 +102,16 @@ what they don't want and restocks from the AH or the bank.
 **UX**
 - Sidecar settings section: button **Add common consumables**.
 - Click → adds every item on the curated list that isn't already tracked,
-  with that item's default target. Existing items and their targets are
-  never changed. Footer: "Added 12 items. Remove any you don't need with
+  with a target of 1. **Decided:** an item you already track is never
+  touched (its target and cap stay as you set them). Footer: "Added 12 items. Remove any you don't need with
   the trash icon."
 - One log entry for the batch (not one per item).
 
 **Data**
-- **Decided:** you supply the itemIDs.
-- Shipped data file `Data/Consumables.lua`: an ordered list of
-  `{ itemID, target, category }`. Category is for list order/grouping in
-  the file only; nothing in the UI depends on it.
+- **Decided:** the list is `Data/Consumables.lua` (already in the repo):
+  one itemID per line with its name as a comment, grouped by category in
+  comments. Target is 1 for every item for now (may revisit). To change
+  the list, edit that file.
 - Replaces the debug-only `Dev/RecommendedLists.lua` and `/clerk seed`
   (same idea, now for everyone).
 - New expansion or patch = edit that one file; no code change.
@@ -125,7 +125,7 @@ what they don't want and restocks from the AH or the bank.
 ### Tasks (in order)
 
 1. In-game spike for Feature A's container calls (see above).
-2. `Data/Consumables.lua` from your itemID list; Sidecar button; retire
+2. Load `Data/Consumables.lua` from the TOC; Sidecar button; retire
    `Dev/RecommendedLists.lua` and `/clerk seed` → `v1.2.0-alpha1`.
 3. `BankRestock.lua` planner + smoke tests for the move math.
 4. Executor, bank open/close detection, footer button, log kind,
@@ -135,11 +135,28 @@ what they don't want and restocks from the AH or the bank.
 
 ### Open questions
 
-- **Consumables list (Open):** your itemIDs, plus a target for each (or
-  one default target for all).
-- **Re-clicking "Add common consumables" (Default):** re-adds any listed
-  item you've since removed. Fine for a one-shot setup button; if that
-  gets annoying, remember removals per character and skip them.
+- **Consumables list (Open):** `241304` is listed as both Light's
+  Potential and Silvermoon Healing Potion; one ID is wrong. The healing
+  potion line is commented out in the file until confirmed.
+- **Re-clicking "Add common consumables" (Decided):** re-adds any listed
+  item you've since removed. The addon doesn't remember removals.
+
+---
+
+## v1.3 candidate — Deposit surplus (depends on 1.2 usage)
+
+Only after Restock from Bank has proven reliable in the field.
+
+- **Decided:** never automatic. Extra copies in your bags are your call;
+  the addon doesn't move them unless you press a button.
+- Candidate UX: a **Deposit Surplus** button at the bank that moves
+  anything above target from bags to the bank, with a choice of
+  character bank or warband bank (warband is shared by every character
+  on the account; a character bank is only reachable by that character).
+- Reuses the 1.2 planner/executor in the other direction.
+- Open when scheduled: default destination, whether surplus of
+  soulbound items (which can't go in the warband bank) falls back to the
+  character bank.
 
 ---
 
@@ -150,7 +167,6 @@ Carried from the legacy backlog; not committed to a release.
 - Auto-loot mailbox attachments for tracked items (warn if Postal or a
   similar addon is loaded).
 - Vendor auto-buy for tracked items a merchant sells.
-- Deposit surplus above target back to the bank.
 - Per-item "count bank toward Have" mode; warband shopper/quartermaster
   (cross-character restocking).
 - Gold/silver/copper cap input; "no cap" as an explicit checkbox.
