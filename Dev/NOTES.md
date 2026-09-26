@@ -1,10 +1,10 @@
 # Stock Clerk — Backlog
 
 Dev-only (the `Dev/` folder never ships). Release process lives in the
-README's "Releasing" section; shipped work is recorded in CHANGELOG.md.
+README's "Releasing" section; shipped work is on the GitHub Releases page.
 
 This backlog predates v1.0 and some entries have since shipped; check
-CHANGELOG.md before picking one up.
+the Releases page before picking one up.
 
 ---
 

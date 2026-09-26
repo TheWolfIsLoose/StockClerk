@@ -82,8 +82,9 @@ unzip it into `Interface/AddOns/`.
 
 ## Releasing
 
-Releases are cut by CI from the top `## vX.Y.Z` heading in
-[CHANGELOG.md](CHANGELOG.md):
+Releases are cut by CI from the `## vX.Y.Z` heading in
+[CHANGELOG.md](CHANGELOG.md), which holds only the release being cut
+(short, player-facing bullets); past notes live on the Releases page.
 
 - Push to `dev` with a new `-alphaN` / `-betaN` version heading to
   publish a prerelease (CurseForge Alpha/Beta).
