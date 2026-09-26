@@ -232,11 +232,10 @@ Your list, caps and settings carry over unchanged.
 
 ### Circle back (noted 2026-09-26)
 
-- **Filter chip (header):** should filter to items you're *short* on.
-  Today its code, tooltip and empty-state text all say "stuck above cap"
-  (has a cap + a fresh last price above it; `UI/MainFrame.lua` Refresh,
-  `DB:GetStuckOnly`). Open: replace the predicate with "short"
-  (bags below target), or keep "stuck" and add "short" as a second mode.
+- ~~Filter chip should show only items you're short on.~~ **Done
+  2026-09-26:** replaced "stuck above cap" outright (bags below target).
+- Footer action messages now hold 8s before the tracked/short summary
+  returns (was overwritten on the next redraw). Done 2026-09-26.
 
 ### Open questions
 
