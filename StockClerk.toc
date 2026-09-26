@@ -25,4 +25,5 @@ UI\LogPopup.lua
 
 #@debug@
 Dev\RecommendedLists.lua
+Dev\BankProbe.lua
 #@end-debug@

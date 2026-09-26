@@ -16,7 +16,16 @@ State: `dev` holds the tested efficiency pass (released as
 this plan. `main` is still v1.1.1. No 1.2 feature code written yet.
 
 First up, in one focused session with the player in-game: the bank-API
-probe (task 2 below).
+probe (task 2 below). **2026-09-26: probe built and pushed to `dev`**
+(`Dev/BankProbe.lua`); waiting on the in-game run.
+
+- **Run it:** `update.bat dev`, `/reload`, open the bank (open it *after*
+  the reload), then `/clerk bankprobe <itemID> scan` (moves nothing),
+  then `/clerk bankprobe <itemID>`. `/reload` afterwards saves the log to
+  `StockClerkDB.bankProbe` in the SavedVariables file.
+- **Step order in the probe:** char split 5 → empty, split 3 → partial,
+  3-in-one-frame burst, 3 sequential single moves (latency), whole
+  stack; then warband split 5, split 3, whole stack. ~20 per bank covers it.
 
 - **Build:** dev-only `Dev/BankProbe.lua` (~80 lines) in the TOC's
   `#@debug@` block, so it loads from a git checkout (`update.bat dev`)
