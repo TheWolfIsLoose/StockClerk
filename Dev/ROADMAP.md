@@ -14,7 +14,7 @@ disagree), **Open** (needs an answer before build).
 **Decided:** there is no separate v1.1.2 stable. The next stable release
 is v1.2.0, and it carries three things:
 
-1. **Ponytail efficiency pass (done, on `dev`).** Shipped to testers as
+1. **Ponytail efficiency pass (done, on `dev`, tested in-game).** Shipped to testers as
    `v1.1.2-alpha1` and `v1.1.2-alpha2`; full notes in `Dev/HISTORY.md`.
    - All libraries removed (Ace3, LibStub); events, slash commands and
      saved settings handled natively.
@@ -134,9 +134,9 @@ what they don't want and restocks from the AH or the bank.
 
 ### Tasks (in order)
 
-1. In-game check of the efficiency pass (`v1.1.2-alpha2`): list, caps and
-   settings survive `/reload`; `/clerk`, `/sc`, `/clerk help`; AH
-   auto-open, row search, one Buy; bank tooltip numbers.
+1. ~~In-game check of the efficiency pass (`v1.1.2-alpha2`).~~ **Done
+   2026-09-26:** stable, feels as good or slightly better. It rides along
+   in `v1.2.0-alpha1`.
 2. In-game spike for Feature A's container calls (see above).
 3. Load `Data/Consumables.lua` from the TOC; Sidecar button; retire
    `Dev/RecommendedLists.lua` and `/clerk seed` → `v1.2.0-alpha1`.
