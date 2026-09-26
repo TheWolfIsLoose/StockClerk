@@ -24,7 +24,9 @@ interaction type is `Banker` (8). Three moves in one frame: only 1 lands
 (item locks), so the executor must go one move at a time, waiting for
 each to land: 300-550ms per move, 3s timeout is ample. A whole-stack
 `UseContainerItem` merged onto an existing bag stack by itself. Character
-bank not yet exercised (had no stock) — rerun with ~20 there to confirm.
+bank confirmed on the same client (13:53 run): splits, whole stack and
+pacing identical (326-607ms per move). **Spike done: build Feature A as
+planned.** First move of a run is slower (1.2-1.7s); per-move timeout 3s.
 
 - **Run it:** `update.bat dev`, `/reload`, open the bank (open it *after*
   the reload), then `/clerk bankprobe <itemID> scan` (moves nothing),
