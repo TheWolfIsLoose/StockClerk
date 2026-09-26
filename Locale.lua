@@ -29,8 +29,8 @@ L.ADDBOX_TOOLTIP         = "Type an item ID, or drag an item from your bags onto
 L.ADDBOX_DROP_ACCEPTED   = "Drop to fill"
 
 -- Shopping list filter chip
-L.FILTER_STUCK_ONLY      = "Show only: stuck above cap"
-L.FILTER_STUCK_TOOLTIP   = "Hide items whose most recent seen price is at or under your cap. Only items priced above your cap remain visible."
+L.FILTER_STUCK_ONLY      = "Show only: items you're short on"
+L.FILTER_STUCK_TOOLTIP   = "Hide items you already have enough of in your bags."
 
 -- Slash command help
 L.HELP_TITLE             = "|cff88ccffStock Clerk|r commands:"

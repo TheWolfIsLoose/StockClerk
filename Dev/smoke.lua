@@ -288,4 +288,16 @@ do -- Footer: an action message survives a redraw's summary, then yields to it
   assert(bar.t == "6 items tracked", "summary blocked after hold")
   mf.statusBar = saved
 end
+do -- Filter chip: shows only short items (items 111 need 5, 42 need 30; bags hold 7)
+  local mf, shown = ADDON.MainFrame, nil
+  local sb = mf.scrollBox
+  mf.scrollBox = { SetDataProvider = function(_, p) shown = p end }
+  local origCDP = CreateDataProvider
+  CreateDataProvider = function() local t = { n = {} }; function t:Insert(x) self.n[#self.n + 1] = x.itemID end; return t end
+  local gii = C_Item.GetItemInfo; C_Item.GetItemInfo = gii or function() end
+  ADDON.DB:SetStuckOnly(true); mf:_RefreshNow()
+  C_Item.GetItemInfo = gii
+  assert(shown and #shown.n == 1 and shown.n[1] == 42, "filter should show only the short item: " .. (shown and table.concat(shown.n, ",") or "nothing shown"))
+  ADDON.DB:SetStuckOnly(false); mf.scrollBox = sb; CreateDataProvider = origCDP
+end
 io.stdout:write("perf/inventory OK\n")

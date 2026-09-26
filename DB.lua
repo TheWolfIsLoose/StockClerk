@@ -59,9 +59,8 @@ DB.defaults = {
         -- AutoSpend deleted. Was the
         -- daily budget tracker. No budget = no tracker.
         -- Per-character UI state. Filter toggle for the
-        -- shopping-list view. `stuckOnly = true` means the list hides
-        -- every row except items whose most recent observed unit price
-        -- exceeds their price cap (i.e. "currently priced out"). Per-
+        -- shopping-list view. `stuckOnly = true` means the list shows
+        -- only items you're short on (bags below target). Per-
         -- character because different characters carry different lists
         -- and different market pressures, so persisting the filter
         -- globally would be surprising.
@@ -175,7 +174,8 @@ function DB:Initialize()
 end
 
 -- ---------------------------------------------------------------------------
--- Shopping-list "stuck above cap" filter toggle
+-- Shopping-list "short items only" filter toggle (named stuckOnly for
+-- saved-data compatibility; it meant "stuck above cap" before v1.2)
 --
 -- Persisted per-character on char.ui.stuckOnly. Getter/setter live here
 -- so MainFrame doesn't touch the raw table shape.

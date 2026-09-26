@@ -2152,7 +2152,7 @@ function MF:Build()
     MakeHeader("Cap",  "right",   -106)   -- cell right -100 - 6 inset
     MakeHeader("Seen", "right",   -30)    -- Seen text right edge
 
-    -- V0.7: "stuck above cap" filter chip — now ICON-ONLY (was a 150w text
+    -- "Show only short items" filter chip (was "stuck above cap" until v1.2) — now ICON-ONLY (was a 150w text
     -- pill in v0.6). At the compressed 420 width there isn't room for a
     -- 150-pixel text chip in the headers strip; the funnel glyph is a
     -- universal filter affordance and hover-tooltip carries the meaning.
@@ -2207,10 +2207,8 @@ function MF:Build()
         GameTooltip:SetOwner(self, "ANCHOR_BOTTOM")
         local on = ADDON.DB:GetStuckOnly()
         GameTooltip:SetText((on and "|cff98FF98Filter ON|r  " or "") ..
-            (L.FILTER_STUCK_ONLY or "Show only: stuck above cap"), 1, 1, 1)
-        GameTooltip:AddLine(L.FILTER_STUCK_TOOLTIP or
-            "Hide items whose most recent seen price is at or under your cap.",
-            0.7, 0.7, 0.7, true)
+            L.FILTER_STUCK_ONLY, 1, 1, 1)
+        GameTooltip:AddLine(L.FILTER_STUCK_TOOLTIP, 0.7, 0.7, 0.7, true)
         GameTooltip:Show()
     end)
     filterChip:SetScript("OnLeave", function()
@@ -2644,22 +2642,14 @@ function MF:_RefreshNow()
 
     local items = ADDON.DB:GetSortedItems()
 
-    -- Apply the "stuck above cap" filter if the chip is on.
-    -- Definition of "stuck": item has a cap AND a fresh (non-stale)
-    -- lastPrice that EXCEEDS the cap. Items without a cap, without any
-    -- lastPrice, or with only stale prices are excluded from the filtered
-    -- view -- the user is explicitly asking "what's currently priced out",
-    -- not "what's unknown or unpriced".
-    local stuckOnly = ADDON.DB.GetStuckOnly and ADDON.DB:GetStuckOnly() or false
+    -- Filter chip ON: show only items you're short on (bags below target,
+    -- the same test as the footer's "N short"). The DB flag keeps its old
+    -- name (char.ui.stuckOnly) so saved on/off state carries over.
+    local stuckOnly = ADDON.DB:GetStuckOnly()
     if stuckOnly then
-        local staleCutoff = (ADDON.DB:Settings() and ADDON.DB:Settings().lastPriceTTL) or 86400
-        local nowT = time()
         local filtered = {}
         for _, it in ipairs(items) do
-            if it.maxPrice and it.lastPrice and it.lastPrice.copper
-               and it.lastPrice.seenAt
-               and (nowT - it.lastPrice.seenAt) <= staleCutoff
-               and it.lastPrice.copper > it.maxPrice then
+            if (ADDON.Inventory:GetCount(it.itemID) or 0) < it.need then
                 filtered[#filtered + 1] = it
             end
         end
@@ -2683,9 +2673,9 @@ function MF:_RefreshNow()
         -- Friendlier empty-state copy when the list is non-empty
         -- but the filter has hidden everything.
         if stuckOnly then
-            self.emptyText:SetText("|cff888888No items currently priced above cap. Click the filter chip to see the full list.|r")
+            self.emptyText:SetText("|cff888888Nothing is short. Click the filter icon to see the full list.|r")
             self.emptyText:Show()
-            self:SetStatus("0 stuck items (filter active)", true)
+            self:SetStatus("|cff4ade80Nothing short|r (filter active)", true)
         else
             self.emptyText:SetText(L.EMPTY_LIST)
             self.emptyText:Show()
