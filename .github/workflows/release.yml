@@ -119,12 +119,17 @@ jobs:
         if: steps.tag.outputs.skip != 'true'
         # Packages the addon following .pkgmeta rules, producing a zip
         # in .release/ that matches CurseForge's own build output.
-        uses: BigWigsMods/packager@master
-        with:
-          # -d: no CurseForge upload (webhook handles that)
-          # -w: no WoWInterface upload
-          # -a: no Wago upload (no Wago project configured)
-          args: -d -w -a
+        # Run release.sh directly (what the packager action does) so the
+        # ref can be presented as the tag: on a branch push the packager
+        # otherwise sees a tag at HEAD and skips, expecting a tag-push run.
+        # -d: no CurseForge upload (webhook handles that)
+        # -w: no WoWInterface upload
+        # -a: no Wago upload (no Wago project configured)
+        run: |
+          TAG="${{ steps.tag.outputs.tag }}"
+          curl -fsSL https://raw.githubusercontent.com/BigWigsMods/packager/master/release.sh -o /tmp/release.sh
+          GITHUB_REF="refs/tags/$TAG" GITHUB_REF_NAME="$TAG" GITHUB_REF_TYPE=tag \
+            bash /tmp/release.sh -d -w -a
 
       - name: Create GitHub Release
         if: steps.tag.outputs.skip != 'true'
