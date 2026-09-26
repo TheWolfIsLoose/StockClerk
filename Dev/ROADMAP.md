@@ -272,6 +272,68 @@ Your list, caps and settings carry over unchanged.
 
 ## v1.2.0-beta2 — Ponytail sweep + UI/UX consistency pass
 
+### Next session: start here (paused 2026-09-26, after the audit)
+
+Done this session (on `dev`, smoke green, no release):
+- Audit below. Safe cuts applied: pre-10.0 `SetMinResize` fallback, dead
+  `_cogBtn/_logBtn` aliases, 11 unused Locale strings, retired
+  `kbd_stuck` log kind, write-only cap `priceSource` field, v0.7
+  size-history notes. About -70 lines.
+
+Next: the UI items (U1-U7) with the player in-game, one at a time with a
+screenshot each; then the remaining code items (C1-C4); then cut
+`v1.2.0-beta2`.
+
+### Audit (2026-09-26)
+
+Baseline: 13 Lua files, ~6.8k lines. `UI/MainFrame.lua` is 3.36k lines,
+of which ~1.1k are comments (vs ~2.0k code). The window spends 138px of
+its 400px minimum height on chrome (header 32, toolbar 48, column
+headers 20, footer 38), leaving ~8.7 rows of 30px.
+
+**UI / real estate** (ranked by space won; each needs an in-game look):
+- U1. **Row height 30 → 24** (icon 22 → 18). About 25% more rows in the
+  same window; the biggest single gain.
+- U2. **Toolbar 48 → ~28px:** drop the labels above Item ID / Target /
+  Cap; the placeholders ("e.g. 212283", "e.g. 20", "none") already say
+  what goes where. Tooltips carry the rest.
+- U3. **Footer Close button → remove** (the header × and Escape already
+  close). Gives the footer message ~90px more room; footer 38 → ~30.
+- U4. **Side panel hints → tooltips.** Each checkbox carries a 1-2 line
+  grey hint (~22px each, 3 of them); moving them into hover tooltips
+  gives the activity feed ~65px. Consider 260 → ~230 width.
+- U5. **Header 32 → ~26px** (title, version, filter/hamburger/× icons fit).
+- U6. **Consistency rules:** one button recipe (StyleButton; tooltips must
+  HookScript, never SetScript, or the hover highlight dies: fixed for +
+  and Restock in beta1, check the rest), one drawn-icon recipe
+  (hamburger, funnel, plus; the header × is still a font glyph), one
+  spacing scale, fewer fonts (7 GameFont variants in use today), one
+  voice for tooltips/footer text (sentence case, no internal terms like
+  "loop", "ledger", "stuck").
+- U7. Candidates to discuss, not decided: the Cap box in the add toolbar
+  (caps are also editable per row), and the Last Seen column (only
+  meaningful after AH visits).
+
+**Code** (Ponytail; keep behaviour identical, smoke must stay green):
+- C1. **Comment diet in `UI/MainFrame.lua`** (~-500 to -700 lines): version
+  history ("v0.4", "V0.7", "QA-11", "PT-1", "KBD-FIX (H1)"...), repeated
+  rationale, and narration of what the next line does. Keep the few
+  "do not remove, here's why" notes. Same treatment, smaller, for
+  RestockLoop.lua (170 comment lines) and DB.lua.
+- C2. **Duplicate AH open/close events** (`Core.lua`): both
+  `PLAYER_INTERACTION_MANAGER_FRAME_SHOW/HIDE` and
+  `AUCTION_HOUSE_SHOW/CLOSED` call the same handlers, so every AH visit
+  runs them twice. Delete the legacy pair, but check in-game that the
+  window still opens/docks with Auctionator/TSM (the comment says the
+  pair was kept "for coverage").
+- C3. **`MF:Build` is ~1,350 lines and `BuildRow` ~600.** Not a split for
+  its own sake; look for repeated widget recipes (edit-box cells, drawn
+  icons, toast lines) that collapse into one helper each.
+- C4. **Keyboard soft-select / Tab navigation** carries a lot of guard code
+  (8 "KBD-FIX" blocks). Decide whether keyboard row navigation earns its
+  keep for a pocket shopping list; if not, removing it deletes the
+  guards with it.
+
 Goal: less code and more usable space before stable v1.2.0. No new
 features.
 
