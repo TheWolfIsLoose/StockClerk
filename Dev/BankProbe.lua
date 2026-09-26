@@ -138,8 +138,8 @@ local function splitMove(label, itemID, bags, n, toBag, toSlot)
     C.SplitContainerItem(src[1], src[2], n)
     if GetCursorInfo() then C.PickupContainerItem(toBag, toSlot)
     else stepErrors[#stepErrors + 1] = "split put nothing on cursor" end
-    report(("%s (%d.%d x%d -> %d.%d)"):format(label, src[1], src[2], n, toBag, toSlot),
-        settle(itemID, before, n, 3), itemID, before)
+    local ok, ms = settle(itemID, before, n, 3)
+    report(("%s (%d.%d x%d -> %d.%d)"):format(label, src[1], src[2], n, toBag, toSlot), ok, ms, itemID, before)
     return true
 end
 
@@ -150,8 +150,8 @@ local function wholeMove(label, itemID, bags)
     wipe(stepErrors)
     local before = C_Item.GetItemCount(itemID)
     C.UseContainerItem(src[1], src[2])
-    report(("%s (UseContainerItem %d.%d x%d)"):format(label, src[1], src[2], src[3]),
-        settle(itemID, before, src[3], 3), itemID, before)
+    local ok, ms = settle(itemID, before, src[3], 3)
+    report(("%s (UseContainerItem %d.%d x%d)"):format(label, src[1], src[2], src[3]), ok, ms, itemID, before)
     local where = {}
     for _, s in ipairs(slotsWith(BAGS, itemID)) do where[#where + 1] = ("%d.%d=%d"):format(s[1], s[2], s[3]) end
     P("  bag stacks now: %s", table.concat(where, " "))
@@ -191,12 +191,17 @@ local function run(itemID, scanOnly)
     if not splitMove("4a char split -> empty", itemID, charBags, 5, emptyBagSlot()) then return end
     if not splitMove("4b char split -> partial", itemID, charBags, 3, partialBagSlot(itemID, 3)) then return end
 
+    -- 6a/6b pacing tests: character bank if it has the item, else warband.
+    local burstBags = #slotsWith(charBags, itemID) > 0 and charBags or acctBags
+    if #slotsWith(burstBags, itemID) == 0 then P("SKIP 6a/6b: item in neither bank") end
+    P("6a/6b source: %s bank", burstBags == charBags and "character" or "warband")
+
     -- 6a: three split+place pairs in the same frame (no waiting).
     if not guard() then return end
     wipe(stepErrors)
     local before, issued = C_Item.GetItemCount(itemID), 0
     for _ = 1, 3 do
-        local src, tb, ts = slotsWith(charBags, itemID)[1], partialBagSlot(itemID, 1)
+        local src, tb, ts = slotsWith(burstBags, itemID)[1], partialBagSlot(itemID, 1)
         if src and tb then
             C.SplitContainerItem(src[1], src[2], 1)
             if GetCursorInfo() then C.PickupContainerItem(tb, ts); issued = issued + 1 end
@@ -211,7 +216,7 @@ local function run(itemID, scanOnly)
     local times = {}
     for n = 1, 3 do
         if not guard() then return end
-        local src, tb, ts = slotsWith(charBags, itemID)[1], partialBagSlot(itemID, 1)
+        local src, tb, ts = slotsWith(burstBags, itemID)[1], partialBagSlot(itemID, 1)
         if not (src and tb) then break end
         wipe(stepErrors)
         before = C_Item.GetItemCount(itemID)
