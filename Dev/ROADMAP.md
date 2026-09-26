@@ -216,8 +216,8 @@ what they don't want and restocks from the AH or the bank.
    - No docking at the bank (Baganator and similar replace the bank
      window); the list floats where the user left it.
 6. README feature bullets (done); field test → `v1.2.0-beta1`.
-   Dropped: the AH guardrail "Restock from Bank first" hint. You can't
-   have the AH and the bank open at once, so it could never show.
+   Deferred: the AH guardrail "Restock from Bank first" hint (see Later:
+   AH and bank open together).
 7. Stable: CHANGELOG `## v1.2.0` (draft below), detailed entry at the
    top of `Dev/HISTORY.md`, merge `dev` → `main` → CI publishes.
 
@@ -289,6 +289,11 @@ Carried from the legacy backlog; not committed to a release.
   (cross-character restocking).
 - Gold/silver/copper cap input; "no cap" as an explicit checkbox.
 - Minimap icon to open Stock Clerk, with a settings option to hide it.
+- **AH and bank open at the same time** (fringe cases may allow it,
+  e.g. a mobile/portable banker next to an auctioneer). Today the footer
+  button prefers the bank whenever `ADDON.bankOpen` is true and no AH walk
+  is running; decide the priority (or offer both), and revisit the AH
+  confirm step's "Restock from Bank first" hint for that case.
 - Footer hint at the AH: "3 short, about 1,240g at last seen prices"
   (estimated restock cost; skip stale prices).
 
