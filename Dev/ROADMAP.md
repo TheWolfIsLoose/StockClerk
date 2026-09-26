@@ -9,17 +9,27 @@ disagree), **Open** (needs an answer before build).
 
 ---
 
-## v1.1.2 — stable (gate before any 1.2 work)
+## v1.2.0 — Efficiency pass + Restock from Bank + Common Consumables
 
-- Test `v1.1.2-alpha2` in-game (list/settings survive `/reload`, AH
-  auto-open, row search, one Buy, bank tooltip numbers).
-- Merge `dev` → `main` with a `## v1.1.2` CHANGELOG heading → CI
-  publishes the stable release.
-- 1.2 work then continues on `dev` as `v1.2.0-alphaN`.
+**Decided:** there is no separate v1.1.2 stable. The next stable release
+is v1.2.0, and it carries three things:
 
----
+1. **Ponytail efficiency pass (done, on `dev`).** Shipped to testers as
+   `v1.1.2-alpha1` and `v1.1.2-alpha2`; full notes in `Dev/HISTORY.md`.
+   - All libraries removed (Ace3, LibStub); events, slash commands and
+     saved settings handled natively.
+   - Dead code and unused files removed; Need/Cap row editors merged;
+     shared palette and style helpers.
+   - AH performance: no list rebuild for other addons' item lookups or
+     while the window is closed; Sidecar/log redraw only when needed;
+     shortfall count without sorting; one fewer bag-count call.
+   - `/clerk help` lists every command; README rewritten; CI
+     auto-releases from CHANGELOG; `Dev/smoke.lua` added.
+2. **Feature B: Add Common Consumables** (below).
+3. **Feature A: Restock from Bank** (below).
 
-## v1.2.0 — Restock from Bank + Common Consumables
+Prerelease tags continue as `v1.2.0-alphaN` on `dev` (the `v1.1.2-alpha`
+tags stay as history). Stable `v1.2.0` ships from `main`.
 
 ### Feature A: "Restock from Bank"
 
@@ -124,14 +134,40 @@ what they don't want and restocks from the AH or the bank.
 
 ### Tasks (in order)
 
-1. In-game spike for Feature A's container calls (see above).
-2. Load `Data/Consumables.lua` from the TOC; Sidecar button; retire
+1. In-game check of the efficiency pass (`v1.1.2-alpha2`): list, caps and
+   settings survive `/reload`; `/clerk`, `/sc`, `/clerk help`; AH
+   auto-open, row search, one Buy; bank tooltip numbers.
+2. In-game spike for Feature A's container calls (see above).
+3. Load `Data/Consumables.lua` from the TOC; Sidecar button; retire
    `Dev/RecommendedLists.lua` and `/clerk seed` → `v1.2.0-alpha1`.
-3. `BankRestock.lua` planner + smoke tests for the move math.
-4. Executor, bank open/close detection, footer button, log kind,
+4. `BankRestock.lua` planner + smoke tests for the move math.
+5. Executor, bank open/close detection, footer button, log kind,
    Sidecar feed, "Auto-open at Bank" toggle → `v1.2.0-alpha2`.
-5. AH guardrail hint text; README feature bullets; field test →
-   `v1.2.0-beta1`, then `v1.2.0` on `main`.
+6. AH guardrail hint text; README feature bullets; field test →
+   `v1.2.0-beta1`.
+7. Stable: CHANGELOG `## v1.2.0` (draft below), detailed entry at the
+   top of `Dev/HISTORY.md`, merge `dev` → `main` → CI publishes.
+
+### v1.2.0 player-facing CHANGELOG (draft)
+
+Stable players are coming from v1.1.1, so the stable notes cover
+everything since then, not just the last alpha. Keep to this shape and
+trim to what actually shipped:
+
+```
+## v1.2.0
+
+- New: Restock from Bank. At the bank, one click moves what you're short
+  from your bank and warband bank into your bags.
+- New: Add common consumables. One click in the side panel fills your
+  list with this expansion's staples; remove what you don't need.
+- Smoother at the Auction House, especially alongside scanning addons
+  like Auctionator or TSM.
+- Smaller download: Stock Clerk no longer bundles any libraries.
+- `/clerk help` now lists every command.
+
+Your list, caps and settings carry over unchanged.
+```
 
 ### Open questions
 

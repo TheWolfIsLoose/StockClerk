@@ -7,6 +7,9 @@ CHANGELOG.md. Add each release's detailed notes here when you cut it.
 Entries up to v1.1.2-alpha2 come from the old cumulative CHANGELOG.md,
 or, where it had no entry, from that version's GitHub release notes.
 
+> There is no v1.1.2 stable: the v1.1.2 alphas are the start of v1.2.0
+> (efficiency pass). v1.2.0 plan: `Dev/ROADMAP.md`.
+
 ## v1.1.2-alpha2 (2026-09-26)
 
 Second cleanup pass. Stock Clerk now has no library dependencies.
