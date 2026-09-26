@@ -9,8 +9,7 @@
     Layout:
       * ~260w fixed, height matches MainFrame
       * Top section: Settings (auto-purchase toggle, default cap, budget,
-        auto-open at AH). Ported from SettingsDropdown so users see the
-        same fields in the same order.
+        auto-open at AH).
       * Hairline 1px divider
       * Bottom section: Recent Activity feed (last ~30 entries, newest
         first). Two-tier filtering will land in Phase D; this initial
@@ -19,14 +18,6 @@
     Persistence:
       * char.ui.sidecar_open  boolean, remembered per character so the
         panel stays open across reloads/sessions when the user prefers it
-
-    Fallback contract:
-      * SettingsDropdown remains loaded so any external caller (macro,
-        slash command, other addon) that calls
-        ADDON.SettingsDropdown:Toggle(...) still works.
-      * The hamburger's phase-A stub prefers Sidecar when present and
-        falls back to SettingsDropdown; installing this file switches
-        the header button to Sidecar automatically.
 ]]
 
 local addonName = ...
@@ -35,56 +26,13 @@ local ADDON     = _G[addonName]
 local Sidecar = {}
 ADDON.Sidecar = Sidecar
 
--- -------------------------------------------------------------------------
--- Palette shim: mirror MainFrame's when available so the sidecar matches
--- the current theme, but degrade to sensible defaults on early Boot before
--- MainFrame has published its palette table.
--- -------------------------------------------------------------------------
-local function P()
-    return (ADDON.MainFrame and ADDON.MainFrame.Palette) or {
-        bg       = { 0.06, 0.06, 0.06, 0.98 },
-        bgMedium = { 0.10, 0.10, 0.10, 1 },
-        bgDark   = { 0.04, 0.04, 0.04, 1 },
-        bandTint = { 1, 1, 1, 0.02 },
-        border   = { 0, 0, 0, 1 },
-        brand    = { 0.60, 1.00, 0.60, 1 },
-    }
-end
+local Palette = ADDON.MainFrame.Palette
+local ApplyFill, AddBlackBorder = ADDON.MainFrame.ApplyFill, ADDON.MainFrame.AddBlackBorder
 
 local WIDTH = 260
 
 -- -------------------------------------------------------------------------
--- Small helpers copied from MainFrame's style vocab so the sidecar reads
--- as the same chrome without introducing a shared style module (that's a
--- Phase F/refactor concern, not v0.7).
--- -------------------------------------------------------------------------
-local function ApplyFill(frame, colour)
-    local t = frame:CreateTexture(nil, "BACKGROUND", nil, -8)
-    t:SetAllPoints()
-    t:SetColorTexture(colour[1], colour[2], colour[3], colour[4] or 1)
-    return t
-end
-
-local function AddBlackEdge(frame, side)
-    local t = frame:CreateTexture(nil, "OVERLAY", nil, 6)
-    t:SetColorTexture(0, 0, 0, 1)
-    if side == "left" then
-        t:SetWidth(1); t:SetPoint("TOPLEFT", 0, 0); t:SetPoint("BOTTOMLEFT", 0, 0)
-    elseif side == "right" then
-        t:SetWidth(1); t:SetPoint("TOPRIGHT", 0, 0); t:SetPoint("BOTTOMRIGHT", 0, 0)
-    elseif side == "top" then
-        t:SetHeight(1); t:SetPoint("TOPLEFT", 0, 0); t:SetPoint("TOPRIGHT", 0, 0)
-    else
-        t:SetHeight(1); t:SetPoint("BOTTOMLEFT", 0, 0); t:SetPoint("BOTTOMRIGHT", 0, 0)
-    end
-    return t
-end
-
--- -------------------------------------------------------------------------
--- Build the Sidecar panel lazily. Uses the same StaticPopup contract for
--- auto-purchase enable that SettingsDropdown does -- both surfaces point
--- at the shared "STOCKCLERK_AUTO_ENABLE" dialog, so the confirmation
--- flow is identical no matter which one triggered it.
+-- Build the Sidecar panel lazily.
 -- -------------------------------------------------------------------------
 local function Build(anchor)
     local f = CreateFrame("Frame", "StockClerkSidecar", UIParent, "BackdropTemplate")
@@ -95,11 +43,8 @@ local function Build(anchor)
     f:EnableMouse(true)
     f:Hide()
 
-    ApplyFill(f, P().bg)
-    AddBlackEdge(f, "top")
-    AddBlackEdge(f, "bottom")
-    AddBlackEdge(f, "left")
-    AddBlackEdge(f, "right")
+    ApplyFill(f, Palette.panelBg)
+    AddBlackBorder(f)
 
     -- Anchor default (may be re-anchored by Toggle if MainFrame moves).
     if anchor then
@@ -171,7 +116,7 @@ local function Build(anchor)
     -- Scrollframe hosts the feed rows. Simple, no fancy pooling -- the
     -- panel is bounded and refreshes on Emit, so ~30 rows is the ceiling.
     local scrollBg = f:CreateTexture(nil, "BACKGROUND")
-    scrollBg:SetColorTexture(P().bgDark[1], P().bgDark[2], P().bgDark[3], 0.6)
+    scrollBg:SetColorTexture(Palette.bgDark[1], Palette.bgDark[2], Palette.bgDark[3], 0.6)
     scrollBg:SetPoint("TOPLEFT", 8, -166)
     scrollBg:SetPoint("BOTTOMRIGHT", -8, 8)
 

@@ -1,5 +1,41 @@
 # Stock Clerk changelog
 
+## v1.1.2-alpha1
+
+Cleanup release. No new features; everything the player sees should
+behave exactly as in v1.1.1. Please report anything that doesn't.
+
+### Smaller package
+
+- Removed six embedded libraries the addon never used or no longer
+  needs: AceGUI-3.0, AceConfig-3.0, AceHook-3.0, AceLocale-3.0,
+  AceBucket-3.0 and AceTimer-3.0 (about 11,600 lines). This also drops
+  a broken include: AceConfig referenced an AceConfigDropdown file that
+  was never in the repo.
+- Bag/bank change events are now debounced with `C_Timer.After(0.25)`
+  instead of AceBucket. Same 0.25s collapse window.
+
+### Dead code removed
+
+- `UI/SettingsDropdown.lua` (replaced by the Sidecar since v0.7) and the
+  hamburger button's fallback to it.
+- `Sources/Bags.lua` placeholder, saved-list templates
+  (`DB:ApplyTemplate` / `DB:SaveTemplate`), `DB:MoveItem`,
+  `Log:Aggregate`, and `RestockLoop` getters nothing called.
+- The no-op `row.pill` stub left over from the old Status column.
+
+### Consolidated
+
+- The row Need and Cap inline editors now share one implementation.
+  Click to open, Escape to cancel, Enter/Tab/click-away to commit, and
+  opening one closes the other without saving it -- same as before.
+- Sidecar, Activity Log and Bulk Import reuse the main window's palette
+  and fill/border helpers instead of their own copies. The Sidecar and
+  log panels' darkest fill moves from 0.04 to 0.031 grey (the main
+  window's value); otherwise colors are unchanged.
+- AH commodity and mail events route straight to their handlers; one
+  shared debug printer replaces two copies.
+
 ## v1.1.1
 
 Point release. Two layout / lifecycle fixes.

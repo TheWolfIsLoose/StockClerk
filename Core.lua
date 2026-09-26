@@ -49,9 +49,8 @@ end
 -- Create the AceAddon object with the mixins we need.
 -- AceConsole gives us self:RegisterChatCommand and self:Print.
 -- AceEvent gives us self:RegisterEvent.
--- AceBucket lets us collapse noisy events (BAG_UPDATE fires per-bag).
 local StockClerk = LibStub("AceAddon-3.0"):NewAddon(
-    ADDON, addonName, "AceConsole-3.0", "AceEvent-3.0", "AceBucket-3.0"
+    ADDON, addonName, "AceConsole-3.0", "AceEvent-3.0"
 )
 
 -- ---------------------------------------------------------------------------
@@ -73,7 +72,7 @@ function StockClerk:OnEnable()
     -- Item cache resolution — bounces through ItemResolver:OnItemInfoReceived.
     self:RegisterEvent("GET_ITEM_INFO_RECEIVED", "OnItemInfoReceived")
 
-    -- Inventory invalidation. AceBucket collapses bursts into one call.
+    -- Inventory invalidation, debounced 0.25s so bursts collapse into one call.
     -- Retail 11.2 (Ghosts of K'aresh) removed the reagent bank; personal
     -- banks are now tabs like the warband bank. Modern events:
     --   BAG_UPDATE_DELAYED                    - normal bag changes
@@ -81,15 +80,25 @@ function StockClerk:OnEnable()
     --   PLAYER_ACCOUNT_BANK_TAB_SLOTS_CHANGED - warband bank slot change
     --   BANK_TABS_CHANGED                     - tab settings / purchase
     --   BANKFRAME_OPENED                      - force refresh on open
-    self:RegisterBucketEvent(
-        { "BAG_UPDATE_DELAYED",
-          "PLAYERBANKSLOTS_CHANGED",
-          "PLAYER_ACCOUNT_BANK_TAB_SLOTS_CHANGED",
-          "BANK_TABS_CHANGED",
-          "BANKFRAME_OPENED" },
-        0.25,
-        "OnInventoryChanged"
-    )
+    local invPending = false
+    local function flushInventory()
+        invPending = false
+        ADDON.Debug("debug", "inventory debounce fired")
+        ADDON.Inventory:OnInventoryChanged()
+    end
+    for _, event in ipairs({
+        "BAG_UPDATE_DELAYED",
+        "PLAYERBANKSLOTS_CHANGED",
+        "PLAYER_ACCOUNT_BANK_TAB_SLOTS_CHANGED",
+        "BANK_TABS_CHANGED",
+        "BANKFRAME_OPENED",
+    }) do
+        self:RegisterEvent(event, function()
+            if invPending then return end
+            invPending = true
+            C_Timer.After(0.25, flushInventory)
+        end)
+    end
 
     -- Auction House auto-open.
     --
@@ -104,32 +113,28 @@ function StockClerk:OnEnable()
     self:RegisterEvent("AUCTION_HOUSE_SHOW",   "OnAuctionHouseShow")
     self:RegisterEvent("AUCTION_HOUSE_CLOSED", "OnAuctionHouseClosed")
 
-    -- AH commodity search + buy events for the restock loop. AH.lua
-    -- filters by in-flight itemID/mode so misfires on other addons'
-    -- searches are harmless no-ops.
-    self:RegisterEvent("COMMODITY_SEARCH_RESULTS_UPDATED", "OnCommoditySearchUpdated")
-    self:RegisterEvent("COMMODITY_PRICE_UPDATED",          "OnCommodityPriceUpdated")
-    self:RegisterEvent("COMMODITY_PRICE_UNAVAILABLE",      "OnCommodityPriceUnavailable")
-    self:RegisterEvent("COMMODITY_PURCHASE_SUCCEEDED",     "OnCommodityPurchaseSucceeded")
-    self:RegisterEvent("COMMODITY_PURCHASE_FAILED",        "OnCommodityPurchaseFailed")
+    -- AH commodity search + buy events go straight to AH.lua's handler of
+    -- the same name (event payload passed through). AH.lua filters by
+    -- in-flight itemID/mode, so other addons' searches are harmless no-ops.
+    -- COMMODITY_PRICE_UPDATED carries (unitPrice, totalPrice), no itemID.
+    for event, method in pairs({
+        COMMODITY_SEARCH_RESULTS_UPDATED = "OnCommoditySearchUpdated",
+        COMMODITY_PRICE_UPDATED          = "OnCommodityPriceUpdated",
+        COMMODITY_PRICE_UNAVAILABLE      = "OnCommodityPriceUnavailable",
+        COMMODITY_PURCHASE_SUCCEEDED     = "OnCommodityPurchaseSucceeded",
+        COMMODITY_PURCHASE_FAILED        = "OnCommodityPurchaseFailed",
+    }) do
+        self:RegisterEvent(event, function(_, ...) ADDON.AH[method](ADDON.AH, ...) end)
+    end
 
-    -- PT-4 mail-delivery gate: MAIL_INBOX_UPDATE fires when the mailbox
-    -- opens and each time the inbox refreshes. RestockLoop reconciles
-    -- its persisted pendingBuys ledger against actual mail contents,
-    -- which is how the auto-pass gate opens after cross-session buys.
-    self:RegisterEvent("MAIL_INBOX_UPDATE",                "OnMailInboxUpdate")
+    -- PT-4 mail-delivery gate: RestockLoop reconciles its persisted
+    -- pendingBuys ledger against actual mail contents on each inbox refresh.
+    self:RegisterEvent("MAIL_INBOX_UPDATE", function() ADDON.RestockLoop:_OnMailInboxUpdate() end)
 end
 
 -- ---------------------------------------------------------------------------
 -- Event handlers (thin — delegate to modules)
 -- ---------------------------------------------------------------------------
-function StockClerk:OnInventoryChanged()
-    if ADDON.debug then
-        print("|cff98FF98[SC:debug]|r bucket fired → Inventory:OnInventoryChanged")
-    end
-    ADDON.Inventory:OnInventoryChanged()
-end
-
 function StockClerk:OnItemInfoReceived(_, itemID, success)
     ADDON.ItemResolver:OnItemInfoReceived(itemID, success)
     -- A newly-cached item may have appeared in our list; refresh the UI
@@ -148,40 +153,6 @@ end
 function StockClerk:OnInteractionHide(_, interactionType)
     if interactionType == Enum.PlayerInteractionType.Auctioneer then
         self:OnAuctionHouseClosed()
-    end
-end
-
--- ---- AH commodity events (forward to ADDON.AH state machine) --------
-function StockClerk:OnCommoditySearchUpdated(_, itemID)
-    if ADDON.AH then ADDON.AH:OnCommoditySearchUpdated(itemID) end
-end
-
--- COMMODITY_PRICE_UPDATED fires with (unitPrice, totalPrice) -- NO itemID.
--- (Auctionator's Tabs/Buying/Commodity/Mixins/Main.lua confirms this:
---  `self:CheckPurchase(eventData, ...)` where eventData=unitPrice.)
--- We know which itemID we're waiting on from AH.state, so we just pass
--- the price data through.
-function StockClerk:OnCommodityPriceUpdated(_, newUnitPrice, newTotalPrice)
-    if ADDON.AH then ADDON.AH:OnCommodityPriceUpdated(newUnitPrice, newTotalPrice) end
-end
-
--- These three don't carry a reliable itemID payload; AH.lua filters by
--- the currently in-flight operation.
-function StockClerk:OnCommodityPriceUnavailable()
-    if ADDON.AH then ADDON.AH:OnCommodityPriceUnavailable() end
-end
-
-function StockClerk:OnCommodityPurchaseSucceeded()
-    if ADDON.AH then ADDON.AH:OnCommodityPurchaseSucceeded() end
-end
-
-function StockClerk:OnCommodityPurchaseFailed()
-    if ADDON.AH then ADDON.AH:OnCommodityPurchaseFailed() end
-end
-
-function StockClerk:OnMailInboxUpdate()
-    if ADDON.RestockLoop and ADDON.RestockLoop._OnMailInboxUpdate then
-        ADDON.RestockLoop:_OnMailInboxUpdate()
     end
 end
 

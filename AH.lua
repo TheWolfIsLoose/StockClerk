@@ -51,14 +51,6 @@ AH.state = {
 local SORT_UNIT_PRICE_ASC = { { sortOrder = 0, reverseSort = false } }
 local SEARCH_TIMEOUT_SEC = 6
 
-local function DebugPrint(...)
-    if ADDON.debug then
-        local parts = {}
-        for i = 1, select("#", ...) do parts[i] = tostring(select(i, ...)) end
-        print("|cff98FF98[SC:AH]|r " .. table.concat(parts, " "))
-    end
-end
-
 local function ClearState()
     if AH.state.timeoutTimer then
         AH.state.timeoutTimer:Cancel()
@@ -101,7 +93,7 @@ function AH:SearchItem(itemID, callback, priceSource)
         return
     end
     if self.state.mode then
-        DebugPrint("cancelling in-flight " .. self.state.mode .. " for new search")
+        ADDON.Debug("AH", "cancelling in-flight " .. self.state.mode .. " for new search")
         Finish(false, "superseded")
     end
 
@@ -110,12 +102,12 @@ function AH:SearchItem(itemID, callback, priceSource)
     self.state.callback    = callback
     self.state.priceSource = priceSource or "unknown"
 
-    DebugPrint("SendSearchQuery id=" .. itemID)
+    ADDON.Debug("AH", "SendSearchQuery id=" .. itemID)
     local itemKey = C_AuctionHouse.MakeItemKey(itemID)
     C_AuctionHouse.SendSearchQuery(itemKey, SORT_UNIT_PRICE_ASC, false)
 
     self.state.timeoutTimer = C_Timer.NewTimer(SEARCH_TIMEOUT_SEC, function()
-        DebugPrint("search timeout id=" .. itemID)
+        ADDON.Debug("AH", "search timeout id=" .. itemID)
         Finish(false, "search timeout")
     end)
 end
@@ -213,7 +205,7 @@ end
 -- ---------------------------------------------------------------------------
 function AH:ExecutePurchase(itemID, quantity, expectedSpend, callback)
     if self.state.mode then
-        DebugPrint("cancelling in-flight " .. self.state.mode .. " for buy")
+        ADDON.Debug("AH", "cancelling in-flight " .. self.state.mode .. " for buy")
         Finish(false, "superseded")
     end
 
@@ -222,13 +214,13 @@ function AH:ExecutePurchase(itemID, quantity, expectedSpend, callback)
     self.state.quantity = quantity
     self.state.callback = callback
 
-    DebugPrint(("StartCommoditiesPurchase id=%d qty=%d expected=%d"):format(
+    ADDON.Debug("AH", ("StartCommoditiesPurchase id=%d qty=%d expected=%d"):format(
         itemID, quantity, expectedSpend or 0))
     self.state.expectedSpend = expectedSpend
     C_AuctionHouse.StartCommoditiesPurchase(itemID, quantity)
 
     self.state.timeoutTimer = C_Timer.NewTimer(SEARCH_TIMEOUT_SEC, function()
-        DebugPrint("buy timeout id=" .. itemID)
+        ADDON.Debug("AH", "buy timeout id=" .. itemID)
         -- Cancel the pending server-side purchase so the next buy isn't
         -- blocked by an orphaned StartCommoditiesPurchase.
         pcall(C_AuctionHouse.CancelCommoditiesPurchase)
@@ -241,7 +233,7 @@ end
 -- ---------------------------------------------------------------------------
 function AH:OnCommoditySearchUpdated(itemID)
     if self.state.mode ~= "search" or self.state.itemID ~= itemID then return end
-    DebugPrint("search results in for id=" .. itemID)
+    ADDON.Debug("AH", "search results in for id=" .. itemID)
     local results = GatherResults(itemID)
 
     -- QA-11: piggyback the search result to stamp the cheapest unit price
@@ -282,20 +274,20 @@ function AH:OnCommodityPriceUpdated(newUnitPrice, newTotalPrice)
     if self.state.mode ~= "buy" then return end
     local itemID   = self.state.itemID
     local expected = self.state.expectedSpend or math.huge
-    DebugPrint(("price update id=%d unit=%d total=%d expected=%d"):format(
+    ADDON.Debug("AH", ("price update id=%d unit=%d total=%d expected=%d"):format(
         itemID or 0, newUnitPrice or 0, newTotalPrice or 0, expected))
     if newTotalPrice and newTotalPrice <= expected then
-        DebugPrint("price acceptable, confirming")
+        ADDON.Debug("AH", "price acceptable, confirming")
         C_AuctionHouse.ConfirmCommoditiesPurchase(itemID, self.state.quantity)
         -- Reset timeout for the confirm ack.
         if self.state.timeoutTimer then self.state.timeoutTimer:Cancel() end
         self.state.timeoutTimer = C_Timer.NewTimer(SEARCH_TIMEOUT_SEC, function()
-            DebugPrint("confirm ack timeout id=" .. (itemID or 0))
+            ADDON.Debug("AH", "confirm ack timeout id=" .. (itemID or 0))
             C_AuctionHouse.CancelCommoditiesPurchase()
             Finish(false, "purchase confirm timed out")
         end)
     else
-        DebugPrint("price increased beyond cap, cancelling")
+        ADDON.Debug("AH", "price increased beyond cap, cancelling")
         C_AuctionHouse.CancelCommoditiesPurchase()
         Finish(false, "price rose above cap during purchase")
     end
@@ -305,7 +297,7 @@ end
 -- in flight, so state.mode == "buy" is enough of a filter.
 function AH:OnCommodityPriceUnavailable()
     if self.state.mode ~= "buy" then return end
-    DebugPrint("price unavailable id=" .. (self.state.itemID or 0))
+    ADDON.Debug("AH", "price unavailable id=" .. (self.state.itemID or 0))
     C_AuctionHouse.CancelCommoditiesPurchase()
     Finish(false, "listings stale, re-search needed")
 end
@@ -313,7 +305,7 @@ end
 function AH:OnCommodityPurchaseSucceeded()
     if self.state.mode ~= "buy" then return end
     local itemID = self.state.itemID
-    DebugPrint("purchase succeeded id=" .. (itemID or 0))
+    ADDON.Debug("AH", "purchase succeeded id=" .. (itemID or 0))
     Finish(true, {
         itemID   = itemID,
         quantity = self.state.quantity,
@@ -323,14 +315,14 @@ end
 
 function AH:OnCommodityPurchaseFailed()
     if self.state.mode ~= "buy" then return end
-    DebugPrint("purchase failed id=" .. (self.state.itemID or 0))
+    ADDON.Debug("AH", "purchase failed id=" .. (self.state.itemID or 0))
     Finish(false, "server reported purchase failed")
 end
 
 -- When the AH closes mid-flight, abort cleanly.
 function AH:OnAuctionHouseClosed()
     if self.state.mode then
-        DebugPrint("AH closed mid-" .. self.state.mode .. ", aborting")
+        ADDON.Debug("AH", "AH closed mid-" .. self.state.mode .. ", aborting")
         Finish(false, "AH closed")
     end
 end

@@ -1,7 +1,6 @@
 --[[
     Stock Clerk - Locale.lua
-    Minimal locale table. Expand later via AceLocale-3.0 if we localize.
-    For now: a plain table so strings live in one place.
+    Minimal locale table so strings live in one place.
 --]]
 
 local addonName = ...

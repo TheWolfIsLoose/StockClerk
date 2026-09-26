@@ -11,12 +11,9 @@
           priceSource = string,          -- optional; PT-1 v0.5. Records
                                          -- How the current maxPrice was
                                          -- chosen: "user" (manually typed),
-                                         -- "vendor" (reserved -- vendor
-                                         -- price plumbing lands in Wave 2),
-                                         -- "template" (came in via a saved
-                                         -- template import). Purely metadata
-                                         -- today; no runtime behavior reads
-                                         -- it. Nil is treated as "user".
+                                         -- "vendor" (reserved). Purely
+                                         -- metadata; nothing reads it.
+                                         -- Nil is treated as "user".
           addedAt     = timestamp,
           lastPrice   = { copper, seenAt, source },   -- optional; QA-11
           sortOrder   = number,          -- user-arranged list position;
@@ -24,12 +21,6 @@
         }
       }
       char.uiPos = { point, x, y }           -- last MainFrame position
-      char.autoSpend = {
-          copper  = 0,        -- auto-purchase spend since last daily reset
-          resetAt = unixtime, -- when the current budget day ends (realm
-                              -- Daily reset via C_DateAndTime), not midnight
-      }
-      global.templates = { [name] = { [itemID] = need, ... } }
       global.settings  = {
         autoOpenAtAH     = bool,       -- default TRUE. Pops SC on AH visit.
         autoRestock      = bool,       -- default FALSE. If TRUE, opening the
@@ -37,15 +28,6 @@
                                        -- there's a shortfall to work through.
         lastPriceTTL     = number,     -- QA-11 seconds before "Last Seen" dims
       }
-      -- AutoPurchase / autoBudgetGold /
-      -- defaultMaxCopper deleted. WoW's C_AuctionHouse commodity API
-      -- requires a hardware event per transaction, so silent auto-buy
-      -- is impossible. Restock is user-driven: one keystroke = one
-      -- purchase. Budget guardrail deleted with it -- users are
-      -- adults, SC is a tool not a nanny. defaultMaxCopper deleted
-      -- because per-row cap is now the only way to skip: no cap =
-      -- buy at any price (with a one-shot per-AH-session soft
-      -- warning). No global cap fallback.
       global.log      = array of entries (see Log.lua)
 
     We keep the on-disk shape stable across versions; any new field lives
@@ -55,6 +37,14 @@
 local addonName = ...
 local ADDON     = _G[addonName] or {}
 _G[addonName]   = ADDON
+
+-- Debug print, gated on `/clerk debug`. Shows as [SC:<tag>].
+function ADDON.Debug(tag, ...)
+    if not ADDON.debug then return end
+    local parts = {}
+    for i = 1, select("#", ...) do parts[i] = tostring(select(i, ...)) end
+    print("|cff98FF98[SC:" .. tag .. "]|r " .. table.concat(parts, " "))
+end
 
 local DB = {}
 ADDON.DB = DB
@@ -90,7 +80,6 @@ DB.defaults = {
         pendingBuys = {},
     },
     global = {
-        templates = {},
         settings  = {
             autoOpenAtAH     = true,      -- open SC docked to the AH on visit.
                                           -- Design ended up here: users who
@@ -225,7 +214,7 @@ function DB:GetSortedItems()
             need        = entry.need,
             name        = name,
             maxPrice    = entry.maxPrice,    -- copper, may be nil ("no cap set")
-            priceSource = entry.priceSource, -- "user"/"vendor"/"template" or nil
+            priceSource = entry.priceSource, -- "user"/"vendor" or nil
             lastPrice   = entry.lastPrice,   -- { copper, seenAt, source } or nil
             sortOrder   = entry.sortOrder,
         }
@@ -260,28 +249,9 @@ function DB:ReorderItems(orderedIDs)
     return true
 end
 
--- Nudge one item up (delta=-1) or down (delta=+1) a single position.
--- Returns true when the item actually moved.
-function DB:MoveItem(itemID, delta)
-    local list = self:GetSortedItems()
-    local idx
-    for i, it in ipairs(list) do
-        if it.itemID == itemID then idx = i; break end
-    end
-    if not idx then return false end
-    local target = idx + delta
-    if target < 1 or target > #list then return false end
-    local ids = {}
-    for i, it in ipairs(list) do ids[i] = it.itemID end
-    ids[idx], ids[target] = ids[target], ids[idx]
-    self:ReorderItems(ids)
-    return true
-end
-
 -- Create-or-update an item entry. `maxPrice` is copper or nil. `source`
 -- (PT-1 priceSource) defaults to "user" when a maxPrice is provided;
--- callers that import from a template or vendor path should pass their
--- tag explicitly.
+-- callers from a vendor path should pass their tag explicitly.
 function DB:SetItem(itemID, need, maxPrice, source)
     if not itemID or need == nil then return end
     itemID = tonumber(itemID)
@@ -320,7 +290,7 @@ end
 
 -- Update just the maxPrice for an existing item; no-op if the item isn't
 -- tracked. Pass nil to clear the cap. `source` is the PT-1 priceSource
--- tag ("user" / "vendor" / "template"); defaults to "user" when omitted
+-- tag ("user" / "vendor"); defaults to "user" when omitted
 -- because every UI-driven call site is a user edit. Passing nil for
 -- maxPriceCopper clears the source tag too -- an unset cap has no source.
 function DB:SetItemMaxPrice(itemID, maxPriceCopper, source)
@@ -366,43 +336,8 @@ function DB:ClearAll()
 end
 
 -- ---------------------------------------------------------------------------
--- Templates (account-wide named lists we can apply to any character)
--- ---------------------------------------------------------------------------
-function DB:ApplyTemplate(name, mode)
-    -- Mode: "merge" (default, keeps existing) or "replace"
-    local t = self.db.global.templates[name]
-    if not t then return 0 end
-    if mode == "replace" then wipe(self.char.items) end
-    local count = 0
-    for itemID, need in pairs(t) do
-        -- Merge: only set if not present; keep user-modified needs
-        if mode == "replace" or self.char.items[itemID] == nil then
-            self:SetItem(itemID, need)
-            count = count + 1
-        end
-    end
-    return count
-end
-
-function DB:SaveTemplate(name)
-    local t = {}
-    for itemID, entry in pairs(self.char.items) do
-        t[itemID] = entry.need
-    end
-    self.db.global.templates[name] = t
-end
-
--- ---------------------------------------------------------------------------
 -- Settings passthrough
 -- ---------------------------------------------------------------------------
 function DB:Settings()
     return self.db.global.settings
 end
-
--- The entire daily-budget subsystem is
--- gone. NextResetTime / EnsureFreshBucket / GetDailyAutoSpend /
--- GetDailyAutoBudgetLeft / AddDailyAutoSpend / GetDailyResetAt all
--- deleted along with settings.autoBudgetGold and char.autoSpend.
--- Rationale: WoW's commodity API requires a hardware event per
--- transaction, so silent budget-gated auto-buys are impossible.
--- Restock is user-driven now; there is nothing to gate.

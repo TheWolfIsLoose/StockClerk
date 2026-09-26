@@ -58,8 +58,8 @@ local ROW_HEIGHT = 30
 -- Palette — ported from atrocityEssentials' ThemeDefaults (near-black,
 -- flat, ElvUI-family). One rule: the WINDOW paints one fill; nested regions
 -- get separated only by 1px pure-black borders, not by additional shades.
--- Accent = SharedMedia_Tones organic mint green #98FF98, kept everywhere the addon used to paint
--- gold (title, focus borders, section labels).
+-- Accent = SharedMedia_Tones organic mint green #98FF98 (title, focus
+-- borders, section labels).
 -- ---------------------------------------------------------------------------
 local Palette = {
     -- Backgrounds. Three overlapping opacity tiers, each with a clear role:
@@ -76,8 +76,8 @@ local Palette = {
     --   btnRest   = button-at-rest fill so Add / Restock / Close read as
     --              buttons even before hover. Hover still brightens on top.
     bgDark        = { 0.031, 0.031, 0.031, 0.97 }, -- window fill (was 0.94)
-    bgLight       = { 0.055, 0.055, 0.055, 0.85 }, -- (unused legacy)
-    bgMedium      = { 0.055, 0.055, 0.055, 0.95 }, -- (legacy — kept for compat)
+    bgMedium      = { 0.055, 0.055, 0.055, 0.95 }, -- control fill (buttons, hover wells)
+    panelBg       = { 0.060, 0.060, 0.060, 0.98 }, -- Sidecar / LogPopup body
     bandTint      = { 1.000, 1.000, 1.000, 0.035 }, -- section-band overlay (light-on-dark)
     fieldFill     = { 0.000, 0.000, 0.000, 0.55  }, -- editable well fill
     btnRest       = { 1.000, 1.000, 1.000, 0.045 }, -- button-at-rest fill
@@ -90,7 +90,6 @@ local Palette = {
     -- Atrocity brand (their signature). Used on focus borders, section
     -- headers, title accent word, and the shortfall count number.
     brand         = { 0.596, 1.000, 0.596, 1.00 }, -- #98FF98 (SharedMedia_Tones organic)
-    brandDim      = { 0.451, 0.506, 1.000, 0.55 },
     -- Text
     textPrimary   = { 1.00, 1.00, 1.00, 1.00 },
     textSecondary = { 0.78, 0.78, 0.78, 1.00 },
@@ -194,6 +193,11 @@ local function AddBlackBorder(frame, color)
     frame._border = textures
     return textures
 end
+
+-- Shared with Sidecar / LogPopup / BulkImport, which load after this file.
+MF.Palette        = Palette
+MF.ApplyFill      = ApplyFill
+MF.AddBlackBorder = AddBlackBorder
 
 -- SetBorderColor: recolor an existing 4-texture border.
 local function SetBorderColor(frame, r, g, b, a)
@@ -370,16 +374,10 @@ local function BuildRow(row)
 
     -- Row hover wash is created lazily by ApplyRowHover on first RowEnter.
 
-    -- 2px vertical accent bar on the row's
-    -- left edge that encodes short/ok/unknown state. Replaces the
-    -- dedicated Status column (dropped in v0.7 but the old row.pill
-    -- FontString was still leaking 'ok'/'-N' text at the row's right
-    -- edge because InitializeRow was force-showing the stub). This bar
-    -- is a robust position-anchored signal that works alongside the
-    -- red/mint coloring of the Have text (dual-channel encoding for
-    -- colorblind resilience). Sits BEFORE the grip in the mouse-hit
-    -- stack; grip stays clickable because the accent is a texture, not
-    -- a mouse-enabled frame.
+    -- 2px vertical accent bar on the row's left edge encoding short/ok/
+    -- unknown state, alongside the red/mint Have text (dual-channel for
+    -- colorblind resilience). A texture, not a mouse-enabled frame, so
+    -- the grip stays clickable.
     row.accent = row:CreateTexture(nil, "OVERLAY")
     row.accent:SetWidth(2)
     row.accent:SetPoint("TOPLEFT",    row, "TOPLEFT",     0, -1)
@@ -446,11 +444,6 @@ local function BuildRow(row)
         if MF.EndRowDrag then MF:EndRowDrag() end
     end)
 
-    -- The row-selection ring (soft-select) is
-    -- gone. It was the source of every keyboard-nav bug we hit in
-    -- alpha5, and the grip handle already communicates "drag to reorder"
-    -- intuitively. Tab walks editors (Need, Cap) only; row order changes
-    -- via mouse drag on the grip.
 
     -- Icon (shifted right by GRIP_W to clear the grip handle).
     row.icon = row:CreateTexture(nil, "OVERLAY")
@@ -473,8 +466,8 @@ local function BuildRow(row)
 
     -- Name (fills leftmost region up to the Have column). The right edge
     -- stops at -220 to leave room for four right-aligned columns (Have,
-    -- Need, Cap, Last Seen) plus trash. Status column dropped in v0.7 --
-    -- short/ok state is now signaled by coloring row.have (see below).
+    -- Need, Cap, Last Seen) plus trash. Short/ok state is signaled by
+    -- coloring row.have (see below).
     row.name = row:CreateFontString(nil, "OVERLAY", "GameFontNormal")
     row.name:SetPoint("LEFT", row.icon, "RIGHT", 8, 0)
     row.name:SetJustifyH("LEFT")
@@ -493,8 +486,7 @@ local function BuildRow(row)
     --
     -- status-via-color: row.have text is colored red when have<need
     -- ("you're short") and mint when have>=need ("stocked"). This
-    -- replaces the dedicated Status pill from earlier versions. See
-    -- InitializeRow further down for the coloring logic.
+    -- is also the row's status signal; see InitializeRow for the logic.
     --
     -- Column layout (v0.7 accounting-style: each numeric column right-
     -- aligns on its own right edge; headers right-align above matching
@@ -505,8 +497,6 @@ local function BuildRow(row)
     --   Cap    cell right -100, width 50, text right-inset -6
     --   Seen   right edge  -30, width 60 (Seen text right-aligned)
     --   trash  right edge   -6, width 18
-    -- Status column dropped in v0.7 (short/ok signalled by Have text
-    -- color plus the left-edge accent bar).
     -- Have column: read-only display of bags count with an optional dim
     -- (+N) suffix when the item has stashed copies in bank/warband. The
     -- suffix is intentionally quantity-only; the storage-source breakdown
@@ -515,11 +505,8 @@ local function BuildRow(row)
     -- column at narrow widths.
     --
     -- Have cell is an INVISIBLE hit region: no fill, no border, no animator.
-    -- Alpha3 wrapped Have in a chromed button matching Need/Cap for visual
-    -- unity, but in practice the border box clipped the guardrail "0 (+24)"
-    -- overflow and read as nuisance. v1.0.0 rolls the box back: cursor arrow
-    -- + tooltip appearing are sufficient signal. The button is retained
-    -- purely so OnEnter/OnLeave fire the Have tooltip; Have is derived from
+    -- It has no chrome (a box clipped the "0 (+24)" overflow); the button
+    -- exists only so OnEnter/OnLeave fire the Have tooltip. Have is derived
     -- inventory, not user input, so no OnClick handler either.
     row.haveCell = CreateFrame("Button", nil, row)
     row.haveCell:SetSize(50, 20)  -- slightly wider than needCell (42) to
@@ -757,20 +744,6 @@ local function BuildRow(row)
         GameTooltip:Hide()
     end)
 
-    -- The row.pill stub was intended to be a
-    -- hidden 1x1 no-op after v0.7 dropped the Status column, but
-    -- InitializeRow unconditionally called row.pill:Show() on every
-    -- row init, and its FontString's text was still being SetText'd
-    -- with 'ok' / '-N' -- so the pill's centered text (anchored at
-    -- the row's right edge) was leaking through as the visible 'o' /
-    -- 'o!' the screenshot showed. Keep the stub table so any lingering
-    -- caller doesn't nil-error, but back it with no-op methods that
-    -- can't paint anything. The full status signal now lives in
-    -- row.accent (left-edge bar) + row.have color.
-    row.pill = { text = { SetText = function() end } }
-    row.pill.Show = function() end
-    row.pill.Hide = function() end
-
     -- Trash button (visible on hover only).
     --
     -- Tooltip / trash-visibility model:
@@ -861,285 +834,143 @@ local function BuildRow(row)
     end)
     row:RegisterForClicks("LeftButtonUp")
 
-    -- Cap cell hover + click: opens the inline price editor. Prefills
-    -- with the current cap in whole gold so the user can edit it in
-    -- place instead of retyping.
-    local function OpenPriceEdit(r)
-        -- Mirror of the guard in
-        -- OpenNeedEdit -- see comment there. Close the sibling Need
-        -- editor synchronously before opening Cap so the two editors
-        -- can never be visible together on the same row.
-        if r.needEdit and r.needEdit:IsShown() then
-            r.needEdit:ClearFocus()
-            r.needEdit:Hide()
-            if r.needEditBg then r.needEditBg:Hide() end
-            if r.need then r.need:Show() end
-            if r.needCell then
-                r.needCell._needEditActive = false
-                if r.needCell._borderAnim then
-                    r.needCell._borderAnim.AnimateTo(r.needCell._borderIdle)
-                end
-                if r.needCell._bg and r.needCell._fillIdle then
-                    r.needCell._bg:SetVertexColor(unpack(r.needCell._fillIdle))
-                end
-            end
-        end
-        local currentG = r._maxPrice and math.floor(r._maxPrice / 10000) or nil
-        r.priceEdit:SetText(currentG and tostring(currentG) or "")
-        r.cap:Hide()
-        r.priceEdit:Show()
-        r.priceEditBg:Show()
-        r.priceEdit:SetFocus()
-        r.priceEdit:HighlightText()
-        r.capCell._priceEditActive = true
-        r.capCell._borderAnim.AnimateTo(Palette.brand)
-        if r.capCell._bg then r.capCell._bg:SetVertexColor(unpack(r.capCell._fillHover)) end
-    end
-    row.capCell:SetScript("OnClick", function(self)
-        OpenPriceEdit(self:GetParent())
-    end)
-    row.capCell:SetScript("OnEnter", function(self)
-        local r = self:GetParent()
-        -- Paint cap tooltip at ANCHOR_TOP.
-        -- Also fires row-level hover so trash + wash still appear.
-        r:GetScript("OnEnter")(r)
-        -- Border animates to brand mint -- the "this opens something" signal.
-        self._borderAnim.AnimateTo(Palette.brand)
-        if self._bg then self._bg:SetVertexColor(unpack(self._fillHover)) end
-        GameTooltip:SetOwner(self, "ANCHOR_TOP")
-        if r._maxPrice then
-            GameTooltip:SetText(("Max %dg / unit"):format(math.floor(r._maxPrice / 10000)), 1, 1, 1)
-            GameTooltip:AddLine("Click to change  \194\183  blank = no cap", 0.7, 0.7, 0.7)
-        else
-            GameTooltip:SetText("No price cap set", 1, 1, 1)
-            GameTooltip:AddLine("Click to set a max gold/unit", 0.7, 0.7, 0.7)
-        end
-        GameTooltip:Show()
-    end)
-    row.capCell:SetScript("OnLeave", function(self)
-        if not self._priceEditActive then
-            self._borderAnim.AnimateTo(self._borderIdle)
-            if self._bg then self._bg:SetVertexColor(unpack(self._fillIdle)) end
-        end
-        -- Hide unconditionally. If mouse
-        -- is still on the row body, RowEnter re-fires and paints native
-        -- item tooltip. If truly off, RowLeave's deferred check applies.
-        GameTooltip:Hide()
-        local r = self:GetParent()
-        r:GetScript("OnLeave")(r)
-    end)
+    -- Inline cell editors (Need and Cap). Both behave identically; only the
+    -- prefill, tooltip and commit differ. Click opens; Escape aborts; Enter,
+    -- Tab or blur commit. Opening one editor snaps its sibling closed
+    -- synchronously -- SetFocus can outrace the deferred OnEditFocusLost, so
+    -- without this both editors could briefly show on the same row.
+    -- Commit refreshes the list only when the value changed, so clicking
+    -- away from an untouched cell doesn't cost a DataProvider rebuild.
+    local editors = {}
 
-    -- Need cell hover + click: opens the inline target editor. Mirrors the
-    -- capCell wiring exactly so both editable cells behave identically.
-    local function OpenNeedEdit(r)
-        -- Force-close the sibling Cap
-        -- editor on this row before we open Need. The within-row Tab
-        -- path (need <-> cap) relied on the source editor's
-        -- OnEditFocusLost to run before the destination editor showed,
-        -- but priceEdit:SetFocus() in OpenPriceEdit can outrace the
-        -- deferred focus-lost dispatch -- so briefly BOTH editors were
-        -- visible on the same row. Snap the sibling cell state to
-        -- closed synchronously.
-        if r.priceEdit and r.priceEdit:IsShown() then
-            r.priceEdit:ClearFocus()
-            r.priceEdit:Hide()
-            if r.priceEditBg then r.priceEditBg:Hide() end
-            if r.cap then r.cap:Show() end
-            if r.capCell then
-                r.capCell._priceEditActive = false
-                if r.capCell._borderAnim then
-                    r.capCell._borderAnim.AnimateTo(r.capCell._borderIdle)
-                end
-                if r.capCell._bg and r.capCell._fillIdle then
-                    r.capCell._bg:SetVertexColor(unpack(r.capCell._fillIdle))
-                end
-            end
+    local function CloseEdit(r, e)
+        local cell = r[e.cell]
+        r[e.edit]:ClearFocus()
+        r[e.edit]:Hide()
+        r[e.bg]:Hide()
+        r[e.label]:Show()
+        cell[e.active] = false
+        if not cell:IsMouseOver() then
+            cell._borderAnim.AnimateTo(cell._borderIdle)
+            if cell._bg then cell._bg:SetVertexColor(unpack(cell._fillIdle)) end
         end
-        r.needEdit:SetText(tostring(r._need or 20))
-        r.need:Hide()
-        r.needEdit:Show()
-        r.needEditBg:Show()
-        r.needEdit:SetFocus()
-        r.needEdit:HighlightText()
-        r.needCell._needEditActive = true
-        r.needCell._borderAnim.AnimateTo(Palette.brand)
-        if r.needCell._bg then r.needCell._bg:SetVertexColor(unpack(r.needCell._fillHover)) end
     end
-    row.needCell:SetScript("OnClick", function(self)
-        OpenNeedEdit(self:GetParent())
-    end)
-    row.needCell:SetScript("OnEnter", function(self)
-        local r = self:GetParent()
-        -- Paint need tooltip at ANCHOR_TOP.
-        r:GetScript("OnEnter")(r)
-        self._borderAnim.AnimateTo(Palette.brand)
-        if self._bg then self._bg:SetVertexColor(unpack(self._fillHover)) end
-        GameTooltip:SetOwner(self, "ANCHOR_TOP")
-        GameTooltip:SetText(("Target: %d"):format(r._need or 20), 1, 1, 1)
-        GameTooltip:AddLine("Click to change", 0.7, 0.7, 0.7)
-        GameTooltip:Show()
-    end)
-    row.needCell:SetScript("OnLeave", function(self)
-        if not self._needEditActive then
-            self._borderAnim.AnimateTo(self._borderIdle)
-            if self._bg then self._bg:SetVertexColor(unpack(self._fillIdle)) end
-        end
-        -- Mirror of capCell OnLeave.
-        GameTooltip:Hide()
-        local r = self:GetParent()
-        r:GetScript("OnLeave")(r)
-    end)
 
-    local function CloseNeedEdit(r)
-        r.needEdit:ClearFocus()
-        r.needEdit:Hide()
-        r.needEditBg:Hide()
-        r.need:Show()
-        r.needCell._needEditActive = false
-        if not r.needCell:IsMouseOver() then
-            r.needCell._borderAnim.AnimateTo(r.needCell._borderIdle)
-            if r.needCell._bg then r.needCell._bg:SetVertexColor(unpack(r.needCell._fillIdle)) end
+    local function OpenEdit(r, e)
+        for _, other in ipairs(editors) do
+            if other ~= e and r[other.edit]:IsShown() then CloseEdit(r, other) end
         end
+        local cell, edit = r[e.cell], r[e.edit]
+        edit:SetText(e.prefill(r))
+        r[e.label]:Hide()
+        edit:Show()
+        r[e.bg]:Show()
+        edit:SetFocus()
+        edit:HighlightText()
+        cell[e.active] = true
+        cell._borderAnim.AnimateTo(Palette.brand)
+        if cell._bg then cell._bg:SetVertexColor(unpack(cell._fillHover)) end
     end
-    -- Commit Need edit: reads the current text, writes to DB if valid,
-    -- and refreshes the list ONLY if the value actually changed. Skipping
-    -- the refresh in the no-op case is a perf win -- clicking away from
-    -- a cell you didn't actually edit shouldn't cost a full DataProvider
-    -- rebuild. (Historically the guard also protected the row-body Tab
-    -- traversal from racing with FindFrame lookups; that path is gone as
-    -- of v1.1 but the guard is still worth keeping on its own merits.)
-    local function CommitNeedEdit(r)
-        local newNeed = tonumber(r.needEdit:GetText())
-        local changed = false
-        if newNeed and newNeed > 0 and r._itemID and newNeed ~= r._need then
+
+    local function CommitEdit(r, e)
+        local changed = r._itemID and e.commit(r, r[e.edit]:GetText())
+        CloseEdit(r, e)
+        if changed then MF:Refresh() end
+    end
+
+    local function WireEditor(e)
+        editors[#editors + 1] = e
+        local cell, edit = row[e.cell], row[e.edit]
+        cell:SetScript("OnClick", function(self) OpenEdit(self:GetParent(), e) end)
+        cell:SetScript("OnEnter", function(self)
+            local r = self:GetParent()
+            -- Fire row-level hover too so trash + wash still appear.
+            r:GetScript("OnEnter")(r)
+            self._borderAnim.AnimateTo(Palette.brand)
+            if self._bg then self._bg:SetVertexColor(unpack(self._fillHover)) end
+            GameTooltip:SetOwner(self, "ANCHOR_TOP")
+            e.tooltip(r)
+            GameTooltip:Show()
+        end)
+        cell:SetScript("OnLeave", function(self)
+            if not self[e.active] then
+                self._borderAnim.AnimateTo(self._borderIdle)
+                if self._bg then self._bg:SetVertexColor(unpack(self._fillIdle)) end
+            end
+            -- Hide unconditionally. If the mouse is still on the row body,
+            -- RowEnter re-fires and paints the native item tooltip.
+            GameTooltip:Hide()
+            local r = self:GetParent()
+            r:GetScript("OnLeave")(r)
+        end)
+        edit:SetScript("OnEscapePressed", function(self)
+            self._escaping = true
+            CloseEdit(self:GetParent(), e)
+            self._escaping = false
+        end)
+        edit:SetScript("OnEnterPressed", function(self) CommitEdit(self:GetParent(), e) end)
+        edit:SetScript("OnEditFocusLost", function(self)
+            if self._escaping or not self:IsShown() then return end
+            CommitEdit(self:GetParent(), e)
+        end)
+        edit:SetScript("OnTabPressed", function(self) self:ClearFocus() end)
+    end
+
+    -- Cap: whole gold in the box, copper in the DB. Blank = clear cap.
+    WireEditor({
+        cell = "capCell", label = "cap", edit = "priceEdit", bg = "priceEditBg",
+        active = "_priceEditActive",
+        prefill = function(r)
+            return r._maxPrice and tostring(math.floor(r._maxPrice / 10000)) or ""
+        end,
+        tooltip = function(r)
+            if r._maxPrice then
+                GameTooltip:SetText(("Max %dg / unit"):format(math.floor(r._maxPrice / 10000)), 1, 1, 1)
+                GameTooltip:AddLine("Click to change  \194\183  blank = no cap", 0.7, 0.7, 0.7)
+            else
+                GameTooltip:SetText("No price cap set", 1, 1, 1)
+                GameTooltip:AddLine("Click to set a max gold/unit", 0.7, 0.7, 0.7)
+            end
+        end,
+        commit = function(r, text)
+            local priceGold = tonumber(text)
+            local maxPriceCopper = (priceGold and priceGold > 0) and (priceGold * 10000) or nil
+            if maxPriceCopper == r._maxPrice then return false end
+            local oldMax = r._maxPrice
+            ADDON.DB:SetItemMaxPrice(r._itemID, maxPriceCopper, "user")
+            r._maxPrice = maxPriceCopper
+            local name = r.name:GetText() or ("item:" .. r._itemID)
+            if maxPriceCopper then
+                MF:SetStatus(("Cap for %s set to %dg"):format(name, priceGold))
+            else
+                MF:SetStatus(("Cap cleared for %s"):format(name))
+            end
+            ADDON.Log:Emit("cap_change", r._itemID, { fromCopper = oldMax, toCopper = maxPriceCopper })
+            r.cap:SetText(maxPriceCopper and ("%dg"):format(priceGold) or "")
+            return true
+        end,
+    })
+
+    -- Need: positive integer target count.
+    WireEditor({
+        cell = "needCell", label = "need", edit = "needEdit", bg = "needEditBg",
+        active = "_needEditActive",
+        prefill = function(r) return tostring(r._need or 20) end,
+        tooltip = function(r)
+            GameTooltip:SetText(("Target: %d"):format(r._need or 20), 1, 1, 1)
+            GameTooltip:AddLine("Click to change", 0.7, 0.7, 0.7)
+        end,
+        commit = function(r, text)
+            local newNeed = tonumber(text)
+            if not (newNeed and newNeed > 0 and newNeed ~= r._need) then return false end
             local oldNeed = r._need
             ADDON.DB:SetItem(r._itemID, newNeed)
             r._need = newNeed
-            -- Update the inline fontstring immediately so the user sees
-            -- the new value even though we skip the full Refresh.
-            if r.need then r.need:SetText(tostring(newNeed)) end
-            if ADDON.Log then
-                ADDON.Log:Emit("target_change", r._itemID, {
-                    from = oldNeed, to = newNeed,
-                })
-            end
-            changed = true
-        end
-        CloseNeedEdit(r)
-        if changed then MF:Refresh() end
-    end
-    row.needEdit:SetScript("OnEscapePressed", function(self)
-        -- Escape = cancel: set the abort flag BEFORE clearing focus so the
-        -- OnEditFocusLost handler (which fires on ClearFocus) knows to
-        -- close-without-committing instead of doing a blur-commit.
-        self._escaping = true
-        local r = self:GetParent()
-        CloseNeedEdit(r)
-        self._escaping = false
-        -- Escape from cell edit closes the
-        -- editor and yields keyboard focus. No ring stage.
-    end)
-    row.needEdit:SetScript("OnEnterPressed", function(self)
-        CommitNeedEdit(self:GetParent())
-    end)
-    -- QA-8: commit on blur. If the user tabs away or clicks elsewhere
-    -- (anywhere that steals focus), treat that as a commit rather than
-    -- silently discarding the typed value. Escape still cancels via the
-    -- _escaping flag set above.
-    row.needEdit:SetScript("OnEditFocusLost", function(self)
-        if self._escaping then return end
-        local r = self:GetParent()
-        if r.needEdit:IsShown() then CommitNeedEdit(r) end
-    end)
-    -- v1.1: Tab traversal into row-body cells has been excised. Rows are
-    -- click-to-edit only; Tab now cycles Item ID -> Target -> Cap -> Add
-    -- button and wraps back to Item ID (see toolbar wiring below). Pressing
-    -- Tab in an active row editor commits and clears focus rather than
-    -- hopping to the next cell.
-    row.needEdit:SetScript("OnTabPressed", function(self)
-        self:ClearFocus()
-    end)
-    -- Alpha4's ROW-FOCUS grey-wash hooks are
-    -- removed. The mint ring (row.selRing, painted by SetRowSelection)
-    -- is now the singular focus indicator; the cell's own border-brand
-    -- animation shows which cell is being edited. Two overlays on the
-    -- same row was noisy and doubled up the "you are here" signal.
-
-    -- Price editor: Escape aborts; Enter, Tab, or blur commit
-    -- (blank = clear cap).
-    local function ClosePriceEdit(r)
-        r.priceEdit:ClearFocus()
-        r.priceEdit:Hide()
-        r.priceEditBg:Hide()
-        r.cap:Show()
-        r.capCell._priceEditActive = false
-        if not r.capCell:IsMouseOver() then
-            r.capCell._borderAnim.AnimateTo(r.capCell._borderIdle)
-            if r.capCell._bg then r.capCell._bg:SetVertexColor(unpack(r.capCell._fillIdle)) end
-        end
-    end
-    -- Same 'skip refresh in no-op case' guard as CommitNeedEdit -- see
-    -- comment there for why this matters for Tab traversal.
-    local function CommitPriceEdit(r)
-        local changed = false
-        if r._itemID then
-            local raw = r.priceEdit:GetText()
-            -- Whole-gold input only. tonumber handles the numeric parse
-            -- (SetNumeric already prevented non-digit keystrokes); we
-            -- convert gold to copper for storage since the rest of the
-            -- codebase (RestockLoop, AH:BuyUpTo, DB) works in copper.
-            local priceGold = tonumber(raw)
-            local maxPriceCopper = (priceGold and priceGold > 0) and (priceGold * 10000) or nil
-            if maxPriceCopper ~= r._maxPrice then
-                local oldMax = r._maxPrice
-                ADDON.DB:SetItemMaxPrice(r._itemID, maxPriceCopper, "user")
-                r._maxPrice = maxPriceCopper
-                local name = r.name:GetText() or ("item:" .. r._itemID)
-                if maxPriceCopper then
-                    MF:SetStatus(("Cap for %s set to %dg"):format(name, priceGold))
-                else
-                    MF:SetStatus(("Cap cleared for %s"):format(name))
-                end
-                if ADDON.Log then
-                    ADDON.Log:Emit("cap_change", r._itemID, {
-                        fromCopper = oldMax, toCopper = maxPriceCopper,
-                    })
-                end
-                -- Update the inline fontstring so the change is visible
-                -- without a full Refresh.
-                if r.cap then
-                    r.cap:SetText(maxPriceCopper and ("%dg"):format(priceGold) or "")
-                end
-                changed = true
-            end
-        end
-        ClosePriceEdit(r)
-        if changed then MF:Refresh() end
-    end
-    row.priceEdit:SetScript("OnEscapePressed", function(self)
-        -- Escape from cell edit closes the
-        -- editor and yields keyboard focus. No ring stage.
-        self._escaping = true
-        local r = self:GetParent()
-        ClosePriceEdit(r)
-        self._escaping = false
-    end)
-    row.priceEdit:SetScript("OnEnterPressed", function(self)
-        CommitPriceEdit(self:GetParent())
-    end)
-    -- Alpha4's ROW-FOCUS grey-wash hook for
-    -- the price cell removed for the same reason as the need cell above.
-
-    -- QA-8: commit on blur (see row.needEdit's OnEditFocusLost).
-    row.priceEdit:SetScript("OnEditFocusLost", function(self)
-        if self._escaping then return end
-        local r = self:GetParent()
-        if r.priceEdit:IsShown() then CommitPriceEdit(r) end
-    end)
-    -- v1.1: row Tab excised; commit and unfocus (matches needEdit above).
-    row.priceEdit:SetScript("OnTabPressed", function(self)
-        self:ClearFocus()
-    end)
+            r.need:SetText(tostring(newNeed))
+            ADDON.Log:Emit("target_change", r._itemID, { from = oldNeed, to = newNeed })
+            return true
+        end,
+    })
 end
 
 -- ---------------------------------------------------------------------------
@@ -1194,15 +1025,8 @@ local function InitializeRow(row, data)
     -- resolves; no explicit event handler needed here because Refresh()
     -- already re-runs on that event via ItemResolver's callback path.
     --
-    -- C_Item.GetItemQualityColor returns
-    -- MULTIPLE VALUES (r, g, b, hex) as plain numbers -- NOT a ColorMixin
-    -- table. The alpha5-preview build tried to index qc.r on the first
-    -- return value (a number 0.0-1.0), which threw
-    --   "attempt to index local 'qc' (a number value)"
-    -- three times on launch (once per broken row init) and left the
-    -- shopping list broken with only one row visible. Destructure the
-    -- return values instead. Defensive default to white on nil in the
-    -- unlikely event Blizzard ever returns nothing for a valid quality.
+    -- C_Item.GetItemQualityColor returns multiple values (r, g, b, hex),
+    -- NOT a ColorMixin table, so destructure. Default to white on nil.
     if row.iconBorder then
         if quality and quality >= 2 and C_Item and C_Item.GetItemQualityColor then
             local r, g, b = C_Item.GetItemQualityColor(quality)
@@ -1282,23 +1106,11 @@ local function InitializeRow(row, data)
     -- When auto-purchase is ON but this item has no cap set, we swap the
     -- em-dash for a dim "skip" so the user can at-a-glance see which
     -- rows an auto run will pass over (QA-10 visual affordance).
-    -- Plain text, not a glyph: WoW's stock fonts lack U+263D (moon),
-    -- which was used here first and rendered as a placeholder box --
-    -- the same bug class the v0.3 glyph fixes addressed for cog/log.
+    -- Plain text, not a glyph: WoW's stock fonts lack most symbol glyphs.
     --
-    -- PT-1 v0.5: cap tint reflects the last-seen price when both are
-    -- known. Above cap = pink (a buy would be rejected), at-or-below =
-    -- simplified from the alpha4 three-state
-    -- (pink / mint / muted-mint gated on TTL) to a binary pass/fail per
-    -- user spec: cap is inclusive, so `seen > cap` is the ONLY fail state.
-    -- Red text when we're priced out (seen > cap). Normal text otherwise
-    -- (seen <= cap, or no seen data at all). TTL/staleness gating removed
-    -- from this column -- the Last Seen column below has its own stale-
-    -- dimming, so "this data is old" is communicated there instead.
-    -- Rationale: if we haven't seen fresher data, the last known market
-    -- signal is the best signal we have; hiding a priced-out state behind
-    -- "data is stale" masks a real actionable UX signal.
-    -- auto-purchase / defaultMaxCopper are gone.
+    -- Cap tint is binary: red when last-seen > cap (a buy would be
+    -- rejected; cap is inclusive), normal otherwise. Staleness is shown
+    -- by the Last Seen column's own dimming, not here.
     -- Cap cell has exactly two states: capped (mint "Ng", red "Ng"
     -- if last-seen exceeds cap) or unset (em-dash). No cap set means
     -- the row will buy at market price; the armed-flyout's amber
@@ -1365,7 +1177,7 @@ local function InitializeRow(row, data)
     -- Row background: NONE. Atrocity's aesthetic is one window fill; rows
     -- are separated by the 1px black bottom border from the header/list and
     -- by content spacing, not by per-row backgrounds. Selection = hover wash.
-    -- (Status is signaled by the pill text color + the cap-column number, not
+    -- (Status is signaled by the Have text color + the cap-column number, not
     -- by a full-row wash.)
 
     -- Trash click wire. Read from row._itemID rather than closing over
@@ -1391,9 +1203,6 @@ local function InitializeRow(row, data)
     row.priceEdit:Hide()
     row.priceEditBg:Hide()
     row.cap:Show()
-    -- No-op Show on the stub; kept for parity
-    -- with the surrounding cell-visibility resets.
-    row.pill:Show()
 end
 
 -- ---------------------------------------------------------------------------
@@ -1528,22 +1337,11 @@ function MF:Build()
     -- doesn't feel 'stuck'.
     tinsert(UISpecialFrames, "StockClerkFrame")
 
-    -- ESCAPE-SIDECAR-FIX (was here): sidecar cascade now
-    -- lives inside the SetScript("OnHide", ...) below. The earlier attempt
-    -- registered a HookScript here, but the SetScript further down in
-    -- Build() then REPLACES the OnHide handler entirely (HookScript chains,
-    -- SetScript overwrites), silently killing this hook. Reprise fix folds
-    -- the Sidecar+SettingsDropdown Hide() calls into the SetScript body so
-    -- every close path -- imperative MF:Hide(), X button, Close button,
-    -- /clerk toggle, and Escape via UISpecialFrames -- runs the same
-    -- cleanup atomically.
     -- KBD-FIX (H1): SetPropagateKeyboardInput is sticky per-frame,
     -- so every OnKeyDown MUST end with an explicit propagate call in
-    -- BOTH branches. The previous shape used early `return`s after
-    -- SetPropagateKeyboardInput(false), which meant any Lua error in a
-    -- handled action (Stop, MoveSelectedItem, ...) would leave
-    -- propagate=false stuck -- swallowing every subsequent key game-wide.
-    -- New shape: decide (consumed / not consumed), do the action inside a
+    -- BOTH branches, or a Lua error in a handled action leaves
+    -- propagate=false stuck and swallows every key game-wide. So: decide
+    -- (consumed / not consumed), do the action inside a
     -- pcall, then set propagate exactly ONCE at the end via a single exit
     -- path. No `return` allowed inside this handler before the final line.
     f:SetScript("OnKeyDown", function(self, key)
@@ -1582,14 +1380,10 @@ function MF:Build()
     -- NOTE: MF:BlurAddButton is defined later in Build(); the closure
     -- resolves at call time, after Build has completed.
     f:SetScript("OnHide", function()
-        -- Cascade close to Sidecar and
-        -- SettingsDropdown FIRST, before any propagate/focus/edit cleanup,
-        -- so those UIParent-parented panels never orphan when Escape hides
-        -- the main frame. Both :Hide methods are idempotent no-ops when
-        -- the panel isn't shown.
-        if ADDON.SettingsDropdown and ADDON.SettingsDropdown.Hide then
-            pcall(function() ADDON.SettingsDropdown:Hide() end)
-        end
+        -- Cascade close to Sidecar FIRST, before any propagate/focus/edit
+        -- cleanup, so the UIParent-parented panel never orphans when Escape
+        -- hides the main frame. pcall keeps a Sidecar error from skipping
+        -- the keyboard-propagate reset below.
         if ADDON.Sidecar and ADDON.Sidecar.Hide then
             pcall(function() ADDON.Sidecar:Hide() end)
         end
@@ -1762,13 +1556,7 @@ function MF:Build()
     end)
     closeX:SetScript("OnClick", function() MF:Hide() end)
 
-    -- V0.7: single hamburger button replaces the previous cog + log button
-    -- pair. It toggles the merged Sidecar (Settings + Activity in one
-    -- flyout panel; see UI/Sidecar.lua, Phase C). Until Sidecar lands the
-    -- click is a no-op stub -- the button is still drawn so header
-    -- proportions are already correct when Sidecar wiring goes in.
-    --
-    -- Sizing bumped 22 -> 26 for parity with the enlarged close X target.
+    -- Hamburger button toggles the Sidecar (Settings + Activity).
     -- Glyph is three drawn mint bars (WoW's stock fonts don't include
     -- U+2261, and SetColorTexture rectangles tint cleanly on hover).
     local hamburgerBtn = CreateFrame("Button", nil, header)
@@ -1797,15 +1585,7 @@ function MF:Build()
         GameTooltip:Hide()
     end)
     hamburgerBtn:SetScript("OnClick", function(self)
-        -- Stub: log to chat so the tester can confirm the button
-        -- wires. Phase C replaces with ADDON.Sidecar:Toggle(self).
-        if ADDON.Sidecar and ADDON.Sidecar.Toggle then
-            ADDON.Sidecar:Toggle(self)
-        elseif ADDON.SettingsDropdown and ADDON.SettingsDropdown.Toggle then
-            -- Fallback during phased build: hamburger opens the old
-            -- Settings dropdown until Sidecar (Phase C) is in place.
-            ADDON.SettingsDropdown:Toggle(self)
-        end
+        ADDON.Sidecar:Toggle(self)
     end)
     MF._hamburgerBtn = hamburgerBtn
     -- Back-compat aliases so existing code that pokes at _cogBtn / _logBtn
@@ -2036,8 +1816,7 @@ function MF:Build()
             -- so the current Tab keystroke is fully consumed by this
             -- OnKeyDown and doesn't double-hop into the newly-focused
             -- control.
-            -- v1.1: row-body Tab excised. Forward Tab wraps back to
-            -- addBox; Shift+Tab returns to priceBox. No list involvement.
+            -- Forward Tab wraps back to addBox; Shift+Tab returns to priceBox.
             local shift = IsShiftKeyDown()
             C_Timer.After(0, function()
                 pcall(function()
@@ -2150,14 +1929,7 @@ function MF:Build()
         MF:SetStatus(("Quick-add: item %d (press Enter to add)"):format(itemID))
     end
 
-    -- Shift-click quick-add on the Add box
-    -- has been retired. It had unresolved edge cases (fired at wrong
-    -- times, interacted poorly with other WoW UI's shift-click handling)
-    -- and drag-and-drop covers the same intent more reliably. Container
-    -- OnMouseUp now only does the focus fallthrough; the shift-click
-    -- cursor-stamp branch is removed.
-    --
-    -- Drop-target enablement stays: EnableMouse + RegisterForDrag so the
+    -- Drop-target enablement: EnableMouse + RegisterForDrag so the
     -- container and the editbox itself accept dropped items.
     -- IMPORTANT: use HookScript, not SetScript, on the container.
     -- StyleEditBoxContainer (above) already installs HookScripts on
@@ -2169,7 +1941,6 @@ function MF:Build()
     dropTarget:HookScript("OnMouseUp", function(_, button)
         if button ~= "LeftButton" then return end
         -- Click on the box (or its container padding) focuses the input.
-        -- No modifier branches: shift-click quick-add is retired.
         addBox:SetFocus()
     end)
     dropTarget:HookScript("OnReceiveDrag", function()
@@ -2194,14 +1965,6 @@ function MF:Build()
         if id then StampAddBox(id) end
     end)
 
-    -- The ChatEdit_InsertLink hook that
-    -- allowed shift-clicking an item link into a focused addBox is also
-    -- retired. Same rationale as the container hook above: unreliable in
-    -- practice, drag-and-drop covers the same intent, and typing/pasting
-    -- an item ID still works. Removing the hook entirely (rather than
-    -- leaving it wired but silent) avoids polluting other addons'
-    -- shift-click link flows when Stock Clerk's add box happens to be
-    -- focused in the background.
 
     -- Drop-zone visual affordance (Option A from grill): 1px mint outline
     -- that thickens (2px) when the cursor holds an item, signalling
@@ -2243,21 +2006,10 @@ function MF:Build()
     end)
 
     -- Tooltip on the addBox container so first-time users discover the
-    -- drag path without a wall of on-screen text. Shift-click was retired
-    -- in alpha5 (see SHIFT-CLICK-KILL above), so the copy now names the
-    -- surviving entry points only.
-    --
-    -- the container's OnEnter only fired
-    -- when the cursor was over the ~3-6px gap between the editbox's edge
-    -- and the container's edge, because the EditBox sitting on top of
-    -- the container ate the mouse hover event for the entire interior.
-    -- Users experienced this as a tooltip that only appeared on a
-    -- "very precise edge" of the input. Mirror the same handler onto
-    -- the EditBox itself so the tooltip fires no matter which region
-    -- of the input rectangle the cursor is over. The tooltip is still
-    -- anchored to dropTarget (the container) so its screen position
-    -- doesn't jump around depending on where inside the box the cursor
-    -- entered.
+    -- drag path without a wall of on-screen text. The same handler is
+    -- mirrored onto the EditBox itself, because the EditBox eats hover for
+    -- the whole interior; the tooltip stays anchored to dropTarget so it
+    -- doesn't jump around.
     -- HookScript (not SetScript) preserves the border-hover animation
     -- that StyleEditBoxContainer already installed on OnEnter/OnLeave.
     -- ANCHOR_TOP places the tooltip
@@ -2298,8 +2050,8 @@ function MF:Build()
     self.countBox = countBox
     self.priceBox = priceBox
 
-    -- Tab navigation across the Add cluster only. v1.1 excised row-body
-    -- Tab traversal; the shopping list is click-to-edit. Forward chain:
+    -- Tab navigation across the Add cluster only (the list is click-to-edit).
+    -- Forward chain:
     --   addBox -> countBox -> priceBox -> addBtn -> addBox (wrap)
     -- Shift+Tab is the mirror. addBtn is a Button (not an EditBox), so
     -- its Tab handling lives in its OnKeyDown above (set up by
@@ -2334,14 +2086,7 @@ function MF:Build()
     hint:SetJustifyH("LEFT")
     -- Dimmer than the toolbar band so this recedes visually — it's help text,
     -- not primary content. Alpha via a slightly darker grey than before.
-    -- v0.7: shortened for the 420px layout. "Click 'x' to remove" dropped
-    -- since trash-on-hover is a discovered affordance, not something the
-    -- hint needs to spell out. "Click a value to edit" tightened.
-    -- shift-click quick-add on the Add box is
-    -- retired (SHIFT-CLICK-KILL above). "Shift+Click to link" here still
-    -- refers to shift-clicking a ROW to paste an item link into chat --
-    -- that path is untouched -- but rewording to name the concrete
-    -- gesture rather than lean on the raw modifier name.
+    -- "Shift+Click" here means shift-clicking a ROW to link it in chat.
     hint:SetText("|cff6a6a6aShift+Click a row to link \194\183 Click a value to edit \194\183 Row-click (AH open) to search|r")
 
     -- ---- Column headers -----------------------------------------------
@@ -2526,7 +2271,7 @@ function MF:Build()
     closeBtnText:SetTextColor(1, 1, 1, 1)
     closeBtn:SetScript("OnClick", function() MF:Hide() end)
 
-    -- Phase B post-feedback rework: two-state button.
+    -- Two-state button:
     --   idle    -> "Restock at AH"  (left-click Start; disabled if no AH open,
     --                                nothing short, or loop running elsewhere)
     --   active  -> "Stop restock"    (left-click Stop)
@@ -2592,7 +2337,7 @@ function MF:Build()
     self.restockBtn = restockBtn
 
     -- ---- Confirm/Summary flyout (above the restock button) ---------------
-    -- The core of the post-feedback Phase B rework. This is a compact
+    -- Compact
     -- horizontal flyout that appears above the restock button in two
     -- distinct modes:
     --
@@ -3365,8 +3110,8 @@ end
 -- stream the footer shows -- "Searching AH for...", "Cheapest: 100g",
 -- "Cap for X set to 50g", loop tick messages, etc. This is intentional:
 -- the log is meant to be the durable record of the same human-readable
--- feedback that used to only exist for a fraction of a second in the
--- footer before the next status overwrote it. Empty strings are still
+-- feedback, which otherwise lasts only until the next status overwrites the
+-- footer. Empty strings are still
 -- passed to the footer (to clear it) but skipped in the log.
 function MF:SetStatus(text, skipLog)
     if self.statusBar then self.statusBar:SetText(text or "") end
@@ -3376,35 +3121,12 @@ function MF:SetStatus(text, skipLog)
 end
 
 -- ---------------------------------------------------------------------------
--- Tab navigation across toolbar + list-body cells (QA-7)
--- ---------------------------------------------------------------------------
--- Row-major, unified loop: toolbar Item -> Target -> Price Cap -> row 1's
--- Need -> row 1's Price Cap -> row 2's Need -> ... -> wraps back to Item.
--- Shift+Tab reverses.
---
--- Row ordering comes from the DataProvider so scrolling doesn't reshuffle
--- the Tab sequence. Because rows are RECYCLED by the ScrollView, the
--- current row-Button for a given data index has to be resolved at Tab
--- time via scrollBox:FindFrame(elementData). If the target row is not
--- currently rendered (off-screen), we scroll to it first, then defer the
--- focus + open to the next frame so the ScrollView has time to spawn or
--- re-target the Button.
-
--- v1.1: OpenRowCellEditor removed along with the row-body Tab helpers.
--- Row cells are opened via their own OnClick (mouse) exclusively.
--- ---------------------------------------------------------------------------
 -- Reorder
 --
 -- Shopping list order = restock walk order (see DB.lua GetSortedItems).
 -- Reorder is mouse-only: drag the grip handle on the row's far left. On
 -- drop, compute the target index from the cursor Y against visible rows
 -- and call DB:ReorderItems.
---
--- the previous keyboard soft-select model (Tab
--- into a 1px mint ring, UP/DOWN to reorder, Enter to drop into Need,
--- Escape to clear) is gone. It was the root cause of every alpha5
--- keyboard-nav bug. The grip handle already communicates drag-to-reorder
--- intuitively; Tab walks editors (Need, Cap) only.
 -- ---------------------------------------------------------------------------
 
 -- ---------------------------------------------------------------------------
@@ -3562,11 +3284,6 @@ function MF:EndRowDrag()
     self:Refresh()
 end
 
--- v1.1: MF:FocusRowCell, MF:TabToFirstRowCell, MF:TabToLastRowCell, and
--- MF:TabFromCell were removed here. Row-body Tab navigation is excised;
--- the shopping list is click-to-edit. Toolbar Tab now cycles within the
--- Add cluster (see the OnTabPressed handlers on addBox/countBox/priceBox
--- and the addBtn OnKeyDown TAB branch).
 
 -- ---------------------------------------------------------------------------
 -- Show / Hide
@@ -3589,9 +3306,8 @@ function MF:Show(fromAH)
 end
 
 function MF:Hide()
-    -- Cleanup for SettingsDropdown
-    -- and Sidecar (both UIParent-parented, so they don't inherit our
-    -- Hide) now lives on the frame's OnHide hook. That way EVERY
+    -- Cleanup for Sidecar (UIParent-parented, so it doesn't inherit our
+    -- Hide) lives on the frame's OnHide hook. That way EVERY
     -- close path -- imperative (this method), Escape (UISpecialFrames),
     -- X button, Close button, /clerk toggle -- runs the same cleanup.
     -- This method just triggers the frame's Hide; the hook does the rest.

@@ -19,13 +19,11 @@ Inventory.lua
 AH.lua
 Core.lua
 
-Sources\Bags.lua
 
 RestockLoop.lua
 
 UI\MainFrame.lua
 UI\BulkImport.lua
-UI\SettingsDropdown.lua
 UI\Sidecar.lua
 UI\LogPopup.lua
 

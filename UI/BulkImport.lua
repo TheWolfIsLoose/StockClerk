@@ -142,46 +142,11 @@ end
 -- ---------------------------------------------------------------------------
 -- UI
 -- ---------------------------------------------------------------------------
--- Styling mirrors the main window's palette so the popup reads as part
--- of the same addon rather than a floating stock Blizzard dialog. See
--- UI/MainFrame.lua Palette{} for source-of-truth values.
-local PALETTE = {
-    bgDark   = { 0.031, 0.031, 0.031, 0.97 }, -- main window fill
-    fieldFill = { 0.000, 0.000, 0.000, 0.55 }, -- editable well
-    btnRest  = { 1.000, 1.000, 1.000, 0.045 }, -- button-at-rest fill
-    hoverWash = { 0.851, 0.851, 0.851, 0.15 }, -- hover overlay
-    border   = { 0.00, 0.00, 0.00, 1.00 },     -- pure-black 1px chrome
-    brand    = { 0.596, 1.000, 0.596, 1.00 },  -- #98FF98 mint accent
-    text     = { 1.00, 1.00, 1.00, 1.00 },
-    textDim  = { 0.78, 0.78, 0.78, 1.00 },
-    textMute = { 0.50, 0.50, 0.50, 1.00 },
-}
+-- Styling reuses the main window's palette and helpers so the popup reads
+-- as part of the same addon rather than a stock Blizzard dialog.
+local PALETTE = ADDON.MainFrame.Palette
+local ApplyFill, AddBorder = ADDON.MainFrame.ApplyFill, ADDON.MainFrame.AddBlackBorder
 local frame  -- lazy-built singleton
-
--- Solid fill on the BACKGROUND layer of a Frame or Region.
-local function ApplyFill(parent, color, subLevel)
-    local tex = parent:CreateTexture(nil, "BACKGROUND", nil, subLevel or -7)
-    tex:SetAllPoints(true)
-    tex:SetColorTexture(color[1], color[2], color[3], color[4] or 1)
-    return tex
-end
-
--- 4-texture pure-black 1px ring on the OVERLAY layer. Same shape the
--- main window uses via AddBlackBorder.
-local function AddBorder(parent, color)
-    color = color or PALETTE.border
-    local edges = {}
-    for _, side in ipairs({"top", "bottom", "left", "right"}) do
-        local t = parent:CreateTexture(nil, "OVERLAY", nil, 7)
-        t:SetColorTexture(color[1], color[2], color[3], color[4] or 1)
-        edges[side] = t
-    end
-    edges.top:SetHeight(1);    edges.top:SetPoint("TOPLEFT", 0, 0);       edges.top:SetPoint("TOPRIGHT", 0, 0)
-    edges.bottom:SetHeight(1); edges.bottom:SetPoint("BOTTOMLEFT", 0, 0);  edges.bottom:SetPoint("BOTTOMRIGHT", 0, 0)
-    edges.left:SetWidth(1);    edges.left:SetPoint("TOPLEFT", 0, 0);      edges.left:SetPoint("BOTTOMLEFT", 0, 0)
-    edges.right:SetWidth(1);   edges.right:SetPoint("TOPRIGHT", 0, 0);    edges.right:SetPoint("BOTTOMRIGHT", 0, 0)
-    return edges
-end
 
 local function StyleFrame(f)
     ApplyFill(f, PALETTE.bgDark)
@@ -195,7 +160,7 @@ local function StyleFrame(f)
 end
 
 local function StyleBtn(btn)
-    ApplyFill(btn, PALETTE.btnRest, -6)
+    ApplyFill(btn, PALETTE.btnRest)
     local hover = btn:CreateTexture(nil, "BORDER")
     hover:SetAllPoints()
     hover:SetColorTexture(PALETTE.hoverWash[1], PALETTE.hoverWash[2],
@@ -254,7 +219,7 @@ local function BuildFrame()
     scrollBg:SetPoint("TOPLEFT", -2, 2)
     scrollBg:SetPoint("BOTTOMRIGHT", 22, -2)  -- +22 clears the scroll bar
     scrollBg:SetFrameLevel(scroll:GetFrameLevel() - 1)
-    ApplyFill(scrollBg, PALETTE.fieldFill, -5)
+    ApplyFill(scrollBg, PALETTE.fieldFill)
     AddBorder(scrollBg)
 
     local edit = CreateFrame("EditBox", nil, scroll)

@@ -71,14 +71,6 @@ Loop.state = {
     -- the armed-flyout's amber 'No cap set' badge, no per-session ack needed)
 }
 
-local function DebugPrint(...)
-    if ADDON.debug then
-        local parts = {}
-        for i = 1, select("#", ...) do parts[i] = tostring(select(i, ...)) end
-        print("|cff98FF98[SC:Loop]|r " .. table.concat(parts, " "))
-    end
-end
-
 local function Status(msg)
     if ADDON.MainFrame and ADDON.MainFrame.SetStatus then
         ADDON.MainFrame:SetStatus(msg)
@@ -188,10 +180,10 @@ function Loop:_OnMailInboxUpdate()
     for id, p in pairs(ledger) do
         local inMail = seen[id] or 0
         if inMail == 0 then
-            DebugPrint(("reconcile: id=%d cleared (not in mail)"):format(id))
+            ADDON.Debug("Loop", ("reconcile: id=%d cleared (not in mail)"):format(id))
             ledger[id] = nil
         elseif inMail < p.qty then
-            DebugPrint(("reconcile: id=%d clamped %d -> %d"):format(id, p.qty, inMail))
+            ADDON.Debug("Loop", ("reconcile: id=%d clamped %d -> %d"):format(id, p.qty, inMail))
             p.qty = inMail
         end
     end
@@ -252,7 +244,7 @@ function Loop:PreviewShortfallCount()
         if short > 0 then
             n = n + 1
             if ADDON.debug and self._previewLast[it.itemID] ~= short then
-                DebugPrint(("preview: id=%d name=%s need=%d effHave=%d short=%d"):format(
+                ADDON.Debug("Loop", ("preview: id=%d name=%s need=%d effHave=%d short=%d"):format(
                     it.itemID, tostring(it.name), it.need, have, short))
             end
             seen[it.itemID] = short
@@ -269,7 +261,7 @@ end
 
 function Loop:Start()
     if self.state.active then
-        DebugPrint("already active, ignoring Start")
+        ADDON.Debug("Loop", "already active, ignoring Start")
         return
     end
     if not AuctionHouseFrame or not AuctionHouseFrame:IsShown() then
@@ -295,7 +287,7 @@ function Loop:Start()
     self.state.touched      = 0
     self.state.stillShort   = 0
 
-    DebugPrint(("started items=%d"):format(#q))
+    ADDON.Debug("Loop", ("started items=%d"):format(#q))
 
     if ADDON.Log then
         ADDON.Log:Emit("loop_start", nil, { queueSize = #q })
@@ -312,7 +304,7 @@ function Loop:Advance()
     self.state.index = self.state.index + 1
     local item = self.state.queue[self.state.index]
     if not item then
-        DebugPrint("queue exhausted, stopping")
+        ADDON.Debug("Loop", "queue exhausted, stopping")
         self:Stop("done")
         return
     end
@@ -327,13 +319,13 @@ function Loop:Advance()
     local have = Loop:_EffectiveHave(item.itemID)
     local short = item.need - have
     if short <= 0 then
-        DebugPrint(("skip id=%d, already restocked (%d/%d)"):format(item.itemID, have, item.need))
+        ADDON.Debug("Loop", ("skip id=%d, already restocked (%d/%d)"):format(item.itemID, have, item.need))
         self:Advance()
         return
     end
 
     -- ARMED-MODEL: search + arm, don't dialog.
-    DebugPrint(("processing id=%d need=%d have=%d short=%d cap=%s"):format(
+    ADDON.Debug("Loop", ("processing id=%d need=%d have=%d short=%d cap=%s"):format(
         item.itemID, item.need, have, short, tostring(item.maxPrice)))
 
     ADDON.AH:BuyUpTo(item.itemID, short, item.maxPrice, function(ok, plan)
@@ -347,13 +339,13 @@ function Loop:Advance()
             local reason = tostring(plan)
             local isCapOut = reason:find("above your") and reason:find("cap")
             if isCapOut then
-                DebugPrint("cap-out silent skip: " .. reason)
+                ADDON.Debug("Loop", "cap-out silent skip: " .. reason)
                 self.state.skippedCapped = self.state.skippedCapped + 1
                 if ADDON.Log then
                     ADDON.Log:Emit("buy_skip", item.itemID, { reason = "cap out (silent)" })
                 end
             else
-                DebugPrint("search/plan failed: " .. reason)
+                ADDON.Debug("Loop", "search/plan failed: " .. reason)
                 Status(("|cffff8888%s: %s|r"):format(item.name, reason))
                 if ADDON.Log then
                     ADDON.Log:Emit("buy_fail", item.itemID, { reason = reason })
@@ -415,7 +407,7 @@ end
 function Loop:_Arm(plan)
     self.state.armed     = true
     self.state.armedPlan = plan
-    DebugPrint(("armed id=%d qty=%d spend=%d"):format(
+    ADDON.Debug("Loop", ("armed id=%d qty=%d spend=%d"):format(
         plan.itemID, plan.planQuantity, plan.plannedSpend))
     Status(("Ready: %d x %s for %s -- confirm in the buy flyout"):format(
         plan.planQuantity, plan.name, ADDON.MoneyText(plan.plannedSpend)))
@@ -441,11 +433,11 @@ end
 function Loop:Fire()
     if not self.state.active then return end
     if not self.state.armed then
-        DebugPrint("Fire called but not armed, ignoring")
+        ADDON.Debug("Loop", "Fire called but not armed, ignoring")
         return
     end
     if self.state.buying then
-        DebugPrint("Fire called mid-buy, ignoring (guards double-click)")
+        ADDON.Debug("Loop", "Fire called mid-buy, ignoring (guards double-click)")
         return
     end
     local plan = self.state.armedPlan
@@ -470,19 +462,12 @@ function Loop:Fire()
     end
 end
 
--- Test-only convenience for the armed-plan getter. MainFrame uses this to
--- paint the button label.
-function Loop:GetArmedPlan()
-    if self.state.armed then return self.state.armedPlan end
-    return nil
-end
-
 -- ---------------------------------------------------------------------------
 -- Confirmation path
 -- ---------------------------------------------------------------------------
 function Loop:_OnConfirm(plan)
     if not self.state.active then return end
-    DebugPrint(("confirming buy id=%d qty=%d spend=%d"):format(
+    ADDON.Debug("Loop", ("confirming buy id=%d qty=%d spend=%d"):format(
         plan.itemID, plan.planQuantity, plan.plannedSpend))
     Status(("Buying %d x %s..."):format(plan.planQuantity, plan.name))
     ADDON.AH:ExecutePurchase(plan.itemID, plan.planQuantity, plan.plannedSpend, function(ok, result)
@@ -525,7 +510,7 @@ end
 
 function Loop:_OnSkip(plan)
     if not self.state.active then return end
-    DebugPrint("user skipped id=" .. plan.itemID)
+    ADDON.Debug("Loop", "user skipped id=" .. plan.itemID)
     if ADDON.Log then
         ADDON.Log:Emit("buy_skip", plan.itemID, { reason = "user skipped" })
     end
@@ -552,7 +537,7 @@ end
 function Loop:Stop(reason)
     if not self.state.active then return end
     reason = reason or "unspecified"
-    DebugPrint("stopping loop: " .. reason)
+    ADDON.Debug("Loop", "stopping loop: " .. reason)
 
     -- Snapshot for the log emit; state is cleared below.
     local spent         = self.state.spentCopper   or 0
@@ -645,15 +630,3 @@ end
 function Loop:IsActive()
     return self.state.active == true
 end
-
-function Loop:IsArmed()
-    return self.state.active and self.state.armed == true
-end
-
-function Loop:IsBuying()
-    return self.state.buying == true
-end
-
--- (ResetSessionFlags removed in v0.7.0 sweep -- the uncappedAcked flag
--- it managed is gone. If new AH-session flags ever need per-visit
--- resets, reintroduce here.)

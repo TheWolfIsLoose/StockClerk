@@ -27,14 +27,7 @@ local ADDON     = _G[addonName]
 local LogPopup = {}
 ADDON.LogPopup = LogPopup
 
-local function P()
-    return (ADDON.MainFrame and ADDON.MainFrame.Palette) or {
-        bg       = { 0.06, 0.06, 0.06, 0.98 },
-        bgDark   = { 0.04, 0.04, 0.04, 1 },
-        border   = { 0, 0, 0, 1 },
-        brand    = { 0.60, 1.00, 0.60, 1 },
-    }
-end
+local Palette = ADDON.MainFrame.Palette
 
 -- -------------------------------------------------------------------------
 -- Tag glyph per kind. Uppercase-in-brackets for greppability. Kept in one
@@ -155,7 +148,7 @@ local function Build()
     -- Bg + black frame edges
     local bg = f:CreateTexture(nil, "BACKGROUND", nil, -8)
     bg:SetAllPoints()
-    bg:SetColorTexture(P().bg[1], P().bg[2], P().bg[3], P().bg[4] or 1)
+    bg:SetColorTexture(Palette.panelBg[1], Palette.panelBg[2], Palette.panelBg[3], Palette.panelBg[4] or 1)
 
     for _, side in ipairs({ "top", "bottom", "left", "right" }) do
         local t = f:CreateTexture(nil, "OVERLAY", nil, 6)
@@ -194,7 +187,7 @@ local function Build()
 
     -- ScrollFrame containing the multi-line EditBox
     local scrollBg = f:CreateTexture(nil, "BACKGROUND")
-    scrollBg:SetColorTexture(P().bgDark[1], P().bgDark[2], P().bgDark[3], 1)
+    scrollBg:SetColorTexture(Palette.bgDark[1], Palette.bgDark[2], Palette.bgDark[3], 1)
     scrollBg:SetPoint("TOPLEFT", 8, -50)
     scrollBg:SetPoint("BOTTOMRIGHT", -8, 38)
 
