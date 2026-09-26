@@ -9,57 +9,20 @@ disagree), **Open** (needs an answer before build).
 
 ---
 
-## Next session: start here (paused 2026-09-26)
+## Next session: start here
 
-State: `dev` holds the tested efficiency pass (released as
-`v1.1.2-alpha2`), `Data/Consumables.lua` (13 items, not loaded yet) and
-this plan. `main` is still v1.1.1. No 1.2 feature code written yet.
+**Paused 2026-09-26 ~14:45 ET.** Pick up at **v1.2.0-beta2 → "Next
+session: start here"** below (UI items U1-U7 in-game, then code items
+C1-C4, then cut `v1.2.0-beta2`).
 
-First up, in one focused session with the player in-game: the bank-API
-probe (task 2 below). **2026-09-26: probe built and pushed to `dev`**
-(`Dev/BankProbe.lua`). **Warband results (12.1.0, 2026-09-26):** split to
-an empty slot, split onto a partial stack and whole stack via
-`UseContainerItem` all work for addons; no blocked actions. Banker
-interaction type is `Banker` (8). Three moves in one frame: only 1 lands
-(item locks), so the executor must go one move at a time, waiting for
-each to land: 300-550ms per move, 3s timeout is ample. A whole-stack
-`UseContainerItem` merged onto an existing bag stack by itself. Character
-bank confirmed on the same client (13:53 run): splits, whole stack and
-pacing identical (326-607ms per move). **Spike done: build Feature A as
-planned.** First move of a run is slower (1.2-1.7s); per-move timeout 3s.
+State: `v1.2.0-beta1` released (prerelease, from `dev`). `dev` is ahead
+of it with the first Ponytail cuts and the audit (no release). `main` is
+still v1.1.1 plus the `update.bat` fix. The bank-API probe is done
+(results under Feature A); `Dev/BankProbe.lua` stays for reference.
 
-- **Run it:** `update.bat dev`, `/reload`, open the bank (open it *after*
-  the reload), then `/clerk bankprobe <itemID> scan` (moves nothing),
-  then `/clerk bankprobe <itemID>`. `/reload` afterwards saves the log to
-  `StockClerkDB.bankProbe` in the SavedVariables file.
-- **Step order in the probe:** char split 5 → empty, split 3 → partial,
-  3-in-one-frame burst, 3 sequential single moves (latency), whole
-  stack; then warband split 5, split 3, whole stack. ~20 per bank covers it.
-
-- **Build:** dev-only `Dev/BankProbe.lua` (~80 lines) in the TOC's
-  `#@debug@` block, so it loads from a git checkout (`update.bat dev`)
-  and never ships. Command: `/clerk bankprobe <itemID>`. Push to `dev`
-  without a CHANGELOG heading, so no release is cut.
-- **Player prep:** ~20 of one stackable consumable in the character bank
-  and ~20 in the warband bank; a few free bag slots plus one partial
-  stack of the same item in bags; at a banker, out of combat.
-- **Probe prints one line per step:**
-  1. Banker interaction type(s) reported on bank open.
-  2. Bank tab IDs (`C_Bank.FetchPurchasedBankTabIDs`, character and
-     account) and the slots holding the item.
-  3. Whole stack → bags (`C_Container.UseContainerItem`).
-  4. Split 5 → empty bag slot; split 3 → existing partial stack
-     (`SplitContainerItem` + `PickupContainerItem`).
-  5. Same moves from the warband bank.
-  6. A quick burst of small moves to find the throttle ("item is
-     locked" / "object is busy") → sets the executor's pacing.
-- **Player sends back:** the chat output (screenshot or copy) and
-  anything that visibly didn't move.
-- **Outcome:** all steps work → build Feature A as planned. Moves
-  blocked → switch to the "highlight bank slots to click" fallback.
-
-Feature B (Add Common Consumables) doesn't depend on the probe and can
-ship as `v1.2.0-alpha1` in the same or a separate session.
+Session setup: player syncs with `Dev\update.bat dev` and `/reload`;
+Claude reads `WTF\Account\SAVAGEFEARLESS\SavedVariables\StockClerk.lua`
+via the connected `_retail_` folder (after a `/reload`) for logs.
 
 ---
 
