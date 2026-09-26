@@ -230,6 +230,14 @@ trim to what actually shipped:
 Your list, caps and settings carry over unchanged.
 ```
 
+### Circle back (noted 2026-09-26)
+
+- **Filter chip (header):** should filter to items you're *short* on.
+  Today its code, tooltip and empty-state text all say "stuck above cap"
+  (has a cap + a fresh last price above it; `UI/MainFrame.lua` Refresh,
+  `DB:GetStuckOnly`). Open: replace the predicate with "short"
+  (bags below target), or keep "stuck" and add "short" as a second mode.
+
 ### Open questions
 
 - **Re-clicking "Add common consumables" (Decided):** re-adds any listed
