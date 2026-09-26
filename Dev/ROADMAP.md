@@ -9,6 +9,42 @@ disagree), **Open** (needs an answer before build).
 
 ---
 
+## Next session: start here (paused 2026-09-26)
+
+State: `dev` holds the tested efficiency pass (released as
+`v1.1.2-alpha2`), `Data/Consumables.lua` (13 items, not loaded yet) and
+this plan. `main` is still v1.1.1. No 1.2 feature code written yet.
+
+First up, in one focused session with the player in-game: the bank-API
+probe (task 2 below).
+
+- **Build:** dev-only `Dev/BankProbe.lua` (~80 lines) in the TOC's
+  `#@debug@` block, so it loads from a git checkout (`update.bat dev`)
+  and never ships. Command: `/clerk bankprobe <itemID>`. Push to `dev`
+  without a CHANGELOG heading, so no release is cut.
+- **Player prep:** ~20 of one stackable consumable in the character bank
+  and ~20 in the warband bank; a few free bag slots plus one partial
+  stack of the same item in bags; at a banker, out of combat.
+- **Probe prints one line per step:**
+  1. Banker interaction type(s) reported on bank open.
+  2. Bank tab IDs (`C_Bank.FetchPurchasedBankTabIDs`, character and
+     account) and the slots holding the item.
+  3. Whole stack → bags (`C_Container.UseContainerItem`).
+  4. Split 5 → empty bag slot; split 3 → existing partial stack
+     (`SplitContainerItem` + `PickupContainerItem`).
+  5. Same moves from the warband bank.
+  6. A quick burst of small moves to find the throttle ("item is
+     locked" / "object is busy") → sets the executor's pacing.
+- **Player sends back:** the chat output (screenshot or copy) and
+  anything that visibly didn't move.
+- **Outcome:** all steps work → build Feature A as planned. Moves
+  blocked → switch to the "highlight bank slots to click" fallback.
+
+Feature B (Add Common Consumables) doesn't depend on the probe and can
+ship as `v1.2.0-alpha1` in the same or a separate session.
+
+---
+
 ## v1.2.0 — Efficiency pass + Restock from Bank + Common Consumables
 
 **Decided:** there is no separate v1.1.2 stable. The next stable release
