@@ -612,143 +612,52 @@ local function BuildRow(row)
         r:GetScript("OnLeave")(r)
     end)
 
-    -- Need column: dedicated editable cell for the target count. Styled
-    -- exactly like the Price Cap cell — transparent at rest, dark fill +
-    -- brand border fade in on hover, click opens an inline editor in place.
-    row.needCell = CreateFrame("Button", nil, row)
-    row.needCell:SetSize(42, 20)
-    row.needCell:SetPoint("RIGHT", row, "RIGHT", -160, 0)  -- accounting-columns edge
-    row.needCell:RegisterForClicks("LeftButtonUp", "RightButtonUp")
-    row.needCell:SetFrameLevel(row:GetFrameLevel() + 2)
+    -- Need and Cap: click-to-edit cells. Faint well at rest; dark fill and a
+    -- mint border fade in on hover; a click swaps in an inline edit box with
+    -- a darker backing (WireEditor below owns the behaviour).
+    -- The value is parented to the cell so it draws above the cell's fill.
+    -- The edit box never calls EnableKeyboard(true): a hidden EditBox holding
+    -- keyboard capture swallows every key game-wide until /reload. It also
+    -- clears focus when hidden (row recycled mid-edit) for the same reason.
+    local CELL_FILL_IDLE   = { 0, 0, 0, 0.35 }
+    local CELL_FILL_HOVER  = { Palette.bgMedium[1], Palette.bgMedium[2], Palette.bgMedium[3], 1 }
+    local CELL_BORDER_IDLE = { Palette.brand[1], Palette.brand[2], Palette.brand[3], 0 }
+    local function MakeCell(width, right, maxLetters)
+        local cell = CreateFrame("Button", nil, row)
+        cell:SetSize(width, 20)
+        cell:SetPoint("RIGHT", row, "RIGHT", right, 0)  -- accounting-columns edge
+        cell:RegisterForClicks("LeftButtonUp", "RightButtonUp")
+        cell:SetFrameLevel(row:GetFrameLevel() + 2)
+        ApplyFill(cell, CELL_FILL_IDLE)
+        AddBlackBorder(cell, CELL_BORDER_IDLE)
+        AttachBorderAnimator(cell)
+        cell._fillIdle, cell._fillHover, cell._borderIdle = CELL_FILL_IDLE, CELL_FILL_HOVER, CELL_BORDER_IDLE
 
-    -- Faint at-rest fill (was alpha 0). Reads as a clickable well without
-    -- being loud — a scanning eye picks out "editable" cells at a glance.
-    -- Hover ramps to full opacity via NEED_FILL_HOVER.
-    local NEED_FILL_IDLE   = { 0, 0, 0, 0.35 }
-    local NEED_FILL_HOVER  = { Palette.bgMedium[1], Palette.bgMedium[2], Palette.bgMedium[3], 1 }
-    local NEED_BORDER_IDLE = { Palette.brand[1], Palette.brand[2], Palette.brand[3], 0 }
-    ApplyFill(row.needCell, NEED_FILL_IDLE)
-    AddBlackBorder(row.needCell, NEED_BORDER_IDLE)
-    AttachBorderAnimator(row.needCell)
-    row.needCell._fillIdle   = NEED_FILL_IDLE
-    row.needCell._fillHover  = NEED_FILL_HOVER
-    row.needCell._borderIdle = NEED_BORDER_IDLE
+        local text = cell:CreateFontString(nil, "OVERLAY", "StockClerkFontHighlightSmall")
+        text:SetPoint("RIGHT", cell, "RIGHT", -6, 0)
+        text:SetJustifyH("RIGHT")
 
-    -- FontString is parented to the CELL (not the row) so it inherits the
-    -- cell's higher FrameLevel and draws ABOVE the cell's fill texture,
-    -- rather than underneath it. At idle the cell fill is
-    -- alpha 0.35 (value shows through by luck), but on hover the fill
-    -- goes to full opacity and previously eclipsed the value entirely.
-    -- Right-align inside the cell (accounting style). SetPoint anchors
-    -- the FontString's RIGHT edge at the cell's RIGHT edge -6px inset
-    -- so the digit doesn't touch the cell border.
-    row.need = row.needCell:CreateFontString(nil, "OVERLAY", "StockClerkFontHighlightSmall")
-    row.need:SetPoint("RIGHT", row.needCell, "RIGHT", -6, 0)
-    row.need:SetJustifyH("RIGHT")
-
-    -- Price Cap column: dedicated cell for the max price / unit. Click to
-    -- edit. Always visible so the user can see (and change) the cap without
-    -- hunting for it inside the count string. Wider than the Need cell (72
-    -- vs 56) to comfortably hold 4-digit gold values like "9999g".
-    row.capCell = CreateFrame("Button", nil, row)
-    row.capCell:SetSize(50, 20)
-    row.capCell:SetPoint("RIGHT", row, "RIGHT", -100, 0)  -- accounting-columns edge
-    row.capCell:RegisterForClicks("LeftButtonUp", "RightButtonUp")
-    row.capCell:SetFrameLevel(row:GetFrameLevel() + 2)
-
-    -- Cap cell: no idle fill or border — the value sits directly on the
-    -- window background (same visual weight as the Have column). On hover
-    -- the border grows in as brand mint and a subtle dark fill appears,
-    -- so the affordance ("this opens something") stays discoverable. All
-    -- colours start at alpha 0 and animate up.
-    -- Same faint at-rest fill as the Need cell (see NEED_FILL_IDLE comment).
-    local CAP_FILL_IDLE = { 0, 0, 0, 0.35 }
-    local CAP_FILL_HOVER = { Palette.bgMedium[1], Palette.bgMedium[2], Palette.bgMedium[3], 1 }
-    local CAP_BORDER_IDLE = { Palette.brand[1], Palette.brand[2], Palette.brand[3], 0 }
-    ApplyFill(row.capCell, CAP_FILL_IDLE)
-    AddBlackBorder(row.capCell, CAP_BORDER_IDLE)
-    AttachBorderAnimator(row.capCell)
-    row.capCell._fillIdle   = CAP_FILL_IDLE
-    row.capCell._fillHover  = CAP_FILL_HOVER
-    row.capCell._borderIdle = CAP_BORDER_IDLE
-
-    -- See row.need above: parented to the cell so it draws over the fill.
-    -- Right-align inside cell (accounting style, matches Need cell).
-    row.cap = row.capCell:CreateFontString(nil, "OVERLAY", "StockClerkFontHighlightSmall")
-    row.cap:SetPoint("RIGHT", row.capCell, "RIGHT", -6, 0)
-    row.cap:SetJustifyH("RIGHT")
-
-    -- Inline Need editor (hidden until needCell is clicked). Anchored to
-    -- the needCell so it lands exactly where the value was. The needCell
-    -- carries the border animation; the editor just needs a slightly
-    -- darker fill so the caret has enough contrast.
-    -- SetColorTexture (not WHITE_TEX+SetVertexColor) so the editor bg
-    -- actually paints on retail Midnight -- see LogFrame's ApplyFill
-    -- comment for the atlas-alpha gotcha.
-    row.needEditBg = row:CreateTexture(nil, "BACKGROUND")
-    row.needEditBg:SetColorTexture(Palette.bgDark[1], Palette.bgDark[2], Palette.bgDark[3], 1)
-    row.needEditBg:Hide()
-
-    row.needEdit = CreateFrame("EditBox", nil, row)
-    row.needEdit:SetFontObject("StockClerkFontHighlightSmall")
-    row.needEdit:SetAutoFocus(false)
-    row.needEdit:SetNumeric(true)
-    row.needEdit:SetMaxLetters(5)
-    row.needEdit:SetJustifyH("CENTER")
-    row.needEdit:SetSize(42, 20)
-    row.needEdit:SetPoint("CENTER", row.needCell, "CENTER")
-    -- Explicitly single-line so Enter routes to OnEnterPressed rather
-    -- than being consumed as a newline. Do NOT call EnableKeyboard(true)
-    -- here: an EditBox already handles keystrokes when it has focus,
-    -- and EnableKeyboard(true) on a hidden EditBox that never releases
-    -- keyboard capture causes the addon to swallow ALL keys game-wide
-    -- (chat, hotbars, movement) until /reload.
-    row.needEdit:SetMultiLine(false)
-    row.needEditBg:SetPoint("TOPLEFT",     row.needEdit, "TOPLEFT",     -4, 2)
-    row.needEditBg:SetPoint("BOTTOMRIGHT", row.needEdit, "BOTTOMRIGHT",  4, -2)
-    row.needEdit:SetFrameLevel(row.needCell:GetFrameLevel() + 1)
-    -- KBD-FIX (H4): belt-and-suspenders. Any Hide of a focused
-    -- EditBox must ClearFocus first, or WoW keeps routing keystrokes to
-    -- the now-invisible field. Guards the case where the row itself is
-    -- Hidden (row pool release, parent Hide) while this editor was open.
-    row.needEdit:HookScript("OnHide", function(self)
-        if self:HasFocus() then self:ClearFocus() end
-    end)
-    row.needEdit:Hide()
-
-    -- Price cap inline editor (hidden until the cap cell is clicked).
-    -- Anchored TO the cap cell so it lands exactly where the value was.
-    -- The cap cell already carries the flat black border and brand-mint
-    -- focus animation — the editor just needs a slightly darker fill so
-    -- the caret has enough contrast.
-    -- See row.needEditBg above for why SetColorTexture rather than the
-    -- WHITE_TEX+SetVertexColor atlas path.
-    row.priceEditBg = row:CreateTexture(nil, "BACKGROUND")
-    row.priceEditBg:SetColorTexture(Palette.bgDark[1], Palette.bgDark[2], Palette.bgDark[3], 1)
-    row.priceEditBg:Hide()
-
-    row.priceEdit = CreateFrame("EditBox", nil, row)
-    row.priceEdit:SetFontObject("StockClerkFontHighlightSmall")
-    row.priceEdit:SetAutoFocus(false)
-    -- Whole-gold integers only. SetNumeric strips any non-digit keystroke,
-    -- which is exactly the constraint we want -- the storage is copper
-    -- internally, but callers only ever type gold.
-    row.priceEdit:SetNumeric(true)
-    -- See row.needEdit above for why single-line and why we deliberately
-    -- do NOT call EnableKeyboard(true) here.
-    row.priceEdit:SetMultiLine(false)
-    row.priceEdit:SetMaxLetters(7)  -- 9,999,999g cap on the input field
-    row.priceEdit:SetJustifyH("CENTER")
-    row.priceEdit:SetSize(50, 20)
-    row.priceEdit:SetPoint("CENTER", row.capCell, "CENTER")
-    row.priceEditBg:SetPoint("TOPLEFT",     row.priceEdit, "TOPLEFT",     -4, 2)
-    row.priceEditBg:SetPoint("BOTTOMRIGHT", row.priceEdit, "BOTTOMRIGHT",  4, -2)
-    row.priceEdit:SetFrameLevel(row.capCell:GetFrameLevel() + 1)
-    -- KBD-FIX (H4): see needEdit OnHide above.
-    row.priceEdit:HookScript("OnHide", function(self)
-        if self:HasFocus() then self:ClearFocus() end
-    end)
-    row.priceEdit:Hide()
+        local editBg = row:CreateTexture(nil, "BACKGROUND")
+        editBg:SetColorTexture(Palette.bgDark[1], Palette.bgDark[2], Palette.bgDark[3], 1)
+        editBg:Hide()
+        local edit = CreateFrame("EditBox", nil, row)
+        edit:SetFontObject("StockClerkFontHighlightSmall")
+        edit:SetAutoFocus(false)
+        edit:SetNumeric(true)         -- whole numbers only (gold for Cap)
+        edit:SetMultiLine(false)      -- Enter reaches OnEnterPressed
+        edit:SetMaxLetters(maxLetters)
+        edit:SetJustifyH("CENTER")
+        edit:SetSize(width, 20)
+        edit:SetPoint("CENTER", cell, "CENTER")
+        edit:SetFrameLevel(cell:GetFrameLevel() + 1)
+        editBg:SetPoint("TOPLEFT",     edit, "TOPLEFT",     -4, 2)
+        editBg:SetPoint("BOTTOMRIGHT", edit, "BOTTOMRIGHT",  4, -2)
+        edit:HookScript("OnHide", function(self) if self:HasFocus() then self:ClearFocus() end end)
+        edit:Hide()
+        return cell, text, edit, editBg
+    end
+    row.needCell, row.need, row.needEdit, row.needEditBg   = MakeCell(42, -160, 5)
+    row.capCell,  row.cap,  row.priceEdit, row.priceEditBg = MakeCell(50, -100, 7)  -- up to 9,999,999g
 
     -- Last Seen column: dim display of the most recently observed
     -- unit price, or an em-dash if we've never seen it. Not clickable --
