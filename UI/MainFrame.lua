@@ -74,9 +74,15 @@ end
 local function ApplyFontFace()
     local lsm  = LibStub and LibStub("LibSharedMedia-3.0", true)
     local face = lsm and lsm:Fetch("font", "Expressway", true) or FONT_FALLBACK
-    for _, fo in pairs(fonts) do
-        local _, size, flags = fo:GetFont()  -- size/flags copied from the Blizzard base
-        fo:SetFont(face, size or 12, flags or "")
+    for name, fo in pairs(fonts) do
+        -- Size/outline from the Blizzard base: a CopyFontObject copy reports height 0.
+        local base = _G[FONT_BASES[name]]
+        local _, size, flags
+        if base then _, size, flags = base:GetFont() end
+        if not size or size <= 0 then
+            size = name:find("Small") and 10 or name:find("Large") and 16 or 12
+        end
+        fo:SetFont(face, size, flags or "")
     end
 end
 
