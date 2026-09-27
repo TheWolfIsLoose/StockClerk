@@ -615,7 +615,7 @@ function Loop:Stop(reason)
         end
     elseif reason == "user_esc" or reason == "user_stop" then
         title = ("Stopped  \194\183  bought %d for %s"):format(touched, moneyText)
-        sub   = ("Loop halted with %d left%s%s"):format(stillShort, skipTxt, mailNudge)
+        sub   = ("%d still short%s%s"):format(stillShort, skipTxt, mailNudge)
     elseif reason == "AH closed" then
         title = ("AH closed  \194\183  bought %d for %s"):format(touched, moneyText)
         sub   = ("Reopen the AH to continue%s%s"):format(skipTxt, mailNudge)

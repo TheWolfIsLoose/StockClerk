@@ -267,7 +267,13 @@ function StockClerk:OnBankShow()
     end
     if mf.RefreshRestockBtn then mf:RefreshRestockBtn() end
     local n = ADDON.BankRestock:PullableCount()
-    if n > 0 then
+    if n > 0 and ADDON.DB:Settings().autoRestockBank then
+        -- Express-Restock at Bank. Short delay lets the bank frame settle,
+        -- same as the AH path. The pull reports its own result.
+        C_Timer.After(0.3, function()
+            if ADDON.bankOpen then ADDON.BankRestock:Start() end
+        end)
+    elseif n > 0 then
         mf:SetStatus(("%d short item%s can come from your bank."):format(n, n == 1 and "" or "s"), true)
     end
 end
@@ -374,12 +380,12 @@ function StockClerk:OnSlashCommand(msg)
             if ADDON.DB and ADDON.DB.char then
                 ADDON.DB.char.pendingBuys = {}
             end
-            self:Print("|cff98FF98Pending ledger cleared.|r Mail-in-flight tracking reset.")
+            self:Print("|cff98FF98Cleared.|r StockClerk no longer counts purchases waiting in the mail.")
             return
         end
         -- No arg: print current pending items.
         if not next(ledger) then
-            self:Print("|cff4ade80Nothing pending.|r Mail-in-flight ledger is empty.")
+            self:Print("|cff4ade80Nothing waiting in the mail.|r")
             return
         end
         local now = GetServerTime and GetServerTime() or time()

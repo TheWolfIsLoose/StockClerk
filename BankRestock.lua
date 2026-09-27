@@ -153,8 +153,12 @@ function BR:Stop(reason)
     local stillShort = #self:Shortfalls()
     local msg = items == 0 and "Nothing pulled from the bank."
         or ("Pulled %d item%s from the bank."):format(items, items == 1 and "" or "s")
-    if reason then msg = msg .. " |cffff8888Stopped: " .. reason .. "|r" end
-    if stillShort > 0 then
+    if reason == "not enough bag space" and items == 0 then
+        msg = "|cffff8888Not enough bag space.|r"
+    elseif reason then
+        msg = msg .. " |cffff8888Stopped: " .. reason .. ".|r"
+    end
+    if stillShort > 0 and reason ~= "not enough bag space" then  -- they're in the bank, not the AH
         msg = msg .. (" %d still short, restock at the AH."):format(stillShort)
     end
     ADDON.MainFrame:SetStatus(msg)
@@ -175,7 +179,7 @@ function BR:_Step(run)
     if not m then
         -- Nothing left to move: either done or bags are full.
         local left = #self:Shortfalls() > 0 and self:PullableCount() > 0
-        return self:Stop(left and "bags are full" or nil)
+        return self:Stop(left and "not enough bag space" or nil)
     end
 
     local before = C_Item.GetItemCount(m.itemID)

@@ -11,18 +11,19 @@ disagree), **Open** (needs an answer before build).
 
 ## Next session: start here
 
-**Paused 2026-09-26 ~14:45 ET.** Pick up at **v1.2.0-beta2 → "Next
-session: start here"** below (UI items U1-U7 in-game, then code items
-C1-C4, then cut `v1.2.0-beta2`).
+**2026-09-26 late session:** the beta2 UI pass is built on `dev` (see
+**v1.2.0-beta2 → Reconciled list**). Next: player's in-game screenshot
+round on the whole pass, then C1-C4, then cut `v1.2.0-beta2`.
 
 State: `v1.2.0-beta1` released (prerelease, from `dev`). `dev` is ahead
-of it with the first Ponytail cuts and the audit (no release). `main` is
-still v1.1.1 plus the `update.bat` fix. The bank-API probe is done
-(results under Feature A); `Dev/BankProbe.lua` stays for reference.
+of it (no release: CHANGELOG top heading is still beta1). `main` is still
+v1.1.1 plus the `update.bat` fix.
 
 Session setup: player syncs with `Dev\update.bat dev` and `/reload`;
 Claude reads `WTF\Account\SAVAGEFEARLESS\SavedVariables\StockClerk.lua`
-via the connected `_retail_` folder (after a `/reload`) for logs.
+via the connected `_retail_` folder (after a `/reload`) for logs. Local
+smoke: `lua5.1 Dev/smoke.lua .` (Lua 5.1 builds from github.com/lua/lua
+tag v5.1 when no package manager is reachable).
 
 ---
 
@@ -235,17 +236,41 @@ Your list, caps and settings carry over unchanged.
 
 ## v1.2.0-beta2 — Ponytail sweep + UI/UX consistency pass
 
-### Next session: start here (paused 2026-09-26, after the audit)
+### Reconciled list (2026-09-26, late session)
 
-Done this session (on `dev`, smoke green, no release):
-- Audit below. Safe cuts applied: pre-10.0 `SetMinResize` fallback, dead
-  `_cogBtn/_logBtn` aliases, 11 unused Locale strings, retired
-  `kbd_stuck` log kind, write-only cap `priceSource` field, v0.7
-  size-history notes. About -70 lines.
+**Built on `dev`, awaiting the in-game look:**
+- U1 rows 30 → 24px, icons 18px; row text one size smaller; no `[ ]`
+  around item names.
+- 1px quality border on icons (Baganator style): quality colour for every
+  quality (grey poor, white common...), black while the item loads.
+- U2 toolbar 48 → 30px: no labels, the placeholder names each box, hover
+  tooltips explain. **Cap box removed** (caps are set per row after
+  seeing AH prices; Seen stays as the price reference). Item ID stretches.
+- The grey hint line moved into the row grip's (≡) tooltip.
+- Add → drawn **+** icon button. Bulk import moved to the side panel.
+- Side panel (U4): auto-open hints dropped (labels say it); Express-Restock
+  explained in tooltips; tooltips on "Add common consumables" and "Bulk
+  import item IDs"; labels are clickable; same button style as the main
+  window.
+- **Express-Restock at Bank** (new setting `autoRestockBank`, default off):
+  opening the bank with something short and pullable starts the bank
+  pull. Bag space is planned per move (tops up stacks, then empty
+  slots); if nothing fits the footer says "Not enough bag space."
+  **Known unknown (Decided):** ships without the nearly-full-bags /
+  bank-closed-mid-pull test.
+- U3 footer Close button removed (× and Escape close); footer 38 → 30px.
+- U5 header 32 → 26px; the × is drawn like the other header icons.
+- U6 fonts: StockClerk's own font objects (same sizes/colours as the
+  Blizzard ones it borrowed). Face = Expressway when LibSharedMedia has
+  it (ElvUI, EllesmereUI...), else bundled Barlow Semi Condensed (SIL
+  OFL, `Media/`). Expressway can't ship: its free license forbids
+  embedding in software.
+- U6 wording: no internal terms in player-facing text (Seen tooltip,
+  restock-stopped toast, `/clerk pending`).
 
-Next: the UI items (U1-U7) with the player in-game, one at a time with a
-screenshot each; then the remaining code items (C1-C4); then cut
-`v1.2.0-beta2`.
+**Still to do for beta2:** C1-C4 below; `Dev/STYLE.md` (the rules above).
+**Parked (v1.3 log rework):** activity feed wording ("loop start (?, 2
+items)", "user_stop", "unset -> 150g").
 
 ### Audit (2026-09-26)
 
@@ -273,9 +298,7 @@ headers 20, footer 38), leaving ~8.7 rows of 30px.
   spacing scale, fewer fonts (7 GameFont variants in use today), one
   voice for tooltips/footer text (sentence case, no internal terms like
   "loop", "ledger", "stuck").
-- U7. Candidates to discuss, not decided: the Cap box in the add toolbar
-  (caps are also editable per row), and the Last Seen column (only
-  meaningful after AH visits).
+- U7. **Decided:** Cap box leaves the toolbar; Last Seen column stays.
 
 **Code** (Ponytail; keep behaviour identical, smoke must stay green):
 - C1. **Comment diet in `UI/MainFrame.lua`** (~-500 to -700 lines): version

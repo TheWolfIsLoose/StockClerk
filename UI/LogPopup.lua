@@ -160,11 +160,11 @@ local function Build()
     end
 
     -- Title
-    local title = f:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+    local title = f:CreateFontString(nil, "OVERLAY", "StockClerkFontNormal")
     title:SetPoint("TOPLEFT", 12, -10)
     title:SetText("|cff98FF98Stock Clerk - Activity Log|r")
 
-    local hint = f:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
+    local hint = f:CreateFontString(nil, "OVERLAY", "StockClerkFontDisableSmall")
     hint:SetPoint("TOPLEFT", 12, -28)
     hint:SetText("|cff6a6a6aText below is pre-selected. Press Ctrl+C to copy. Esc to close.|r")
 
@@ -172,7 +172,7 @@ local function Build()
     local closeX = CreateFrame("Button", nil, f)
     closeX:SetSize(28, 22)
     closeX:SetPoint("TOPRIGHT", -6, -6)
-    local xText = closeX:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
+    local xText = closeX:CreateFontString(nil, "OVERLAY", "StockClerkFontNormalLarge")
     xText:SetPoint("CENTER")
     xText:SetText("X")
     xText:SetTextColor(0.85, 0.85, 0.85, 1)
@@ -207,14 +207,16 @@ local function Build()
     f._scroll = scroll
 
     -- Bottom-right buttons: Clear, Close.
-    local closeBtn = CreateFrame("Button", nil, f, "UIPanelButtonTemplate")
+    local closeBtn = CreateFrame("Button", nil, f)
     closeBtn:SetSize(80, 22)
+    ADDON.MainFrame.StyleButton(closeBtn)
     closeBtn:SetPoint("BOTTOMRIGHT", -8, 8)
     closeBtn:SetText("Close")
     closeBtn:SetScript("OnClick", function() f:Hide() end)
 
-    local clearBtn = CreateFrame("Button", nil, f, "UIPanelButtonTemplate")
+    local clearBtn = CreateFrame("Button", nil, f)
     clearBtn:SetSize(80, 22)
+    ADDON.MainFrame.StyleButton(clearBtn)
     clearBtn:SetPoint("RIGHT", closeBtn, "LEFT", -6, 0)
     clearBtn:SetText("Clear Log")
     clearBtn:SetScript("OnClick", function()

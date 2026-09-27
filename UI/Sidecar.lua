@@ -8,8 +8,8 @@
 
     Layout:
       * ~260w fixed, height matches MainFrame
-      * Top section: Settings (auto-purchase toggle, default cap, budget,
-        auto-open at AH).
+      * Top section: Settings (auto-open and Express-Restock toggles) and
+        the list builders (common consumables, bulk import).
       * Hairline 1px divider
       * Bottom section: Recent Activity feed (newest first): buys, cap
         changes and restock start/stop. `/clerk log` shows everything.
@@ -60,103 +60,108 @@ local function Build(anchor)
     end
 
     -- ---- Settings section --------------------------------------------
-    local settingsTitle = f:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+    local settingsTitle = f:CreateFontString(nil, "OVERLAY", "StockClerkFontNormal")
     settingsTitle:SetPoint("TOPLEFT", 12, -10)
     settingsTitle:SetText("|cff98FF98Settings|r")
 
-    -- The auto-purchase checkbox, default
-    -- cap edit, and daily budget edit are gone. Restock is user-driven
-    -- now (WoW's commodity API requires a hardware event per purchase,
-    -- so silent auto was always impossible). No budget = no readout.
+    -- Checkbox rows: label says what it does; a tooltip only where it
+    -- needs more than the label. The label is part of the click area.
+    local function Check(y, label, key, tipTitle, tipBody)
+        local c = CreateFrame("CheckButton", nil, f, "UICheckButtonTemplate")
+        c:SetPoint("TOPLEFT", 8, y)
+        c:SetSize(22, 22)
+        c:SetHitRectInsets(0, -(WIDTH - 40), 0, 0)
+        local text = c:CreateFontString(nil, "OVERLAY", "StockClerkFontHighlight")
+        text:SetPoint("LEFT", c, "RIGHT", 2, 0)
+        text:SetText(label)
+        c:SetScript("OnClick", function(self)
+            ADDON.DB:Settings()[key] = self:GetChecked() and true or false
+        end)
+        if tipTitle then
+            c:SetScript("OnEnter", function(self)
+                GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+                GameTooltip:SetText(tipTitle, 1, 1, 1)
+                GameTooltip:AddLine(tipBody, 0.8, 0.8, 0.8, true)
+                GameTooltip:Show()
+            end)
+            c:SetScript("OnLeave", GameTooltip_Hide)
+        end
+        c._key = key
+        return c
+    end
+    -- The autoRestock key predates the "Express-Restock" label and stays
+    -- for saved-settings compatibility.
+    f._checks = {
+        Check(-30, "Auto-open at Auction House", "autoOpenAtAH"),
+        Check(-52, "Auto-open at Bank",          "autoOpenAtBank"),
+        Check(-74, "Express-Restock at Auction House", "autoRestock",
+            "Express-Restock at Auction House",
+            "When you open the AH and something is short, start buying right away. You still confirm each purchase."),
+        Check(-96, "Express-Restock at Bank", "autoRestockBank",
+            "Express-Restock at Bank",
+            "When you open your bank and something is short, pull it from your bank and warband bank right away."),
+    }
 
-    -- Auto-open at AH (default ON).
-    local ahCheck = CreateFrame("CheckButton", "StockClerkSidecarAHCheck", f, "UICheckButtonTemplate")
-    ahCheck:SetPoint("TOPLEFT", 8, -32)
-    ahCheck:SetSize(22, 22)
-    _G[ahCheck:GetName() .. "Text"]:SetText("Auto-open at Auction House")
-    _G[ahCheck:GetName() .. "Text"]:SetTextColor(0.9, 0.9, 0.9, 1)
-    f._ahCheck = ahCheck
-
-    local ahHint = f:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
-    ahHint:SetPoint("TOPLEFT", 30, -54)
-    ahHint:SetPoint("RIGHT", -8, 0)
-    ahHint:SetJustifyH("LEFT")
-    ahHint:SetWordWrap(true)
-    ahHint:SetText("Pop the shopping list open when you visit the AH.")
-
-    -- Auto-open at Bank (default ON).
-    local bankCheck = CreateFrame("CheckButton", "StockClerkSidecarBankCheck", f, "UICheckButtonTemplate")
-    bankCheck:SetPoint("TOPLEFT", 8, -78)
-    bankCheck:SetSize(22, 22)
-    _G[bankCheck:GetName() .. "Text"]:SetText("Auto-open at Bank")
-    _G[bankCheck:GetName() .. "Text"]:SetTextColor(0.9, 0.9, 0.9, 1)
-    f._bankCheck = bankCheck
-
-    local bankHint = f:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
-    bankHint:SetPoint("TOPLEFT", 30, -100)
-    bankHint:SetPoint("RIGHT", -8, 0)
-    bankHint:SetJustifyH("LEFT")
-    bankHint:SetWordWrap(true)
-    bankHint:SetText("Open the list at a banker too.")
-
-    -- Express-Restock on AH open (default OFF). v1.1 rename; internal
-    -- identifier stays StockClerkSidecarAutoRestockCheck / DB field
-    -- autoRestock for compatibility.
-    local arCheck = CreateFrame("CheckButton", "StockClerkSidecarAutoRestockCheck", f, "UICheckButtonTemplate")
-    arCheck:SetPoint("TOPLEFT", 8, -124)
-    arCheck:SetSize(22, 22)
-    _G[arCheck:GetName() .. "Text"]:SetText("Express-Restock on AH open")
-    _G[arCheck:GetName() .. "Text"]:SetTextColor(0.9, 0.9, 0.9, 1)
-    f._autoRestockCheck = arCheck
-
-    local arHint = f:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
-    arHint:SetPoint("TOPLEFT", 30, -146)
-    arHint:SetPoint("RIGHT", -8, 0)
-    arHint:SetJustifyH("LEFT")
-    arHint:SetWordWrap(true)
-    arHint:SetText("Also start the restock loop when the AH opens (if anything is short).")
-
-    -- One click: add this expansion's staples (Data/Consumables.lua).
-    local ccBtn = CreateFrame("Button", nil, f, "UIPanelButtonTemplate")
-    ccBtn:SetPoint("TOPLEFT", 12, -180)
-    ccBtn:SetPoint("RIGHT", -12, 0)
-    ccBtn:SetHeight(22)
-    ccBtn:SetText("Add common consumables")
-
-    local bulkBtn = CreateFrame("Button", nil, f, "UIPanelButtonTemplate")
-    bulkBtn:SetPoint("TOPLEFT", 12, -206)
-    bulkBtn:SetPoint("RIGHT", -12, 0)
-    bulkBtn:SetHeight(22)
-    bulkBtn:SetText("Bulk import item IDs")
-    bulkBtn:SetScript("OnClick", function() ADDON.BulkImport:Open() end)
+    -- List builders. Same button recipe as the main window.
+    local function Button(y, label, tipTitle, tipBody, onClick)
+        local b = CreateFrame("Button", nil, f)
+        b:SetPoint("TOPLEFT", 12, y)
+        b:SetPoint("RIGHT", -12, 0)
+        b:SetHeight(22)
+        ADDON.MainFrame.StyleButton(b)
+        b:SetText(label)
+        b:SetNormalFontObject("StockClerkFontHighlight")
+        b:HookScript("OnEnter", function(self)  -- Hook, not Set: keeps the hover wash
+            GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+            GameTooltip:SetText(tipTitle, 1, 1, 1)
+            GameTooltip:AddLine(tipBody, 0.8, 0.8, 0.8, true)
+            GameTooltip:Show()
+        end)
+        b:HookScript("OnLeave", GameTooltip_Hide)
+        b:SetScript("OnClick", onClick)
+        return b
+    end
+    Button(-126, "Add common consumables", "Add common consumables",
+        "Adds this expansion's go-to potions, flasks and weapon oils with a target of 1. Items already on your list are left as they are.",
+        function()
+            local n  = ADDON.DB:AddCommonConsumables()
+            local mf = ADDON.MainFrame
+            if mf.frame and mf.frame:IsShown() then mf:Refresh() end
+            mf:SetStatus(n > 0
+                and ("Added %d items. Remove any you don't need with the red X on each row."):format(n)
+                or  "All the common consumables are already on your list.")
+        end)
+    Button(-152, "Bulk import item IDs", "Bulk import item IDs",
+        "Paste a list of item IDs, one per line, to add them all at once.",
+        function() ADDON.BulkImport:Open() end)
 
     -- ---- Divider -----------------------------------------------------
     local divider = f:CreateTexture(nil, "OVERLAY", nil, 6)
     divider:SetColorTexture(0, 0, 0, 1)
     divider:SetHeight(1)
-    divider:SetPoint("TOPLEFT", 8, -240)
-    divider:SetPoint("TOPRIGHT", -8, -240)
+    divider:SetPoint("TOPLEFT", 8, -184)
+    divider:SetPoint("TOPRIGHT", -8, -184)
 
     -- ---- Activity feed section --------------------------------------
-    local feedTitle = f:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-    feedTitle:SetPoint("TOPLEFT", 12, -248)
+    local feedTitle = f:CreateFontString(nil, "OVERLAY", "StockClerkFontNormal")
+    feedTitle:SetPoint("TOPLEFT", 12, -192)
     feedTitle:SetText("|cff98FF98Recent Activity|r")
 
     -- "log" hint anchored to feedTitle's right so the user can find the
     -- full log dump.
-    local feedHint = f:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
-    feedHint:SetPoint("TOPRIGHT", -12, -252)
+    local feedHint = f:CreateFontString(nil, "OVERLAY", "StockClerkFontDisableSmall")
+    feedHint:SetPoint("TOPRIGHT", -12, -196)
     feedHint:SetText("|cff6a6a6a/clerk log|r")
 
     -- Scrollframe hosts the feed rows. Simple, no fancy pooling -- the
     -- panel is bounded and refreshes on Emit, so ~30 rows is the ceiling.
     local scrollBg = f:CreateTexture(nil, "BACKGROUND")
     scrollBg:SetColorTexture(Palette.bgDark[1], Palette.bgDark[2], Palette.bgDark[3], 0.6)
-    scrollBg:SetPoint("TOPLEFT", 8, -270)
+    scrollBg:SetPoint("TOPLEFT", 8, -214)
     scrollBg:SetPoint("BOTTOMRIGHT", -8, 8)
 
     local scrollFrame = CreateFrame("ScrollFrame", "StockClerkSidecarScroll", f, "UIPanelScrollFrameTemplate")
-    scrollFrame:SetPoint("TOPLEFT", 10, -272)
+    scrollFrame:SetPoint("TOPLEFT", 10, -216)
     scrollFrame:SetPoint("BOTTOMRIGHT", -28, 10)  -- -28 leaves room for the scrollbar
 
     local feedContent = CreateFrame("Frame", nil, scrollFrame)
@@ -164,25 +169,6 @@ local function Build(anchor)
     scrollFrame:SetScrollChild(feedContent)
     f._feedContent = feedContent
     f._feedRows = {}
-
-    -- ---- Wire behavior ----------------------------------------------
-    ahCheck:SetScript("OnClick", function(self)
-        ADDON.DB:Settings().autoOpenAtAH = self:GetChecked() and true or false
-    end)
-    bankCheck:SetScript("OnClick", function(self)
-        ADDON.DB:Settings().autoOpenAtBank = self:GetChecked() and true or false
-    end)
-    arCheck:SetScript("OnClick", function(self)
-        ADDON.DB:Settings().autoRestock = self:GetChecked() and true or false
-    end)
-    ccBtn:SetScript("OnClick", function()
-        local n  = ADDON.DB:AddCommonConsumables()
-        local mf = ADDON.MainFrame
-        if mf.frame and mf.frame:IsShown() then mf:Refresh() end
-        mf:SetStatus(n > 0
-            and ("Added %d items. Remove any you don't need with the red X on each row."):format(n)
-            or  "All the common consumables are already on your list.")
-    end)
 
     Sidecar.frame = f
     return f
@@ -247,11 +233,7 @@ function Sidecar:Refresh()
     local s = ADDON.DB:Settings()
 
     -- Settings widgets
-    f._ahCheck:SetChecked(s.autoOpenAtAH and true or false)
-    f._bankCheck:SetChecked(s.autoOpenAtBank and true or false)
-    if f._autoRestockCheck then
-        f._autoRestockCheck:SetChecked(s.autoRestock and true or false)
-    end
+    for _, c in ipairs(f._checks) do c:SetChecked(s[c._key] and true or false) end
 
     -- Activity feed. Two-tier model per v0.7 spec:
     -- * BASIC (this sidecar): curated action-focused entries only.
@@ -296,7 +278,7 @@ function Sidecar:Refresh()
         local e = entries[i]
         local row = f._feedRows[i]
         if not row then
-            row = content:CreateFontString(nil, "ARTWORK", "GameFontHighlightSmall")
+            row = content:CreateFontString(nil, "ARTWORK", "StockClerkFontHighlightSmall")
             row:SetPoint("TOPLEFT", 4, -y)
             row:SetPoint("RIGHT", -4, 0)
             row:SetJustifyH("LEFT")

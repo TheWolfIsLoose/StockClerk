@@ -187,7 +187,7 @@ local function BuildFrame()
     StyleFrame(f)
 
     -- ---- Title ---------------------------------------------------------
-    local title = f:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
+    local title = f:CreateFontString(nil, "OVERLAY", "StockClerkFontNormalLarge")
     title:SetPoint("TOPLEFT", PAD, -PAD)
     title:SetText("Bulk Import")
     -- Mint accent on the title word to match the main-window title band
@@ -199,7 +199,7 @@ local function BuildFrame()
     closeX:SetScript("OnClick", function() f:Hide() end)
 
     -- ---- Instructions --------------------------------------------------
-    local instr = f:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    local instr = f:CreateFontString(nil, "OVERLAY", "StockClerkFontHighlightSmall")
     instr:SetPoint("TOPLEFT", PAD, -PAD - 24)
     instr:SetPoint("TOPRIGHT", -PAD, -PAD - 24)
     instr:SetJustifyH("LEFT")
@@ -236,7 +236,7 @@ local function BuildFrame()
     -- and unfocused. Not a real placeholder (WoW's EditBox has no
     -- built-in placeholder support for multi-line), so we render our
     -- own FontString and toggle it on OnTextChanged / focus events.
-    local ghost = edit:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
+    local ghost = edit:CreateFontString(nil, "OVERLAY", "StockClerkFontDisableSmall")
     ghost:SetPoint("TOPLEFT", 6, -4)
     ghost:SetJustifyH("LEFT")
     ghost:SetJustifyV("TOP")
@@ -260,7 +260,7 @@ local function BuildFrame()
     RefreshGhost()
 
     -- ---- Status line (below edit) -------------------------------------
-    local status = f:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    local status = f:CreateFontString(nil, "OVERLAY", "StockClerkFontHighlightSmall")
     status:SetPoint("TOPLEFT", PAD, -76 - EDIT_H - 8)
     status:SetPoint("TOPRIGHT", -PAD, -76 - EDIT_H - 8)
     status:SetJustifyH("LEFT")
@@ -282,7 +282,7 @@ local function BuildFrame()
     addBtn:SetSize(96, BTN_H)
     addBtn:SetPoint("BOTTOMLEFT", PAD, PAD)
     StyleBtn(addBtn)
-    local addTxt = addBtn:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+    local addTxt = addBtn:CreateFontString(nil, "OVERLAY", "StockClerkFontNormal")
     addTxt:SetPoint("CENTER")
     addTxt:SetText("Add All")
     addTxt:SetTextColor(1, 1, 1, 1)
@@ -291,7 +291,7 @@ local function BuildFrame()
     cancelBtn:SetSize(72, BTN_H)
     cancelBtn:SetPoint("BOTTOMRIGHT", -PAD, PAD)
     StyleBtn(cancelBtn)
-    local cancelTxt = cancelBtn:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+    local cancelTxt = cancelBtn:CreateFontString(nil, "OVERLAY", "StockClerkFontNormal")
     cancelTxt:SetPoint("CENTER")
     cancelTxt:SetText("Close")
     cancelTxt:SetTextColor(0.9, 0.9, 0.9, 1)

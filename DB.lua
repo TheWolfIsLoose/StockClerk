@@ -21,6 +21,8 @@
         autoRestock      = bool,       -- default FALSE. If TRUE, opening the
                                        -- AH also fires the restock loop when
                                        -- there's a shortfall to work through.
+        autoRestockBank  = bool,       -- default FALSE. Same at a banker:
+                                       -- pull short items from the bank.
         lastPriceTTL     = number,     -- QA-11 seconds before "Last Seen" dims
       }
       global.log      = array of entries (see Log.lua)
@@ -86,6 +88,7 @@ DB.defaults = {
                                           -- default because it commits the
                                           -- user to a purchase flow they
                                           -- didn't explicitly ask for.
+            autoRestockBank  = false,     -- opt-in, same idea at a banker (v1.2).
             lastPriceTTL     = 24 * 3600, -- QA-11; 24h before Last Seen dims
         },
     },

@@ -9,7 +9,6 @@ _G[addonName .. "_L"] = L
 
 -- UI strings
 L.ADDON_NAME             = "Stock Clerk"
-L.BTN_CLOSE              = "Close"
 L.EMPTY_LIST             = "No items yet.\n\nAdd items by:\n |cffffffff1.|r Typing an item ID into the Item ID box and pressing Enter\n |cffffffff2.|r Clicking the |cffffffff+|r button to paste multiple item IDs at once\n |cffffffff3.|r Dragging an item from your bags into this window"
 L.ITEM_NOT_FOUND         = "Item not found or not yet cached. Try opening its tooltip in-game first, then re-add."
 
@@ -29,4 +28,4 @@ L.HELP_DUMP              = "  /clerk dump |cff888888— print current list to ch
 L.HELP_LOG               = "  /clerk log [clear] |cff888888— open or clear the activity log|r"
 L.HELP_DEBUG             = "  /clerk debug |cff888888— toggle diagnostic chat output|r"
 L.HELP_ADD               = "  /clerk <item ID or link> |cff888888— add an item with target 1|r"
-L.HELP_PENDING           = "  /clerk pending [clear] |cff888888— show items awaiting mail delivery; 'clear' resets the mail-in-flight ledger|r"
+L.HELP_PENDING           = "  /clerk pending [clear] |cff888888— show items awaiting mail delivery; 'clear' stops counting them|r"

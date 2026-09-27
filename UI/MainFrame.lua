@@ -54,6 +54,32 @@ ADDON.MainFrame = MF
 -- ---------------------------------------------------------------------------
 local ROW_HEIGHT = 24
 
+-- Fonts: StockClerk's own font objects, one per Blizzard font it used to
+-- borrow (same size and colour), so every UI file shares one face. The face
+-- is Expressway when LibSharedMedia has it (ElvUI, EllesmereUI...), else the
+-- bundled Barlow Semi Condensed (SIL OFL, Media/). Expressway itself can't
+-- ship: its free license forbids embedding in software.
+local FONT_FALLBACK = "Interface\\AddOns\\StockClerk\\Media\\BarlowSemiCondensed-Medium.ttf"
+local FONT_BASES = {
+    Normal = "StockClerkFontNormal", NormalSmall = "StockClerkFontNormalSmall", NormalLarge = "StockClerkFontNormalLarge",
+    Highlight = "StockClerkFontHighlight", HighlightSmall = "StockClerkFontHighlightSmall",
+    Disable = "StockClerkFontDisable", DisableSmall = "StockClerkFontDisableSmall",
+}
+local fonts = {}
+for name, base in pairs(FONT_BASES) do
+    fonts[name] = CreateFont("StockClerkFont" .. name)
+    fonts[name]:CopyFontObject(_G[base])
+end
+-- Called from Build (first open, after every addon has registered media).
+local function ApplyFontFace()
+    local lsm  = LibStub and LibStub("LibSharedMedia-3.0", true)
+    local face = lsm and lsm:Fetch("font", "Expressway", true) or FONT_FALLBACK
+    for _, fo in pairs(fonts) do
+        local _, size, flags = fo:GetFont()  -- size/flags copied from the Blizzard base
+        fo:SetFont(face, size or 12, flags or "")
+    end
+end
+
 -- ---------------------------------------------------------------------------
 -- Palette — ported from atrocityEssentials' ThemeDefaults (near-black,
 -- flat, ElvUI-family). One rule: the WINDOW paints one fill; nested regions
@@ -283,15 +309,17 @@ local function StyleButton(btn, opts)
         ApplyBand(self, Palette.btnRest)
     end)
     if btn.SetNormalFontObject then
-        btn:SetNormalFontObject("GameFontNormal")
-        btn:SetHighlightFontObject("GameFontHighlight")
-        btn:SetDisabledFontObject("GameFontDisable")
+        btn:SetNormalFontObject("StockClerkFontNormal")
+        btn:SetHighlightFontObject("StockClerkFontHighlight")
+        btn:SetDisabledFontObject("StockClerkFontDisable")
     end
 end
 
 -- StyleEditBox: for a plain WoW EditBox that already lives inside a
 -- container Frame (the container gets the border + fill; the EditBox stays
 -- transparent). Wires up brand-mint border animation on hover/focus.
+MF.StyleButton = StyleButton
+
 local function StyleEditBoxContainer(container, editBox)
     -- Deeper well fill (Palette.fieldFill = near-black @ 55%) so the box
     -- reads as an interactive sunken input even when it sits on top of a
@@ -466,7 +494,7 @@ local function BuildRow(row)
     -- stops at -220 to leave room for four right-aligned columns (Have,
     -- Need, Cap, Last Seen) plus trash. Short/ok state is signaled by
     -- coloring row.have (see below).
-    row.name = row:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+    row.name = row:CreateFontString(nil, "OVERLAY", "StockClerkFontNormalSmall")
     row.name:SetPoint("LEFT", row.icon, "RIGHT", 8, 0)
     row.name:SetJustifyH("LEFT")
     row.name:SetWordWrap(false)
@@ -512,7 +540,7 @@ local function BuildRow(row)
     row.haveCell:SetPoint("RIGHT", row, "RIGHT", -212, 0)
     row.haveCell:SetFrameLevel(row:GetFrameLevel() + 2)
 
-    row.have = row.haveCell:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    row.have = row.haveCell:CreateFontString(nil, "OVERLAY", "StockClerkFontHighlightSmall")
     row.have:SetPoint("RIGHT", row.haveCell, "RIGHT", -6, 0)
     row.have:SetJustifyH("RIGHT")
 
@@ -584,7 +612,7 @@ local function BuildRow(row)
     -- Right-align inside the cell (accounting style). SetPoint anchors
     -- the FontString's RIGHT edge at the cell's RIGHT edge -6px inset
     -- so the digit doesn't touch the cell border.
-    row.need = row.needCell:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    row.need = row.needCell:CreateFontString(nil, "OVERLAY", "StockClerkFontHighlightSmall")
     row.need:SetPoint("RIGHT", row.needCell, "RIGHT", -6, 0)
     row.need:SetJustifyH("RIGHT")
 
@@ -616,7 +644,7 @@ local function BuildRow(row)
 
     -- See row.need above: parented to the cell so it draws over the fill.
     -- Right-align inside cell (accounting style, matches Need cell).
-    row.cap = row.capCell:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    row.cap = row.capCell:CreateFontString(nil, "OVERLAY", "StockClerkFontHighlightSmall")
     row.cap:SetPoint("RIGHT", row.capCell, "RIGHT", -6, 0)
     row.cap:SetJustifyH("RIGHT")
 
@@ -632,7 +660,7 @@ local function BuildRow(row)
     row.needEditBg:Hide()
 
     row.needEdit = CreateFrame("EditBox", nil, row)
-    row.needEdit:SetFontObject("GameFontHighlightSmall")
+    row.needEdit:SetFontObject("StockClerkFontHighlightSmall")
     row.needEdit:SetAutoFocus(false)
     row.needEdit:SetNumeric(true)
     row.needEdit:SetMaxLetters(5)
@@ -670,7 +698,7 @@ local function BuildRow(row)
     row.priceEditBg:Hide()
 
     row.priceEdit = CreateFrame("EditBox", nil, row)
-    row.priceEdit:SetFontObject("GameFontHighlightSmall")
+    row.priceEdit:SetFontObject("StockClerkFontHighlightSmall")
     row.priceEdit:SetAutoFocus(false)
     -- Whole-gold integers only. SetNumeric strips any non-digit keystroke,
     -- which is exactly the constraint we want -- the storage is copper
@@ -695,8 +723,8 @@ local function BuildRow(row)
     -- Last Seen column: dim display of the most recently observed
     -- unit price, or an em-dash if we've never seen it. Not clickable --
     -- the value updates automatically on every AH search (row-click or
-    -- restock loop). Tooltip on hover: "1250g -- 2h ago via loop".
-    row.lastSeen = row:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    -- restock run). Tooltip on hover: "1250g / 2h ago - restock".
+    row.lastSeen = row:CreateFontString(nil, "OVERLAY", "StockClerkFontHighlightSmall")
     row.lastSeen:SetPoint("RIGHT", row, "RIGHT", -30, 0)
     row.lastSeen:SetWidth(60)  -- widened for #g#s (was 38)
     row.lastSeen:SetJustifyH("RIGHT")
@@ -723,7 +751,8 @@ local function BuildRow(row)
         GameTooltip:SetOwner(self, "ANCHOR_TOP")
         GameTooltip:SetText("Last seen at AH")
         GameTooltip:AddLine(MoneyText(lp.copper) .. " per unit", 1, 1, 1)
-        GameTooltip:AddLine(agoText .. " \194\183 via " .. (lp.source or "?"), 0.7, 0.7, 0.7)
+        local how = ({ click = " \194\183 you searched", loop = " \194\183 restock" })[lp.source] or ""
+        GameTooltip:AddLine(agoText .. how, 0.7, 0.7, 0.7)
         local staleCutoff = (ADDON.DB:Settings() and ADDON.DB:Settings().lastPriceTTL) or 86400
         if ago > staleCutoff then
             GameTooltip:AddLine("Price is stale -- re-search to refresh", 0.9, 0.6, 0.2)
@@ -1214,7 +1243,7 @@ local function MakeEditBox(parent, placeholder, width, isNumeric, maxLetters, ti
     local eb = CreateFrame("EditBox", nil, container)
     eb:SetPoint("TOPLEFT", 6, -3)
     eb:SetPoint("BOTTOMRIGHT", -6, 3)
-    eb:SetFontObject("GameFontHighlight")
+    eb:SetFontObject("StockClerkFontHighlight")
     eb:SetTextColor(1, 1, 1, 1)
     eb:SetAutoFocus(false)
     if isNumeric then eb:SetNumeric(true) end
@@ -1224,7 +1253,7 @@ local function MakeEditBox(parent, placeholder, width, isNumeric, maxLetters, ti
     -- softer font object). Sits on the same layer as the EditBox text; the
     -- three script handlers below keep it in sync with focus + content.
     if placeholder then
-        local ph = container:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
+        local ph = container:CreateFontString(nil, "OVERLAY", "StockClerkFontDisableSmall")
         ph:SetPoint("LEFT", eb, "LEFT", 0, 0)
         ph:SetPoint("RIGHT", eb, "RIGHT", 0, 0)
         ph:SetJustifyH("LEFT")
@@ -1248,7 +1277,7 @@ local function MakeEditBox(parent, placeholder, width, isNumeric, maxLetters, ti
     StyleEditBoxContainer(container, eb)
     -- KBD-FIX (H4): every EditBox in the addon ClearsFocus on Hide
     -- so a hidden focused field never captures game-wide keys. Applies to
-    -- the toolbar's addBox/countBox/priceBox equally.
+    -- the toolbar's addBox/countBox equally.
     eb:HookScript("OnHide", function(self)
         if self:HasFocus() then self:ClearFocus() end
     end)
@@ -1277,6 +1306,7 @@ local function MakeEditBox(parent, placeholder, width, isNumeric, maxLetters, ti
 end
 
 function MF:Build()
+    ApplyFontFace()
     if self.frame then return self.frame end
 
     -- ---- Root frame (no template; atrocity-flat window) ----------------
@@ -1449,12 +1479,12 @@ function MF:Build()
     end
 
     -- ---- Header (title bar) --------------------------------------------
-    -- Height 32, no fill of its own (window paints one bg), 1px black
+    -- Height 26, no fill of its own (window paints one bg), 1px black
     -- bottom border to separate it from the toolbar. Title has an accented
     -- word ("Stock") in brand mint and a neutral second word ("Clerk") —
     -- verbatim structure from atrocity's AccentedTitle recipe.
     local header = CreateFrame("Frame", nil, f)
-    header:SetHeight(32)
+    header:SetHeight(26)
     header:SetPoint("TOPLEFT", 0, 0)
     header:SetPoint("TOPRIGHT", 0, 0)
     header:EnableMouse(true)
@@ -1479,7 +1509,7 @@ function MF:Build()
     headerSep:SetPoint("BOTTOMRIGHT", 0, 0)
     PixelSnap(headerSep)
 
-    local title = header:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
+    local title = header:CreateFontString(nil, "OVERLAY", "StockClerkFontNormalLarge")
     title:SetPoint("LEFT", header, "LEFT", 12, 0)
     title:SetText("|cff98FF98Stock|r|cffFFFFFFClerk|r")
     title:SetShadowOffset(0, 0)
@@ -1521,29 +1551,34 @@ function MF:Build()
         local isPrerelease = rawVersion:match("%-alpha") or rawVersion:match("%-beta")
         versionColor = isPrerelease and "|cffFFAA00" or "|cff888888"
     end
-    local versionLabel = header:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+    local versionLabel = header:CreateFontString(nil, "OVERLAY", "StockClerkFontNormalSmall")
     versionLabel:SetPoint("LEFT", title, "RIGHT", 6, -1)  -- -1 to baseline-align vs the Large title
     versionLabel:SetText(versionColor .. versionText .. "|r")
     versionLabel:SetShadowOffset(0, 0)
 
-    -- Close X button in the header (atrocity's aesClose recipe, WoW-adapted).
-    -- Uses a font-string "×" since we don't have the atrocity texture; the
-    -- shape is functionally the same and it snaps to pixels cleanly.
+    -- Close X: two drawn bars rotated 45 degrees, same recipe as the
+    -- hamburger and funnel so all header icons match and tint on hover.
     local closeX = CreateFrame("Button", nil, header)
-    closeX:SetSize(36, 28)
+    closeX:SetSize(26, 24)
     closeX:SetPoint("RIGHT", header, "RIGHT", -4, 0)
-    local closeXText = closeX:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
-    closeXText:SetPoint("CENTER")
-    closeXText:SetText("×")
-    closeXText:SetTextColor(0.85, 0.85, 0.85, 1)
+    local xBars = {}
+    for i, angle in ipairs({ math.pi / 4, -math.pi / 4 }) do
+        local bar = closeX:CreateTexture(nil, "OVERLAY")
+        bar:SetColorTexture(0.85, 0.85, 0.85, 1)
+        bar:SetSize(12, 2)
+        bar:SetPoint("CENTER")
+        bar:SetRotation(angle)
+        xBars[i] = bar
+    end
+    local function tintX(c) for _, bar in ipairs(xBars) do bar:SetColorTexture(c[1], c[2], c[3], 1) end end
     closeX:SetScript("OnEnter", function(self)
-        closeXText:SetTextColor(Palette.brand[1], Palette.brand[2], Palette.brand[3], 1)
+        tintX(Palette.brand)
         GameTooltip:SetOwner(self, "ANCHOR_BOTTOM")
         GameTooltip:SetText("Close")
         GameTooltip:Show()
     end)
     closeX:SetScript("OnLeave", function()
-        closeXText:SetTextColor(0.85, 0.85, 0.85, 1)
+        tintX({ 0.85, 0.85, 0.85 })
         GameTooltip:Hide()
     end)
     closeX:SetScript("OnClick", function() MF:Hide() end)
@@ -1601,46 +1636,25 @@ function MF:Build()
     toolbarSep:SetPoint("BOTTOMRIGHT", 0, 0)
     PixelSnap(toolbarSep)
 
-    -- Compact single-word labels for the numeric fields so labels don't
-    -- run into the neighbouring column when the editbox itself is narrow.
-    -- Wider containers (100 / 110) give the labels comfortable slack too.
-    -- The 6th argument is a PLACEHOLDER (ghost text), not an initial value.
-    -- Boxes start empty; the hints disappear the moment the user focuses.
-    -- countBox empty falls back to 1 (was 20 pre-v1.1) so quick-add
-    -- is zero-friction — type an ID, hit Enter, get 1. Users edit the
-    -- target inline afterward if they want more. priceBox empty means
-    -- "no cap" — unchanged.
-    -- scope: itemID-only. Item name resolution is deferred to a
-    -- future release (see Dev/NOTES QA-2 backlog) because Blizzard's API
-    -- returns non-deterministic matches when a name maps to multiple
-    -- itemIDs (rank 1/2/3 craft variants, event duplicates), and there's
-    -- no addon-facing enumerate-by-name endpoint to disambiguate.
-    -- Numeric-only input avoids the ambiguity entirely.
-    -- Compact widths for the 420px main-frame layout. Item ID box
-    -- shrunk 240 -> 130 (item IDs are 5-7 digits; 130 comfortably fits
-    -- 8-digit input and the placeholder "e.g. 212283"). Target 100 -> 60,
-    -- Price Cap 120 -> 80. "Price Cap / Unit" label shortened to "Cap"
-    -- (the /unit context is documented in the tooltip and the CHANGELOG).
+    -- Item ID + Target. Item ID only (names are ambiguous across ranks);
+    -- blank Target = 1. Caps are set per row after seeing AH prices.
+    -- Item ID stretches to fill whatever the window width leaves.
     local addEB   = MakeEditBox(toolbar, "Item ID", 130, true, 8, "Item ID",
         L.ADDBOX_TOOLTIP or "Type an item ID, or drag an item from your bags onto this window.")
     local countEB = MakeEditBox(toolbar, "Target",   60, true, 5, "Target",
         "How many to keep in your bags. Blank = 1.")
-    local priceEB = MakeEditBox(toolbar, "Cap",      80, true, 7, "Cap (optional)",
-        "Most you'll pay per unit, in gold. Leave blank for no cap.")
     local addBox   = addEB.editBox
     local countBox = countEB.editBox
-    local priceBox = priceEB.editBox
-
-    addEB:SetPoint("TOPLEFT", toolbar, "TOPLEFT", 12, -4)
-    countEB:SetPoint("LEFT", addEB, "RIGHT", 12, 0)
-    priceEB:SetPoint("LEFT", countEB, "RIGHT", 12, 0)
 
     -- Add: square icon button with a drawn plus (the font "+" sits small
     -- and off-centre), turning brand mint on hover like the header icons.
     -- Bulk import lives in the side panel next to "Add common consumables".
     local addBtn = CreateFrame("Button", nil, toolbar)
     addBtn:SetSize(22, 22)
-    addBtn:SetPoint("LEFT", priceEB, "RIGHT", 8, 0)
+    addBtn:SetPoint("RIGHT", toolbar, "RIGHT", -12, 0)
+    countEB:SetPoint("RIGHT", addBtn, "LEFT", -8, 0)
+    addEB:SetPoint("LEFT", toolbar, "LEFT", 12, 0)
+    addEB:SetPoint("RIGHT", countEB, "LEFT", -8, 0)
     StyleButton(addBtn)
     local plusBars = {}
     for i, size in ipairs({ { 10, 2 }, { 2, 10 } }) do
@@ -1674,11 +1688,6 @@ function MF:Build()
         end
         -- Silent default drops from 20 to 1 for zero-friction quick-add.
         local need = tonumber(countBox:GetText()) or 1
-        -- Whole-gold input only. SetNumeric in MakeEditBox already
-        -- prevented non-digit keystrokes; convert to copper here since
-        -- storage is in copper.
-        local priceGold = tonumber(priceBox:GetText())
-        local maxPriceCopper = (priceGold and priceGold > 0) and (priceGold * 10000) or nil
 
         -- ItemResolver still runs (async cache-warm path) so we get the
         -- item's canonical name + link for the status message and for
@@ -1689,25 +1698,20 @@ function MF:Build()
                 MF:SetStatus(("|cffff8888Unknown item ID: %d|r"):format(itemID))
                 return
             end
-            ADDON.DB:SetItem(resolvedID, need, maxPriceCopper)
+            ADDON.DB:SetItem(resolvedID, need)
             ADDON.Inventory:Invalidate()
             if ADDON.Log then
                 ADDON.Log:Emit("add", resolvedID, {
                     name       = name,
                     need       = need,
-                    capCopper  = maxPriceCopper,
                 })
             end
-            -- Reset all three fields AND clear focus on all three so the
-            -- placeholder hooks (which hide while focused) re-show.
+            -- Clear and unfocus both so the placeholders re-show.
             addBox:SetText("")
             countBox:SetText("")
-            priceBox:SetText("")
             addBox:ClearFocus()
             countBox:ClearFocus()
-            priceBox:ClearFocus()
-            local pMsg = maxPriceCopper and (", cap %dg"):format(priceGold) or ""
-            MF:SetStatus(("Added %s (need %d%s)"):format(name, need, pMsg))
+            MF:SetStatus(("Added %s (need %d)"):format(name, need))
             MF:Refresh()
         end)
     end
@@ -1719,7 +1723,7 @@ function MF:Build()
     -- is the current Tab stop, EnableKeyboard(true) with an OnKeyDown
     -- handler for Tab / Shift+Tab / Enter / Space / Escape, and helpers
     -- MF:FocusAddButton / MF:BlurAddButton to move focus into and out of
-    -- it programmatically. Without this, priceBox forward-Tab would have
+    -- it programmatically. Without this, countBox forward-Tab would have
     -- to jump past the Add button straight into the list, and mouse-
     -- averse users could never trigger Add without Enter-inside-a-box.
     local ring = addBtn:CreateTexture(nil, "OVERLAY")
@@ -1796,13 +1800,13 @@ function MF:Build()
             -- so the current Tab keystroke is fully consumed by this
             -- OnKeyDown and doesn't double-hop into the newly-focused
             -- control.
-            -- Forward Tab wraps back to addBox; Shift+Tab returns to priceBox.
+            -- Forward Tab wraps back to addBox; Shift+Tab returns to countBox.
             local shift = IsShiftKeyDown()
             C_Timer.After(0, function()
                 pcall(function()
                     MF:BlurAddButton()
                     if shift then
-                        if priceBox then priceBox:SetFocus() end
+                        if countBox then countBox:SetFocus() end
                     else
                         if addBox then addBox:SetFocus() end
                     end
@@ -1811,8 +1815,8 @@ function MF:Build()
         elseif key == "ENTER" or key == "SPACE" then
             pcall(function() DoAdd() end)
             -- DoAdd clears the editbox focuses on success. Keyboard
-            -- focus stays on the Add button (so Shift+Tab back to Price
-            -- Cap works) -- safe now that unhandled keys propagate.
+            -- focus stays on the Add button (so Shift+Tab back to Target
+            -- works) -- safe now that unhandled keys propagate.
         elseif key == "ESCAPE" then
             pcall(function() MF:BlurAddButton() end)
         end
@@ -1828,7 +1832,7 @@ function MF:Build()
     -- ring, drop the ring. Prevents 'two focused controls' visual bug
     -- when the user clicks an editbox with a mouse after tabbing into
     -- the Add button.
-    for _, eb in ipairs({ addBox, countBox, priceBox }) do
+    for _, eb in ipairs({ addBox, countBox }) do
         eb:HookScript("OnEditFocusGained", function()
             if MF._addBtnFocused then MF:BlurAddButton() end
         end)
@@ -1838,8 +1842,6 @@ function MF:Build()
     addBox:SetScript("OnEscapePressed", function(self) self:ClearFocus() end)
     countBox:SetScript("OnEnterPressed", function() DoAdd() addBox:ClearFocus() end)
     countBox:SetScript("OnEscapePressed", function(self) self:ClearFocus() end)
-    priceBox:SetScript("OnEnterPressed", function() DoAdd() addBox:ClearFocus() end)
-    priceBox:SetScript("OnEscapePressed", function(self) self:ClearFocus() end)
 
     -- =====================================================================
     -- quick-add via shift-click / drag-and-drop / focused link
@@ -1990,11 +1992,10 @@ function MF:Build()
     -- them for unified Tab navigation across toolbar + row-body cells.
     self.addBox   = addBox
     self.countBox = countBox
-    self.priceBox = priceBox
 
     -- Tab navigation across the Add cluster only (the list is click-to-edit).
     -- Forward chain:
-    --   addBox -> countBox -> priceBox -> addBtn -> addBox (wrap)
+    --   addBox -> countBox -> addBtn -> addBox (wrap)
     -- Shift+Tab is the mirror. addBtn is a Button (not an EditBox), so
     -- its Tab handling lives in its OnKeyDown above (set up by
     -- MF:FocusAddButton).
@@ -2009,11 +2010,8 @@ function MF:Build()
         end
     end)
     countBox:SetScript("OnTabPressed", function(self)
-        if IsShiftKeyDown() then addBox:SetFocus() else priceBox:SetFocus() end
-    end)
-    priceBox:SetScript("OnTabPressed", function(self)
         if IsShiftKeyDown() then
-            countBox:SetFocus()
+            addBox:SetFocus()
         else
             -- Forward Tab from the toolbar's last editbox goes to the
             -- Add button. From there, Tab wraps back to addBox.
@@ -2065,7 +2063,7 @@ function MF:Build()
     -- so the caller can pass the same offset used in BuildRow (which is
     -- relative to row.RIGHT) even though headers is anchored to f.RIGHT.
     local function MakeHeader(text, mode, xOffset)
-        local fs = headers:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+        local fs = headers:CreateFontString(nil, "OVERLAY", "StockClerkFontNormalSmall")
         fs:SetTextColor(Palette.brand[1], Palette.brand[2], Palette.brand[3], 1)
         fs:SetText(text)
         if mode == "left" then
@@ -2160,10 +2158,11 @@ function MF:Build()
     paintChip()
 
     -- ---- Footer / bottom bar ------------------------------------------
-    -- Fixed 36px bar; status text on the left, action buttons on the right.
+    -- Fixed 30px bar: action feedback on the left, the Restock button on
+    -- the right (the header x and Escape close the window).
     -- 1px black top border to separate from the list.
     local footer = CreateFrame("Frame", nil, f)
-    footer:SetHeight(38)
+    footer:SetHeight(30)
     footer:SetPoint("BOTTOMLEFT", 0, 0)
     footer:SetPoint("BOTTOMRIGHT", 0, 0)
     -- Same whisper-band as toolbar/headers so the footer feels like a
@@ -2177,13 +2176,9 @@ function MF:Build()
     footerSep:SetPoint("TOPRIGHT", 0, 0)
     PixelSnap(footerSep)
 
-    -- Status bar spans from left inset to just before the Restock button
-    -- (leftmost of the two footer buttons). Previous impl stopped at
-    -- -100 which cleared Close but NOT the 140px Restock button, so
-    -- longer status text (e.g. "Ready: 30 x Thalassian Phoenix Oil...")
-    -- flowed BEHIND the buttons. Anchoring to the Restock button's left
-    -- edge means the status never overlaps regardless of how long it is.
-    local statusBar = footer:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+    -- Status text runs from the left inset to the Restock button's left
+    -- edge, so long messages truncate instead of sliding under it.
+    local statusBar = footer:CreateFontString(nil, "OVERLAY", "StockClerkFontNormalSmall")
     statusBar:SetPoint("LEFT", 14, 0)
     statusBar:SetJustifyH("LEFT")
     statusBar:SetWordWrap(false)  -- one line; oversized text truncates instead of stacking
@@ -2191,15 +2186,6 @@ function MF:Build()
     self.statusBar = statusBar
     self._statusBarNeedsAnchor = true  -- deferred: restockBtn not built yet
 
-    local closeBtn = CreateFrame("Button", nil, footer)
-    closeBtn:SetSize(80, 22)
-    closeBtn:SetPoint("RIGHT", -12, 0)
-    StyleButton(closeBtn)
-    local closeBtnText = closeBtn:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-    closeBtnText:SetPoint("CENTER")
-    closeBtnText:SetText(L.BTN_CLOSE or "Close")
-    closeBtnText:SetTextColor(1, 1, 1, 1)
-    closeBtn:SetScript("OnClick", function() MF:Hide() end)
 
     -- Two-state button:
     --   idle    -> "Restock at AH"  (left-click Start; disabled if no AH open,
@@ -2211,7 +2197,7 @@ function MF:Build()
     -- "Restock at AH" during arm.
     local restockBtn = CreateFrame("Button", nil, footer)
     restockBtn:SetSize(160, 22)  -- fits "Restock from Bank (12)"
-    restockBtn:SetPoint("RIGHT", closeBtn, "LEFT", -8, 0)
+    restockBtn:SetPoint("RIGHT", -12, 0)
 
     -- Now that restockBtn exists, anchor statusBar's right edge to its
     -- left edge minus a small gap. This is the deferred setup flagged
@@ -2221,7 +2207,7 @@ function MF:Build()
         self._statusBarNeedsAnchor = nil
     end
     StyleButton(restockBtn)
-    local restockBtnText = restockBtn:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+    local restockBtnText = restockBtn:CreateFontString(nil, "OVERLAY", "StockClerkFontNormal")
     restockBtnText:SetPoint("CENTER")
     restockBtnText:SetTextColor(1, 1, 1, 1)
     restockBtn._label = restockBtnText
@@ -2327,7 +2313,7 @@ function MF:Build()
     rigL:SetPoint("TOPRIGHT"); rigL:SetPoint("BOTTOMRIGHT"); rigL:SetWidth(1)
 
     -- Content strings (armed mode)
-    local titleFS = toast:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+    local titleFS = toast:CreateFontString(nil, "OVERLAY", "StockClerkFontNormal")
     titleFS:SetPoint("TOPLEFT", 10, -6)
     titleFS:SetPoint("RIGHT", -160, 0)  -- leave room for two buttons
     titleFS:SetJustifyH("LEFT")
@@ -2338,19 +2324,19 @@ function MF:Build()
     -- sub when the item has copies in bank or warband. Amber-tinted so
     -- they read as a soft warning; hidden by default and re-anchored in
     -- ShowArmedToast based on which sources have >0 copies.
-    local stashBankFS = toast:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    local stashBankFS = toast:CreateFontString(nil, "OVERLAY", "StockClerkFontHighlightSmall")
     stashBankFS:SetJustifyH("LEFT")
     stashBankFS:SetTextColor(1.0, 0.66, 0.4, 1)  -- amber (matches "No cap set")
     stashBankFS:SetWordWrap(false)
     stashBankFS:Hide()
 
-    local stashWarbandFS = toast:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    local stashWarbandFS = toast:CreateFontString(nil, "OVERLAY", "StockClerkFontHighlightSmall")
     stashWarbandFS:SetJustifyH("LEFT")
     stashWarbandFS:SetTextColor(1.0, 0.66, 0.4, 1)  -- amber
     stashWarbandFS:SetWordWrap(false)
     stashWarbandFS:Hide()
 
-    local subFS = toast:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    local subFS = toast:CreateFontString(nil, "OVERLAY", "StockClerkFontHighlightSmall")
     subFS:SetPoint("TOPLEFT", titleFS, "BOTTOMLEFT", 0, -1)
     subFS:SetPoint("RIGHT", -160, 0)
     subFS:SetJustifyH("LEFT")
@@ -2362,7 +2348,7 @@ function MF:Build()
     skipBtn:SetSize(64, 22)
     skipBtn:SetPoint("RIGHT", -78, 0)
     StyleButton(skipBtn)
-    local skipText = skipBtn:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+    local skipText = skipBtn:CreateFontString(nil, "OVERLAY", "StockClerkFontNormal")
     skipText:SetPoint("CENTER")
     skipText:SetText("Skip")
     skipBtn:SetScript("OnClick", function()
@@ -2378,7 +2364,7 @@ function MF:Build()
     primaryBtn:SetSize(70, 22)
     primaryBtn:SetPoint("RIGHT", -8, 0)
     StyleButton(primaryBtn)
-    local primaryText = primaryBtn:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+    local primaryText = primaryBtn:CreateFontString(nil, "OVERLAY", "StockClerkFontNormal")
     primaryText:SetPoint("CENTER")
     primaryText:SetText("Buy")
 
@@ -2536,7 +2522,7 @@ function MF:Build()
     -- width minus inset, enable word wrap, and left-justify inside a
     -- top-anchored region. Overflow-at-min-width fix (v1.0 empty text
     -- didn't wrap and ran past the frame edge at 420px).
-    self.emptyText = listHolder:CreateFontString(nil, "OVERLAY", "GameFontDisable")
+    self.emptyText = listHolder:CreateFontString(nil, "OVERLAY", "StockClerkFontDisable")
     self.emptyText:SetPoint("TOPLEFT", listHolder, "TOPLEFT", 16, -18)
     self.emptyText:SetPoint("TOPRIGHT", listHolder, "TOPRIGHT", -16, -18)
     self.emptyText:SetJustifyH("LEFT")
