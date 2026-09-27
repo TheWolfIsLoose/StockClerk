@@ -298,8 +298,11 @@ keyboard navigation was already gone; `Dev/STYLE.md` written.
   became **bulk import** (drawn "list +" icon) and left the side panel;
   the Add Tab stop and its keyboard guards are gone (Tab switches boxes).
   Item ID placeholder: "Item ID, Enter to add".
-- **Fixed:** row hover could stick after a fast mouse exit or a refresh
-  while hovered (leave check was deferred a frame).
+- **Fixed:** row hover could stick (leaving through the grip or Seen
+  column never cleared it). A hovered row now clears itself once the
+  cursor is outside it.
+- Bulk import docks beside the main window like the side panel (one open
+  at a time), restyled to STYLE.md.
 - Then replace CHANGELOG.md with the beta2 notes below and push to `dev`
   (the push cuts the release).
 
