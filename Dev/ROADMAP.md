@@ -11,21 +11,82 @@ disagree), **Open** (needs an answer before build).
 
 ## Next session: start here
 
-**2026-09-27:** `v1.2.0-beta2` released. `dev` now holds the full Ponytail
-pass for `v1.2.0-beta3` (see that section): needs the player's in-game
-check, then swap in the beta3 CHANGELOG and push to cut it. After that:
-play on it, then stable `v1.2.0` (stable notes cover everything since
-v1.1.1; merge `dev` into `main`).
+**Handoff 2026-09-27 ~01:40 ET.** In order:
 
-State: `main` is still v1.1.1 plus the `update.bat` fix.
+1. **Beta3 check.** `dev` holds the full Ponytail pass for `v1.2.0-beta3`
+   (see that section). The player was testing it in game at handoff: ask
+   how it went and fix anything found. Checklist: window, side panel, bulk
+   import (drop items), `/clerk log`; an AH restock (Buy, Skip, Escape,
+   summary); edit Need and Cap; drag reorder; filter; Restock from Bank.
+2. **Cut `v1.2.0-beta3`:** replace CHANGELOG.md with the drafted beta3
+   notes (in the beta3 section), add the Dev/HISTORY.md entry, push `dev`
+   (the push releases it).
+3. **Then build "Checkout mode"** (the next section; design decided,
+   nothing built yet). Decide with the player whether it lands in beta4
+   or waits for after stable v1.2.0.
+
+State: `main` is still v1.1.1 plus the `update.bat` fix. `v1.2.0-beta2`
+is the latest release.
 
 Session setup: player syncs with `Dev\update.bat dev` and `/reload`;
 Claude reads `WTF\Account\SAVAGEFEARLESS\SavedVariables\StockClerk.lua`
 via the connected `_retail_` folder (after a `/reload`) for logs. Local
 smoke: `lua5.1 Dev/smoke.lua .` (Lua 5.1 builds from github.com/lua/lua
-tag v5.1 when no package manager is reachable).
+tag v5.1 when no package manager is reachable). Pushing needs the repo
+attached with push access (add_repo), then `git push origin dev`.
 
 ---
+
+## Checkout mode: replace the AH buy flyout (Designed 2026-09-27, not built)
+
+Every AH purchase needs a player click (hardware event), so the run is
+always one click per item; this redesigns everything around that click.
+
+**Problems with today's flyout** (below the window, `MF:BuildToast`):
+out of the eye line (hangs under the window, can land on chat or off
+screen); shows one item with no view of the queue, progress or total;
+Buy moves ~6px when the stash lines grow it (breaks click rhythm); Stop
+lives in three places (footer button, hidden right-click, Escape); the
+1.5s lock on every Buy adds ~15s to a 10-item run and trains wait-then-
+click (alarm fatigue); over-cap items skip silently; the summary auto-
+closes after 3s (breaks the footer-keeps-feedback rule); the pulsing amber
+border is animation noise.
+
+**Design (Decided in principle):** the run happens in the list itself,
+like ticking off a paper shopping list.
+- **Footer becomes the checkout bar** while a run is active: line 1
+  "16 x Flask of the Shattered Sun · 7,424g"; line 2 warnings (amber
+  "You have 12 in your bank", "No cap set"); progress "2 of 4 · spent
+  2,420g"; [Skip] [Buy], with **Buy exactly where the Restock button
+  sits** so Restock, Buy, Buy... never moves the mouse and never shifts.
+- **Rows show run state:** bought ✓, current ▶ (highlighted, scrolled
+  into view), queued ·, over cap ⊘ (tooltip: cheapest price). An over-cap
+  item is visible and its Cap cell is right there to edit; the next run
+  uses it.
+- **Friction only where there's risk:** Buy is live at once; the short
+  lock applies only when there's no cap, copies in bank/warband, or a
+  price well above Last Seen.
+- **One Stop:** Escape or a small × in the checkout bar. Drop the right-
+  click gesture.
+- **End of run** stays in the footer ("Done: bought 3 for 1,219g · 1 over
+  cap · check your mail"); row marks stay until the list changes or the
+  AH closes. The log keeps the receipt.
+- **Restock from Bank** uses the same pattern (rows tick as items pull).
+- Expected to remove code: the flyout, its pulse ticker and layout
+  juggling (~150 lines).
+- Open detail: lock drag-reorder during a run (the queue is a snapshot);
+  keep Cap editing live.
+
+**Rejected / shelved (Decided):**
+- A third docked "restock" panel: duplicates the visible list, and at the
+  AH (window docked to the AH's right edge) another 260px doesn't fit
+  many screens.
+- **Quote pass** (price every item before the first Buy): shelved. It
+  adds addon-generated wait at AH open, which slows a quick restock
+  between dungeons; a background version would compete with each Buy's
+  own search (one search at a time).
+- **Keybind for Buy:** shelved (player's call).
+
 
 ## v1.2.0 — Efficiency pass + Restock from Bank + Common Consumables
 
