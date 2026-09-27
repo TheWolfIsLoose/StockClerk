@@ -182,8 +182,9 @@ function Log:Format(e, full, color)
     if e.itemID then
         local name, _, quality = C_Item.GetItemInfo(e.itemID)
         if type(name) ~= "string" then name, quality = e.payload and e.payload.name, nil end
-        item = name or ("item " .. e.itemID)
-        if full then item = ("%s [%d]"):format(item, e.itemID) end
+        -- [Name] like chat links: marks the name even when it's white (Common).
+        item = "[" .. (name or ("item " .. e.itemID)) .. "]"
+        if full then item = ("%s (#%d)"):format(item, e.itemID) end
         if color and type(quality) == "number" then
             local r, g, b = C_Item.GetItemQualityColor(quality)
             if r then item = ("|cff%02x%02x%02x%s|r"):format(r * 255, g * 255, b * 255, item) end

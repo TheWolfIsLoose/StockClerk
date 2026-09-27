@@ -168,14 +168,14 @@ do -- Plain-language wording, report header, error capture
   local Log = ADDON.Log
   local F = function(kind, p, id) return Log:Format({ kind = kind, payload = p, itemID = id }) end
   assert(Log.Money(42550000) == "4,255g" and Log.Money(123400) == "12g 34s" and Log.Money(5000) == "50s", "money")
-  assert(F("buy_success", { qty = 20, spentCopper = 4120000 }, 7) == "Bought 20 item 7 for 412g", F("buy_success", { qty = 20, spentCopper = 4120000 }, 7))
-  assert(F("cap_change", { toCopper = 1500000 }, 7) == "item 7: cap set to 150g", "cap set")
-  assert(F("cap_change", { fromCopper = 1500000 }, 7) == "item 7: cap removed", "cap removed")
+  assert(F("buy_success", { qty = 20, spentCopper = 4120000 }, 7) == "Bought 20 [item 7] for 412g", F("buy_success", { qty = 20, spentCopper = 4120000 }, 7))
+  assert(F("cap_change", { toCopper = 1500000 }, 7) == "[item 7]: cap set to 150g", "cap set")
+  assert(F("cap_change", { fromCopper = 1500000 }, 7) == "[item 7]: cap removed", "cap removed")
   assert(F("loop_stop", { reason = "user_stop", touched = 0 }) == "Restock stopped by you, nothing bought", "loop stop")
   assert(F("loop_stop", { reason = "done", touched = 3, spentCopper = 6120000, stillShort = 1 })
          == "Restock finished, bought 3 items for 612g, 1 still short", "loop done")
-  assert(F("buy_skip", { reason = "cap out (silent)" }, 7) == "Skipped item 7: cheapest price is above your cap", "skip")
-  assert(Log:Format({ kind = "bank_pull", payload = { qty = 5 }, itemID = 7 }, true) == "Pulled 5 item 7 [7] from your bank", "full ids")
+  assert(F("buy_skip", { reason = "cap out (silent)" }, 7) == "Skipped [item 7]: cheapest price is above your cap", "skip")
+  assert(Log:Format({ kind = "bank_pull", payload = { qty = 5 }, itemID = 7 }, true) == "Pulled 5 [item 7] (#7) from your bank", "full ids")
   for kind in pairs(Log.LEVEL) do assert(type(F(kind, {}, 7)) == "string", "format " .. kind) end
   local report = Log:Report()
   assert(report:find("StockClerk report", 1, true) and report:find("Settings: ", 1, true)
