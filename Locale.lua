@@ -9,7 +9,6 @@ _G[addonName .. "_L"] = L
 
 -- UI strings
 L.ADDON_NAME             = "Stock Clerk"
-L.BTN_ADD_ITEM           = "Add"
 L.BTN_CLOSE              = "Close"
 L.EMPTY_LIST             = "No items yet.\n\nAdd items by:\n |cffffffff1.|r Typing an item ID into the Item ID box and pressing Enter\n |cffffffff2.|r Clicking the |cffffffff+|r button to paste multiple item IDs at once\n |cffffffff3.|r Dragging an item from your bags into this window"
 L.ITEM_NOT_FOUND         = "Item not found or not yet cached. Try opening its tooltip in-game first, then re-add."

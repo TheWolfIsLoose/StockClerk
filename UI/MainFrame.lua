@@ -456,8 +456,7 @@ local function BuildRow(row)
     row.icon:SetTexCoord(0.08, 0.92, 0.08, 0.92)   -- trim default 5% border
 
     -- 1px quality border (Baganator style): a solid square 2px larger than
-    -- the icon, drawn just below it. Quality colour for uncommon+, black
-    -- otherwise so every icon gets the same crisp edge.
+    -- the icon, drawn just below it, tinted by quality in the row setter.
     row.iconBorder = row:CreateTexture(nil, "OVERLAY", nil, -1)
     row.iconBorder:SetColorTexture(0, 0, 0, 1)
     row.iconBorder:SetPoint("TOPLEFT", row.icon, "TOPLEFT", -1, 1)
@@ -1016,9 +1015,9 @@ local function InitializeRow(row, data)
     local icon = tex or select(5, C_Item.GetItemInfoInstant(data.itemID)) or QUESTION_ICON
     row.icon:SetTexture(icon)
 
-    -- Quality colour for uncommon+, black for poor/common/unknown. A cold
+    -- Quality colour (grey poor, white common, ...), black while unknown. A cold
     -- item re-runs this row once GET_ITEM_INFO_RECEIVED resolves quality.
-    if quality and quality >= 2 then
+    if quality then
         local r, g, b = C_Item.GetItemQualityColor(quality)
         row.iconBorder:SetColorTexture(r, g, b, 1)
     else
@@ -1636,50 +1635,30 @@ function MF:Build()
     countEB:SetPoint("LEFT", addEB, "RIGHT", 12, 0)
     priceEB:SetPoint("LEFT", countEB, "RIGHT", 12, 0)
 
+    -- Add: square icon button with a drawn plus (the font "+" sits small
+    -- and off-centre), turning brand mint on hover like the header icons.
+    -- Bulk import lives in the side panel next to "Add common consumables".
     local addBtn = CreateFrame("Button", nil, toolbar)
-    addBtn:SetSize(72, 22)
-    addBtn:SetPoint("LEFT", priceEB, "RIGHT", 10, 0)
+    addBtn:SetSize(22, 22)
+    addBtn:SetPoint("LEFT", priceEB, "RIGHT", 8, 0)
     StyleButton(addBtn)
-    local addBtnText = addBtn:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-    addBtnText:SetPoint("CENTER")
-    addBtnText:SetText(L.BTN_ADD_ITEM or "Add")
-    addBtnText:SetTextColor(1, 1, 1, 1)
-
-    -- Bulk-import button. Icon-only compact button (24x22) placed to
-    -- the right of Add Item. Opens a modal popup with a paste area for
-    -- multi-line item ID import. Kept small so we don't have to re-flow
-    -- the Add cluster at 420px min-width; the plus glyph plus tooltip is
-    -- enough affordance for an advanced-user power feature.
-    -- Square (22x22, same height as Add) with a drawn plus: the font "+"
-    -- sat small and off-centre. Two crossed bars, like the header's drawn
-    -- hamburger/funnel icons, turning brand mint on hover.
-    local bulkBtn = CreateFrame("Button", nil, toolbar)
-    bulkBtn:SetSize(22, 22)
-    bulkBtn:SetPoint("LEFT", addBtn, "RIGHT", 6, 0)
-    StyleButton(bulkBtn)
     local plusBars = {}
     for i, size in ipairs({ { 10, 2 }, { 2, 10 } }) do
-        local bar = bulkBtn:CreateTexture(nil, "OVERLAY", nil, 7)
+        local bar = addBtn:CreateTexture(nil, "OVERLAY", nil, 7)
         bar:SetColorTexture(1, 1, 1, 0.9)
         bar:SetSize(size[1], size[2])
         bar:SetPoint("CENTER")
         plusBars[i] = bar
     end
     local function tintPlus(c) for _, bar in ipairs(plusBars) do bar:SetColorTexture(c[1], c[2], c[3], 1) end end
-    bulkBtn:HookScript("OnEnter", function(self)  -- Hook, not Set: keeps StyleButton's hover wash
+    addBtn:HookScript("OnEnter", function(self)  -- Hook, not Set: keeps StyleButton's hover wash
         tintPlus(Palette.brand)
         GameTooltip:SetOwner(self, "ANCHOR_TOP")
-        GameTooltip:SetText("Bulk import items", 1, 1, 1)
-        GameTooltip:AddLine("Paste multiple item IDs at once, one per line.", 0.9, 0.9, 0.9, true)
+        GameTooltip:SetText("Add to list", 1, 1, 1)
+        GameTooltip:AddLine("Or press Enter in any box.", 0.8, 0.8, 0.8, true)
         GameTooltip:Show()
     end)
-    bulkBtn:HookScript("OnLeave", function() GameTooltip:Hide(); tintPlus({ 1, 1, 1 }) end)
-    bulkBtn:SetScript("OnClick", function()
-        if ADDON.BulkImport and ADDON.BulkImport.Open then
-            ADDON.BulkImport:Open()
-        end
-    end)
-    self.bulkBtn = bulkBtn
+    addBtn:HookScript("OnLeave", function() GameTooltip:Hide(); tintPlus({ 1, 1, 1 }) end)
 
     local function DoAdd()
         local raw = addBox:GetText()

@@ -123,33 +123,40 @@ local function Build(anchor)
     ccBtn:SetHeight(22)
     ccBtn:SetText("Add common consumables")
 
+    local bulkBtn = CreateFrame("Button", nil, f, "UIPanelButtonTemplate")
+    bulkBtn:SetPoint("TOPLEFT", 12, -206)
+    bulkBtn:SetPoint("RIGHT", -12, 0)
+    bulkBtn:SetHeight(22)
+    bulkBtn:SetText("Bulk import item IDs")
+    bulkBtn:SetScript("OnClick", function() ADDON.BulkImport:Open() end)
+
     -- ---- Divider -----------------------------------------------------
     local divider = f:CreateTexture(nil, "OVERLAY", nil, 6)
     divider:SetColorTexture(0, 0, 0, 1)
     divider:SetHeight(1)
-    divider:SetPoint("TOPLEFT", 8, -214)
-    divider:SetPoint("TOPRIGHT", -8, -214)
+    divider:SetPoint("TOPLEFT", 8, -240)
+    divider:SetPoint("TOPRIGHT", -8, -240)
 
     -- ---- Activity feed section --------------------------------------
     local feedTitle = f:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-    feedTitle:SetPoint("TOPLEFT", 12, -222)
+    feedTitle:SetPoint("TOPLEFT", 12, -248)
     feedTitle:SetText("|cff98FF98Recent Activity|r")
 
     -- "log" hint anchored to feedTitle's right so the user can find the
     -- full log dump.
     local feedHint = f:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
-    feedHint:SetPoint("TOPRIGHT", -12, -226)
+    feedHint:SetPoint("TOPRIGHT", -12, -252)
     feedHint:SetText("|cff6a6a6a/clerk log|r")
 
     -- Scrollframe hosts the feed rows. Simple, no fancy pooling -- the
     -- panel is bounded and refreshes on Emit, so ~30 rows is the ceiling.
     local scrollBg = f:CreateTexture(nil, "BACKGROUND")
     scrollBg:SetColorTexture(Palette.bgDark[1], Palette.bgDark[2], Palette.bgDark[3], 0.6)
-    scrollBg:SetPoint("TOPLEFT", 8, -244)
+    scrollBg:SetPoint("TOPLEFT", 8, -270)
     scrollBg:SetPoint("BOTTOMRIGHT", -8, 8)
 
     local scrollFrame = CreateFrame("ScrollFrame", "StockClerkSidecarScroll", f, "UIPanelScrollFrameTemplate")
-    scrollFrame:SetPoint("TOPLEFT", 10, -246)
+    scrollFrame:SetPoint("TOPLEFT", 10, -272)
     scrollFrame:SetPoint("BOTTOMRIGHT", -28, 10)  -- -28 leaves room for the scrollbar
 
     local feedContent = CreateFrame("Frame", nil, scrollFrame)
