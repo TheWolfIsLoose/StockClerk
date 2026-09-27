@@ -576,9 +576,7 @@ local function BuildRow(row)
         GameTooltip:Hide()
     end)
 
-    -- Trash, shown on row hover. Row and trash share RowEnter/RowLeave; the
-    -- leave check waits a frame and tests both, so exiting through the
-    -- tooltip doesn't leave it stuck.
+    -- Trash, shown on row hover. Row, cells and trash share RowEnter/RowLeave.
     row.trash = CreateFrame("Button", nil, row)
     row.trash:SetSize(18, 18)
     row.trash:SetPoint("RIGHT", row, "RIGHT", -6, 0)
@@ -595,16 +593,15 @@ local function BuildRow(row)
         r.trash:Show()
     end
 
+    -- Checked right away, not a frame later: moving onto one of the row's own
+    -- cells or its trash button keeps the cursor inside the row, so the
+    -- hover stays; anywhere else clears it. (The old one-frame delay could
+    -- misread a fast exit and leave the highlight stuck.)
     local function RowLeave(r)
-        -- Wait a frame so IsMouseOver reflects the settled state.
-        C_Timer.After(0, function()
-            if r:IsMouseOver() or r.trash:IsMouseOver() then
-                return -- still hovering some part of the row cluster
-            end
-            ApplyRowHover(r, false)
-            GameTooltip:Hide()
-            r.trash:Hide()
-        end)
+        if r:IsMouseOver() then return end
+        ApplyRowHover(r, false)
+        GameTooltip:Hide()
+        r.trash:Hide()
     end
 
     row:SetScript("OnEnter",  function(self) RowEnter(self) end)
@@ -792,6 +789,12 @@ local function InitializeRow(row, data)
         BuildRow(row)
         row._built = true
     end
+
+    -- A pooled row can be rebound while hovered (a refresh mid-hover), and no
+    -- OnLeave fires then: set hover from where the cursor actually is.
+    local over = row:IsMouseOver()
+    ApplyRowHover(row, over)
+    row.trash:SetShown(over)
 
     -- Pooled rows get rebound to other items (refresh, scroll, filter). An
     -- editor left open and focused would keep capturing every key game-wide
