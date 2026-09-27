@@ -320,6 +320,18 @@ local function HeaderIcon(parent, bars, tip, onClick)
 end
 MF.HeaderIcon = HeaderIcon
 
+-- itemID of whatever the cursor holds, or nil. Shared with bulk import.
+local function CursorItemID()
+    local kind, arg1, arg2 = GetCursorInfo()
+    if kind ~= "item" then return nil end
+    -- ("item", itemID, link); some builds sent a link as arg1.
+    return tonumber(arg1)
+        or (type(arg1) == "string" and tonumber(arg1:match("item:(%d+)")))
+        or (type(arg2) == "string" and tonumber(arg2:match("item:(%d+)")))
+        or nil
+end
+MF.CursorItemID = CursorItemID
+
 local function StyleEditBoxContainer(container, editBox)
     ApplyFill(container, Palette.fieldFill)
     AddBlackBorder(container)
@@ -1292,25 +1304,6 @@ function MF:Build()
     -- ---- Quick add: shift-click or drop an item on the Item ID box, or
     -- shift-click a link while the box is focused. All three only fill the
     -- box; Enter still commits. Scoped to the box, so chat links are unaffected.
-
-    -- itemID from whatever the cursor holds, or nil.
-    local function CursorItemID()
-        local kind, arg1, arg2 = GetCursorInfo()
-        if kind == "item" then
-            -- ("item", itemID, link); some builds sent a link as arg1.
-            local id = tonumber(arg1)
-            if id then return id end
-            if type(arg1) == "string" then
-                id = tonumber(arg1:match("item:(%d+)"))
-                if id then return id end
-            end
-            if type(arg2) == "string" then
-                id = tonumber(arg2:match("item:(%d+)"))
-                if id then return id end
-            end
-        end
-        return nil
-    end
 
     -- Fill the box, clear the cursor, focus so Enter commits.
     local function StampAddBox(itemID)

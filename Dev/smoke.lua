@@ -212,6 +212,13 @@ ok, err = pcall(function() ADDON.LogPopup:Show() end)
 io.stdout:write("LogPopup " .. (ok and "OK" or ("ERR " .. tostring(err))) .. "\n")
 ok, err = pcall(function() ADDON.BulkImport:Open() end)
 io.stdout:write("BulkImport " .. (ok and "OK" or ("ERR " .. tostring(err))) .. "\n")
+do -- Cursor item: numeric id, or a link in either slot; nothing for non-items
+  local gci = GetCursorInfo
+  GetCursorInfo = function() return "item", 212283 end;                        assert(ADDON.MainFrame.CursorItemID() == 212283, "cursor id")
+  GetCursorInfo = function() return "item", nil, "|Hitem:7:::|h[x]|h" end;     assert(ADDON.MainFrame.CursorItemID() == 7, "cursor link")
+  GetCursorInfo = function() return "spell", 5 end;                            assert(ADDON.MainFrame.CursorItemID() == nil, "cursor non-item")
+  GetCursorInfo = gci
+end
 do -- Bulk parser: id [target [cap]], comments skipped, bad lines reported
   local r = ADDON.BulkImport.ParseBulkText("212283\n7 20 500\n# note\nabc\n1 2 3 4\n5 0")
   assert(#r == 5, "bulk entries " .. #r)

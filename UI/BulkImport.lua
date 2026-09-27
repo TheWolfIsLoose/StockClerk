@@ -152,15 +152,15 @@ local function BuildFrame()
     instr:SetPoint("TOPLEFT", PAD, -32)
     instr:SetPoint("RIGHT", -PAD, 0)
     instr:SetJustifyH("LEFT")
-    instr:SetText("One item per line: |cffffffffID|r, |cffffffffID target|r or |cffffffffID target cap|r (cap in gold).")
+    instr:SetText("Drop items here, or paste one per line: |cffffffffID|r, |cffffffffID target|r or |cffffffffID target cap|r (cap in gold).")
     instr:SetTextColor(0.8, 0.8, 0.8, 1)
 
     -- Paste area fills the panel between the instructions and the status line.
     local well = CreateFrame("Frame", nil, f)
-    well:SetPoint("TOPLEFT", PAD, -62)
+    well:SetPoint("TOPLEFT", PAD, -72)
     well:SetPoint("BOTTOMRIGHT", -PAD, 72)
     MF.ApplyFill(well, PALETTE.fieldFill)
-    MF.AddBlackBorder(well)
+    local wellEdges = MF.AddBlackBorder(well)
 
     local scroll = CreateFrame("ScrollFrame", "StockClerkBulkImportScroll", well, "UIPanelScrollFrameTemplate")
     scroll:SetPoint("TOPLEFT", 2, -2)
@@ -176,9 +176,43 @@ local function BuildFrame()
     edit:SetScript("OnEscapePressed", function() f:Hide() end)
     edit:HookScript("OnHide", function(self) if self:HasFocus() then self:ClearFocus() end end)
     scroll:SetScrollChild(edit)
-    -- Clicking anywhere in the well focuses the box, not just its text.
+    local status  -- set below
+
+    -- Dropping an item (drag, or click while holding it) adds its ID on a
+    -- new line; an ID already listed is skipped.
+    local function AddDropped()
+        local id = MF.CursorItemID()
+        if not id then return false end
+        ClearCursor()
+        local text = edit:GetText()
+        for _, e in ipairs(ParseBulkText(text)) do
+            if e.itemID == id then
+                status:SetText(("Item %d is already listed."):format(id))
+                return true
+            end
+        end
+        if text ~= "" and not text:find("\n$") then text = text .. "\n" end
+        edit:SetText(text .. id .. "\n")
+        edit:SetCursorPosition(#edit:GetText())
+        local n = #ParseBulkText(edit:GetText())
+        status:SetText(("%d item%s ready. Drop more, or press Add all."):format(n, n == 1 and "" or "s"))
+        return true
+    end
+    for _, target in ipairs({ well, edit }) do
+        target:HookScript("OnReceiveDrag", AddDropped)
+    end
+    edit:HookScript("OnMouseUp", AddDropped)
+    -- Clicking the well: drop a held item, else focus the box.
     well:EnableMouse(true)
-    well:SetScript("OnMouseDown", function() edit:SetFocus() end)
+    well:SetScript("OnMouseDown", function() if not AddDropped() then edit:SetFocus() end end)
+
+    -- Mint border while the cursor holds an item: "you can drop here".
+    local function PaintDropZone()
+        local c = MF.CursorItemID() and PALETTE.brand or PALETTE.border
+        for _, t in pairs(wellEdges or {}) do t:SetColorTexture(c[1], c[2], c[3], 1) end
+    end
+    well:RegisterEvent("CURSOR_CHANGED")
+    well:SetScript("OnEvent", PaintDropZone)
 
     -- Example shown while empty and unfocused (multi-line boxes have no placeholder).
     local ghost = edit:CreateFontString(nil, "OVERLAY", "StockClerkFontDisableSmall")
@@ -193,7 +227,7 @@ local function BuildFrame()
     edit:HookScript("OnEditFocusGained", RefreshGhost)
     edit:HookScript("OnEditFocusLost", RefreshGhost)
 
-    local status = f:CreateFontString(nil, "OVERLAY", "StockClerkFontHighlightSmall")
+    status = f:CreateFontString(nil, "OVERLAY", "StockClerkFontHighlightSmall")
     status:SetPoint("BOTTOMLEFT", PAD, 38)
     status:SetPoint("BOTTOMRIGHT", -PAD, 38)
     status:SetHeight(28)
