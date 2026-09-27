@@ -9,7 +9,7 @@
           need        = number,
           maxPrice    = copper,          -- optional; nil = no cap set
           addedAt     = timestamp,
-          lastPrice   = { copper, seenAt, source },   -- optional; QA-11
+          lastPrice   = { copper, seenAt, source },   -- optional
           sortOrder   = number,          -- user-arranged list position;
                                          -- Doubles as restock priority
         }
@@ -23,7 +23,7 @@
                                        -- there's a shortfall to work through.
         autoRestockBank  = bool,       -- default FALSE. Same at a banker:
                                        -- pull short items from the bank.
-        lastPriceTTL     = number,     -- QA-11 seconds before "Last Seen" dims
+        lastPriceTTL     = number,     -- seconds before "Last Seen" dims
       }
       global.log      = array of entries (see Log.lua)
 
@@ -47,59 +47,33 @@ end
 local DB = {}
 ADDON.DB = DB
 
--- ---------------------------------------------------------------------------
--- Defaults
--- ---------------------------------------------------------------------------
 DB.defaults = {
     char = {
         items = {},
         uiPos = { point = "CENTER", x = 0, y = 0 },
-        -- AutoSpend deleted. Was the
-        -- daily budget tracker. No budget = no tracker.
-        -- Per-character UI state. Filter toggle for the
-        -- shopping-list view. `stuckOnly = true` means the list shows
-        -- only items you're short on (bags below target). Per-
-        -- character because different characters carry different lists
-        -- and different market pressures, so persisting the filter
-        -- globally would be surprising.
+        -- Filter state, per character (lists differ per character).
+        -- stuckOnly = "short items only" (old name kept for saved data).
         ui = { stuckOnly = false },
 
-        -- Mail-delivery ledger. Persisted per-character because
-        -- auction mail is delivered to the buying character, not the
-        -- warband. Keys are itemID (as number, keyed by lua so beware
-        -- SavedVariables stringifies these on write -- see the load
-        -- migration in Initialize). Entries look like:
-        --   { qty = N, baseHave = M, boughtAt = serverTimeSeconds }
-        -- The ledger empties when either (a) the bag count catches up
-        -- to baseHave + qty in Loop:_EffectiveHave, or (b) an inbox
-        -- reconciliation observes that the mail no longer holds those
-        -- items. Gate on Loop:Start refuses auto passes while non-empty.
+        -- Mail ledger (RestockLoop): itemID -> { qty, baseHave, boughtAt }.
+        -- Per character: auction mail goes to the buyer.
         pendingBuys = {},
     },
     global = {
         settings  = {
-            autoOpenAtAH     = true,      -- open SC docked to the AH on visit.
-            autoOpenAtBank   = true,      -- same at a banker (v1.2).
-                                          -- Design ended up here: users who
-                                          -- track a shopping list generally
-                                          -- WANT it up when they're at the AH.
-            autoRestock      = false,     -- opt-in. When ON + AH open + at
-                                          -- Least one row is short, the
-                                          -- restock loop auto-starts. Off by
-                                          -- default because it commits the
-                                          -- user to a purchase flow they
-                                          -- didn't explicitly ask for.
-            autoRestockBank  = false,     -- opt-in, same idea at a banker (v1.2).
-            lastPriceTTL     = 24 * 3600, -- QA-11; 24h before Last Seen dims
+            autoOpenAtAH     = true,
+            autoOpenAtBank   = true,
+            autoRestock      = false,     -- Express-Restock at AH: opt-in, it starts a buying flow
+            autoRestockBank  = false,     -- Express-Restock at Bank: opt-in
+            lastPriceTTL     = 24 * 3600, -- Last Seen dims after 24h
         },
     },
 }
 
 -- ---------------------------------------------------------------------------
--- Init (called from Core.lua on OnInitialize)
+-- Init (Core.lua, ADDON_LOADED). Missing keys are filled from defaults,
+-- recursively, so new settings reach existing users.
 -- ---------------------------------------------------------------------------
--- Fill missing keys from defaults, recursing into tables the saved data
--- already has so new settings appear for existing users.
 local function ApplyDefaults(saved, defaults)
     for k, v in pairs(defaults) do
         if saved[k] == nil then
@@ -120,9 +94,7 @@ function DB:Initialize()
     StockClerkCharDB = ApplyDefaults(StockClerkCharDB or {}, self.defaults.char)
     self.char = StockClerkCharDB
 
-    -- SortOrder migration: pre-priority users have no sortOrder on
-    -- any item. Stamp everyone in the current alphabetical readout so the
-    -- upgrade never visibly reshuffles an existing list.
+    -- Saves from before list ordering: stamp the current alphabetical order.
     local needsOrder = false
     for _, entry in pairs(self.char.items) do
         if entry.sortOrder == nil then needsOrder = true; break end
@@ -141,17 +113,8 @@ function DB:Initialize()
         end
     end
 
-    -- pendingBuys hygiene. Two responsibilities:
-    --   1. Normalize keys back to numbers. SavedVariables preserves
-    --      the lua type of table keys inside a table serialized as-is,
-    --      but a defaults-migration path or a hand-edit can leave
-    --      stringified keys around. We accept both and normalize to
-    --      number so downstream code (GetInboxItem returns numeric
-    --      itemIDs) doesn't miss matches.
-    --   2. Garbage-collect entries older than 30 days. Auction house
-    --      mail expires server-side at 30 days; a ledger entry with
-    --      boughtAt older than that is guaranteed stale (the mail is
-    --      gone whether we reconciled or not).
+    -- Ledger hygiene: number keys (a hand-edit can leave strings), and drop
+    -- entries older than 30 days (the mail has expired).
     self.char.pendingBuys = self.char.pendingBuys or {}
     local now      = GetServerTime and GetServerTime() or time()
     local expiry   = now - (30 * 86400)
@@ -165,21 +128,11 @@ function DB:Initialize()
     end
     self.char.pendingBuys = normal
 
-    -- UI defaults hygiene: old saves predate `ui`, so backfill it
-    -- without disturbing anything else on disk. This is the same shape
-    -- the defaults table declares; keep them in sync if a new UI flag
-    -- is added later.
     self.char.ui = self.char.ui or { stuckOnly = false }
     if self.char.ui.stuckOnly == nil then self.char.ui.stuckOnly = false end
 end
 
--- ---------------------------------------------------------------------------
--- Shopping-list "short items only" filter toggle (named stuckOnly for
--- saved-data compatibility; it meant "stuck above cap" before v1.2)
---
--- Persisted per-character on char.ui.stuckOnly. Getter/setter live here
--- so MainFrame doesn't touch the raw table shape.
--- ---------------------------------------------------------------------------
+-- "Short items only" filter, per character (stored as char.ui.stuckOnly).
 function DB:GetStuckOnly()
     if not self.char or not self.char.ui then return false end
     return self.char.ui.stuckOnly == true
@@ -191,21 +144,13 @@ function DB:SetStuckOnly(on)
     self.char.ui.stuckOnly = on and true or false
 end
 
--- ---------------------------------------------------------------------------
--- List CRUD (operates on the current character's list)
--- ---------------------------------------------------------------------------
-
 -- Returns the raw items table; callers should NOT mutate keys/values directly.
 function DB:GetItems()
     return self.char.items
 end
 
--- Returns an array copy in USER-ARRANGED order (sortOrder ascending).
--- This is the ordering contract of the whole addon: the shopping list,
--- the restock loop's queue order, and implicit buy priority all read
--- the same sequence ("tacit priority" -- the list IS the priority).
--- Items lacking sortOrder (shouldn't happen post-migration, but SetItem
--- races during seed) sort to the end by name.
+-- The list in the player's order (sortOrder). Restock order and priority
+-- follow it. Items without sortOrder sort last, by name.
 function DB:GetSortedItems()
     local list = {}
     for itemID, entry in pairs(self.char.items) do
@@ -263,9 +208,7 @@ function DB:SetItem(itemID, need, maxPrice)
             existing.need = need
             if maxPrice ~= nil then existing.maxPrice = maxPrice end
         else
-            -- New items go to the END of the user's arranged list: the
-            -- list is priority order, so silently inserting a newcomer
-            -- anywhere else would imply a priority the user never chose.
+            -- New items go last: the order is the player's priority.
             local maxOrder = 0
             for _, entry in pairs(self.char.items) do
                 if entry.sortOrder and entry.sortOrder > maxOrder then
@@ -302,12 +245,8 @@ function DB:SetItemMaxPrice(itemID, maxPriceCopper)
     if entry then entry.maxPrice = maxPriceCopper end
 end
 
--- Stamp the most-recent observed unit price for an item. Sources:
---   "click"  - piggybacked on a left-click AH search from the row list
---   "loop"   - piggybacked on the restock loop's per-item search
---   "manual" - user-initiated re-price (reserved for future)
--- Silently no-ops if the item isn't currently tracked (a stale search
--- callback firing after remove shouldn't create a phantom entry).
+-- Remember the last AH unit price (source "click" or "loop"). No-op for
+-- untracked items (a late search callback after removal).
 function DB:StampLastPrice(itemID, copperPerUnit, source)
     itemID = tonumber(itemID)
     if not itemID or not copperPerUnit or copperPerUnit <= 0 then return end
@@ -331,9 +270,6 @@ function DB:ClearAll()
     wipe(self.char.items)
 end
 
--- ---------------------------------------------------------------------------
--- Settings passthrough
--- ---------------------------------------------------------------------------
 function DB:Settings()
     return self.global.settings
 end

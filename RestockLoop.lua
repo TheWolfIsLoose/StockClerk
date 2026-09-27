@@ -30,7 +30,7 @@
                  ExecutePurchase, then auto-advances on completion.
       Stop()   - abort, clear armed state, log outcome.
 
-    Repeat-press safety (v0.5 mail-delivery gate, preserved):
+    Repeat-press safety (mail-delivery gate):
       pendingBuys is PERSISTED on char.pendingBuys. Every successful
       purchase increments the ledger; _EffectiveHave folds mailed-
       but-unlooted purchases into the "have" number so BuildQueue
@@ -67,8 +67,6 @@ Loop.state = {
     touched        = 0,     -- items successfully bought this loop
     stillShort     = 0,     -- items whose need was not met at loop end
     skippedCapped  = 0,     -- rows silently skipped for cap-out
-    -- (uncappedAcked removed in v0.7.0 sweep: soft warning now lives in
-    -- the armed-flyout's amber 'No cap set' badge, no per-session ack needed)
 }
 
 local function Status(msg)
@@ -78,38 +76,15 @@ local function Status(msg)
 end
 
 -- ---------------------------------------------------------------------------
--- Purchase ledger (itemID -> { qty, baseHave, boughtAt })
---
--- WHY: AH commodity purchases are delivered by MAIL, not straight to bags,
--- so Inventory:GetCount (bags-only) doesn't reflect a successful buy until
--- the user loots their mailbox. Without this ledger the shortfall math
--- (short = need - have) never sees the purchase, and every press of
--- "Restock at AH" re-buys everything it just bought.
---
--- change: PERSISTED on char.pendingBuys (was session-only in
--- v0.4). Two reasons: (1) the ledger closes the repeat-press gate, and
--- if a user buys then logs out, the gate must remain closed on next
--- login until on-hand confirmation; (2) mailbox reconciliation needs the
--- ledger to survive across sessions because auction mail sits in the
--- inbox for up to 30 days.
---
--- note: the ledger is used by ALL restock passes now
--- (manual-only mode). "Have" always means _EffectiveHave, never raw
--- bag count -- this is what stops a user from rebuying the same
--- items on the second, third, fourth press of the buy bind before
--- their mail arrives.
---
--- Stale-offset hazard is bounded by:
---   * 30-day GC in DB:Initialize -- entries older than 30 days are
---     dropped on load (auction mail expires server-side at 30 days).
---   * MAIL_INBOX_UPDATE reconciliation -- opening the mailbox clamps
---     ledger entries to actual mail contents. Missing entries deleted.
---   * Bag-count decay in _EffectiveHave -- unchanged from v0.4.
+-- Purchase ledger (char.pendingBuys: itemID -> { qty, baseHave, boughtAt })
+-- AH commodity buys arrive by mail, so bag counts miss them until looted;
+-- without the ledger every Restock press would buy the same items again.
+-- "Have" in the loop is always _EffectiveHave (bags + ledger). Persisted,
+-- since mail can sit for days. Kept honest by: 30-day expiry on load
+-- (auction mail expires at 30 days), mailbox reconciliation, and the ledger
+-- decaying as bag counts catch up.
 -- ---------------------------------------------------------------------------
 
--- Accessor: resolves to the persisted store. DB init runs before any
--- Loop method fires (Core.lua orders it that way), so the nil branch
--- is defensive against load-order regressions only.
 function Loop:_Ledger()
     return ADDON.DB and ADDON.DB.char and ADDON.DB.char.pendingBuys or nil
 end
@@ -146,25 +121,13 @@ function Loop:_EffectiveHave(itemID)
     return have + unlooted
 end
 
--- MAIL_INBOX_UPDATE reconciliation. When the mailbox is open the
--- server has streamed inbox contents to the client; walk the inbox
--- and clamp the ledger to reality.
---
--- Cases handled:
---   * Ledger entry NOT in mailbox = looted (bag decay already
---     zeroed it) OR expired server-side OR never existed. Drop it.
---   * Ledger entry qty > mailbox qty = partially looted. Clamp.
---   * Ledger entry qty <= mailbox qty = expected quantity still
---     present, no change.
---
--- We do NOT delete or shrink entries whose mail count exceeds ledger
--- qty -- surplus is from unrelated mail (gifts, sold-auctions, etc).
+-- Mailbox open: clamp the ledger to what's actually in the mail. Not in the
+-- mail = looted or expired: drop. Fewer in the mail = partly looted: clamp.
+-- More in the mail is someone else's mail: leave it.
 function Loop:_OnMailInboxUpdate()
     local ledger = self:_Ledger()
     if not ledger or not next(ledger) then return end
-    -- GetInboxNumItems can return 0 before the server has streamed
-    -- items; a subsequent MAIL_INBOX_UPDATE will fire with the real
-    -- list, so bail on empty rather than deleting the ledger.
+    -- 0 can mean "not streamed yet"; the next MAIL_INBOX_UPDATE has the list.
     local n = GetInboxNumItems()
     if not n or n == 0 then return end
     local seen = {}
@@ -190,17 +153,11 @@ function Loop:_OnMailInboxUpdate()
 end
 
 -- ---------------------------------------------------------------------------
--- Build the shortfall queue in LIST ORDER. The user-arranged shopping
--- list IS the priority: top of the list gets restocked first. No
--- re-sorting here -- biggest-shortfall-first would contradict the
--- user's explicit arrangement.
+-- Queue in list order: the arranged list is the priority.
 -- ---------------------------------------------------------------------------
 local function BuildQueue()
     local q = {}
     for _, it in ipairs(ADDON.DB:GetSortedItems()) do
-        -- _EffectiveHave, not raw bag count: items we successfully bought
-        -- earlier this session are sitting in the mailbox and must count
-        -- toward the shortfall or we buy them again on the next press.
         local have = Loop:_EffectiveHave(it.itemID)
         local short = it.need - have
         if short > 0 then
@@ -221,18 +178,9 @@ end
 -- ---------------------------------------------------------------------------
 -- Start
 -- ---------------------------------------------------------------------------
--- Public preview: how many items would BuildQueue enqueue right now?
--- Uses _EffectiveHave (bags + unlooted purchase ledger) so callers
--- outside RestockLoop don't have to reimplement the same math and
--- risk drifting from BuildQueue's real behavior. Used by
--- Core.lua's auto-restock trigger so "would the loop find work?" is
--- a SINGLE decision point, not two independent shortfall calcs.
--- Called many times per frame from Refresh, button state, and Core's
--- auto-restock trigger. To keep debug logs signal-heavy we memoize the
--- last per-item shortfall snapshot and only log entries whose short
--- number CHANGED since the previous call. Under normal steady-state
--- browsing the log stays silent; when something actually moves (bag
--- update, purchase, mail loot), the log records the delta once.
+-- How many items would BuildQueue take right now? The one shortfall answer
+-- for the button, Express-Restock and the footer, so they can't disagree.
+-- Traces only items whose shortfall changed since the last call.
 Loop._previewLast = Loop._previewLast or {}
 function Loop:PreviewShortfallCount()
     local n = 0
@@ -273,11 +221,8 @@ function Loop:Start(express)
 
     local q = BuildQueue()
     if #q == 0 then
-        -- Red, not mint: this is an unexpected refusal, not a success.
-        -- Under normal flow the button is greyed when there's nothing
-        -- to do, so hitting Start with an empty queue means the caller
-        -- (slash command / autoRestock race) is out of sync with the
-        -- current inventory state.
+        -- Red: the button is greyed when nothing is short, so getting here
+        -- means the caller raced the inventory.
         Status("|cfff87171Nothing to restock -- every row is at or above its need.|r")
         return
     end
@@ -298,9 +243,6 @@ function Loop:Start(express)
     self:Advance()
 end
 
--- ---------------------------------------------------------------------------
--- Advance to next item
--- ---------------------------------------------------------------------------
 function Loop:Advance()
     if not self.state.active then return end
     self.state.index = self.state.index + 1
@@ -314,10 +256,7 @@ function Loop:Advance()
     Status(("Searching AH: %s (%d/%d in queue)"):format(
         item.name, self.state.index, #self.state.queue))
 
-    -- Re-derive short in case we bought some in a prior loop iteration
-    -- and the count has updated. _EffectiveHave folds in this session's
-    -- mailed-but-unlooted purchases so successive loop iterations and
-    -- successive whole loops don't re-buy what already succeeded.
+    -- Re-check: an earlier step (or run) may have covered it already.
     local have = Loop:_EffectiveHave(item.itemID)
     local short = item.need - have
     if short <= 0 then
@@ -333,11 +272,8 @@ function Loop:Advance()
     ADDON.AH:BuyUpTo(item.itemID, short, item.maxPrice, function(ok, plan)
         if not self.state.active then return end -- user stopped mid-flight
         if not ok then
-            -- Distinguish cap-out (silent skip) from real failure. AH.lua's
-            -- BuyUpTo returns "cheapest ... is above your Ng cap" for the
-            -- cap-out case; treat that as a benign, silent skip -- the
-            -- whole point of the reshape is that capped-out rows don't
-            -- bother the user. Everything else is logged and status-noted.
+            -- Cheapest above the cap is a quiet skip; anything else is a
+            -- real failure, logged and shown.
             local reason = tostring(plan)
             local isCapOut = reason:find("above your") and reason:find("cap")
             if isCapOut then
@@ -367,13 +303,8 @@ function Loop:Advance()
         plan.maxPrice = item.maxPrice
         plan.capSource = "item"
 
-        -- Bank/warband guardrail: attach a stash breakdown to
-        -- the plan so the flyout can warn the user before spending gold
-        -- on something they already own (elsewhere). Bags is folded out
-        -- of the breakdown -- Advance's `have` above IS the bags count,
-        -- what we care about here is what lives in non-bag storage.
-        -- Reagent bank folds into bank per retail 11.2+ (single storage
-        -- volume; see Inventory.lua header).
+        -- Attach bank/warband counts so the flyout can warn before buying
+        -- something already owned elsewhere.
         local bd = ADDON.Inventory and ADDON.Inventory.GetBreakdown
                     and ADDON.Inventory:GetBreakdown(item.itemID)
         if bd then
@@ -386,25 +317,14 @@ function Loop:Advance()
             plan.hasStash     = false
         end
 
-        -- Uncapped items arm normally: the armed-flyout already flags
-        -- 'No cap set' in amber on the sub line, which IS the soft warning
-        -- for buying at market price. Previously we short-circuited to a
-        -- StaticPopup modal via BuyDialog on the first uncapped row of an
-        -- AH session, but that was a legacy Phase-A pattern that fought
-        -- the flyout instead of leveraging it (multi-source-of-truth for
-        -- the same 'confirm this buy' decision). Consolidated to the
-        -- flyout in v0.7.0 release sweep.
+        -- Uncapped items arm normally; the flyout's amber "No cap set" is the warning.
         self:_Arm(plan)
     end)
 end
 
 -- ---------------------------------------------------------------------------
--- Arm the loop on a plan. Post-feedback rework: the confirm/skip UI lives
--- in MainFrame's ConfirmToast flyout above the restock button, NOT on the
--- restock button itself. The toast has a 3s arm delay on its Buy button
--- so accidental clicks are impossible during arm.
--- Fire() is invoked from the toast's Buy OnClick -- that click is the
--- hardware event that lets StartCommoditiesPurchase go through.
+-- Arm: show the confirm flyout. Its Buy click (a hardware event, which
+-- StartCommoditiesPurchase requires) calls Fire().
 -- ---------------------------------------------------------------------------
 function Loop:_Arm(plan)
     self.state.armed     = true
@@ -427,11 +347,7 @@ function Loop:_Arm(plan)
     end
 end
 
--- ---------------------------------------------------------------------------
--- Fire: user clicked the armed Buy button on the toast. MUST be called
--- from a hardware-event context (the toast Buy OnClick). Consumes armed
--- state, kicks ExecutePurchase.
--- ---------------------------------------------------------------------------
+-- Fire: must run from the Buy click (hardware event). Consumes the armed plan.
 function Loop:Fire()
     if not self.state.active then return end
     if not self.state.armed then
@@ -464,9 +380,6 @@ function Loop:Fire()
     end
 end
 
--- ---------------------------------------------------------------------------
--- Confirmation path
--- ---------------------------------------------------------------------------
 function Loop:_OnConfirm(plan)
     if not self.state.active then return end
     ADDON.Debug("Loop", ("confirming buy id=%d qty=%d spend=%d"):format(
@@ -479,12 +392,8 @@ function Loop:_OnConfirm(plan)
             local spent = plan.plannedSpend or 0
             self.state.spentCopper = self.state.spentCopper + spent
             self.state.touched     = self.state.touched + 1
-            -- Record in the ledger BEFORE logging/status so the very
-            -- next shortfall computation (next Advance, or the next
-            -- Restock press) sees these units as provisionally owned.
-            -- Items arrive by mail; bags-only counts won't show them
-            -- until the user loots, and the ledger decays away as
-            -- soon as they do. This is the repeat-press safeguard.
+            -- Ledger first, so the next shortfall check already counts
+            -- these mailed units.
             self:_RecordPurchase(plan.itemID, plan.planQuantity)
             if ADDON.Log then
                 ADDON.Log:Emit("buy_success", plan.itemID, {
@@ -527,14 +436,8 @@ function Loop:_OnSkip(plan)
 end
 
 -- ---------------------------------------------------------------------------
--- Stop
---
--- `reason` is a short machine-y string that becomes payload.reason on
--- the loop_stop log entry. Callers use:
---   "done"       - queue exhausted normally
---   "AH closed"  - AH window closed while active
---   "user_esc"   - user pressed Escape while active
---   "user_stop"  - user clicked Stop in the manual buy dialog
+-- Stop(reason): "done", "AH closed", "user_esc", "user_stop" (the log
+-- turns these into plain words).
 -- ---------------------------------------------------------------------------
 function Loop:Stop(reason)
     if not self.state.active then return end
@@ -567,10 +470,6 @@ function Loop:Stop(reason)
     self.state.touched       = 0
     self.state.stillShort    = 0
     self.state.skippedCapped = 0
-    -- (uncappedAcked field removed in v0.7.0 sweep -- see state init above)
-    -- reset by Core.lua when the AH closes. A user starting a new
-    -- restock pass in the same AH visit shouldn't re-see the warning.
-    -- (BuyDialog removed in v0.7.0 sweep; nothing to hide here)
     if ADDON.MainFrame then
         -- Hide any armed toast on stop; the summary toast below replaces it.
         if ADDON.MainFrame._toastMode == "armed" and ADDON.MainFrame.HideToast then
@@ -581,27 +480,20 @@ function Loop:Stop(reason)
         end
     end
 
-    -- If the ledger is non-empty at loop end, nudge the user to loot
-    -- their mail -- this is the "you already bought these, next
-    -- press won't re-buy them because we're tracking mail-in-flight"
-    -- transparency message.
+    -- Bought items still in the mail: remind the player to loot it.
     local mailNudge = ""
     local ledger = self:_Ledger()
     if ledger and next(ledger) then
         mailNudge = " (mail pending)"
     end
 
-    -- Post-feedback session-summary toast. The confirm flyout repurposes
-    -- for the recap: two lines + [Close]. Status line gets a shorter
-    -- version so the activity log still records the outcome.
+    -- End-of-run recap in the flyout; a shorter version goes to the footer.
     local title, sub
     local skipTxt = ""
     if skippedCapped > 0 then
         skipTxt = (("  \194\183  %d skipped over cap"):format(skippedCapped))
     end
-    -- Total items the loop touched at ALL (bought + still-short + capped-skip).
-    -- When totalItems == 1, the sub line ('1/1 items resolved') is redundant
-    -- with the title -- suppress it. Multi-item loops keep the recap.
+    -- One item: the "1/1 resolved" sub line would repeat the title.
     local totalItems = touched + stillShort + skippedCapped
     local moneyText  = ADDON.MoneyText(spent)
 

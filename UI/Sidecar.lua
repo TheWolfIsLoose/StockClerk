@@ -1,10 +1,8 @@
 --[[
     Stock Clerk - UI/Sidecar.lua
 
-    v0.7 redesign: right-docked companion panel that merges the two v0.6
-    surfaces (SettingsDropdown + LogFrame) into a single flyout. Toggled
-    from the header hamburger button. Anchored TOPLEFT to the MainFrame's
-    TOPRIGHT so it grows out to the right without covering the list.
+    Side panel: settings, list builders and the Recent Activity feed.
+    Toggled by the header hamburger; hangs off the main window's right edge.
 
     Layout:
       * ~260w fixed, height matches MainFrame

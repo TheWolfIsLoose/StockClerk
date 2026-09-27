@@ -915,7 +915,7 @@ local function InitializeRow(row, data)
 
     local short = data.need - have
     if short > 0 then
-        -- Palette.short (muted red used throughout the v0.7 palette)
+        -- Palette.short (muted red)
         row.accent:SetColorTexture(0xe5/255, 0x62/255, 0x4a/255, 1)
     else
         -- Mint green -- matches the Have-column stocked color
