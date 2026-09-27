@@ -568,7 +568,7 @@ function Loop:Stop(reason)
     self.state.stillShort    = 0
     self.state.skippedCapped = 0
     -- (uncappedAcked field removed in v0.7.0 sweep -- see state init above)
-    -- reset by Core.lua on AUCTION_HOUSE_CLOSED. A user starting a new
+    -- reset by Core.lua when the AH closes. A user starting a new
     -- restock pass in the same AH visit shouldn't re-see the warning.
     -- (BuyDialog removed in v0.7.0 sweep; nothing to hide here)
     if ADDON.MainFrame then

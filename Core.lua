@@ -131,18 +131,12 @@ On("PLAYER_LOGIN", function()
         end)
     end
 
-    -- Auction House auto-open.
-    --
-    -- Retail 10.0+ consolidated frame show/hide events into the Player
-    -- Interaction Manager. Auctionator's Source_Mainline path uses this
-    -- rather than AUCTION_HOUSE_SHOW, and it fires more reliably. We
-    -- listen for BOTH events for maximum coverage across client builds:
-    --   PLAYER_INTERACTION_MANAGER_FRAME_SHOW (arg1 == Auctioneer)
-    --   AUCTION_HOUSE_SHOW (fallback / legacy)
+    -- AH and bank open/close. Retail routes every NPC window through the
+    -- Player Interaction Manager (Auctionator uses the same events). The
+    -- legacy AUCTION_HOUSE_SHOW/CLOSED pair used to be registered too, which
+    -- ran every open/close handler twice per visit.
     On("PLAYER_INTERACTION_MANAGER_FRAME_SHOW", function(t) StockClerk:OnInteractionShow(t) end)
     On("PLAYER_INTERACTION_MANAGER_FRAME_HIDE", function(t) StockClerk:OnInteractionHide(t) end)
-    On("AUCTION_HOUSE_SHOW",   function() StockClerk:OnAuctionHouseShow() end)
-    On("AUCTION_HOUSE_CLOSED", function() StockClerk:OnAuctionHouseClosed() end)
 
     -- AH commodity search + buy events go straight to AH.lua's handler of
     -- the same name (event payload passed through). AH.lua filters by
