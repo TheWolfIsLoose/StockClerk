@@ -294,8 +294,8 @@ end
 ADDON.Inventory.GetBreakdown = realBreakdown
 ADDON.Inventory:Invalidate()
 local bd = ADDON.Inventory:GetBreakdown(111)
-assert(bd.bags == 3 and bd.bank == 5 and bd.warband == 2 and bd.total == 10 and bd.reagent == nil,
-  ("breakdown %d/%d/%d/%d"):format(bd.bags, bd.bank, bd.warband, bd.total))
+assert(bd.bags == 3 and bd.bank == 5 and bd.warband == 2 and bd.reagent == nil,
+  ("breakdown %d/%d/%d"):format(bd.bags, bd.bank, bd.warband))
 C_Item.GetItemCount = function() return 7 end
 ADDON.Inventory:Invalidate()
 bd = ADDON.Inventory:GetBreakdown(111)

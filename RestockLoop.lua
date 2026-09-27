@@ -92,7 +92,7 @@ end
 function Loop:_RecordPurchase(itemID, qty)
     local ledger = self:_Ledger()
     if not ledger then return end
-    local haveNow = ADDON.Inventory:GetCount(itemID) or 0
+    local haveNow = ADDON.Inventory:GetBreakdown(itemID).bags
     local now     = GetServerTime and GetServerTime() or time()
     local cur     = ledger[itemID]
     if cur then
@@ -108,7 +108,7 @@ end
 -- Bag count + outstanding (mailed-but-unlooted) purchases. Decays
 -- automatically as the bag count catches up.
 function Loop:_EffectiveHave(itemID)
-    local have   = ADDON.Inventory:GetCount(itemID) or 0
+    local have   = ADDON.Inventory:GetBreakdown(itemID).bags
     local ledger = self:_Ledger()
     if not ledger then return have end
     local p = ledger[itemID]

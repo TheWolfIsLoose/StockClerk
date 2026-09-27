@@ -1809,7 +1809,7 @@ function MF:_RefreshNow()
     if stuckOnly then
         local filtered = {}
         for _, it in ipairs(items) do
-            if (ADDON.Inventory:GetCount(it.itemID) or 0) < it.need then
+            if ADDON.Inventory:GetBreakdown(it.itemID).bags < it.need then
                 filtered[#filtered + 1] = it
             end
         end
