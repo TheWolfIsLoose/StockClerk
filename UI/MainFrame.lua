@@ -44,7 +44,8 @@
 
 local addonName = ...
 local ADDON     = _G[addonName]
-local L         = _G[addonName .. "_L"]
+
+local EMPTY_LIST = "No items yet.\n\nAdd items by:\n |cffffffff1.|r Typing an item ID into the Item ID box and pressing Enter\n |cffffffff2.|r Dragging an item from your bags onto the Item ID box\n |cffffffff3.|r Opening bulk import (the button right of Target) to drop or paste many at once"
 
 local MF = {}
 ADDON.MainFrame = MF
@@ -1231,7 +1232,7 @@ function MF:Build()
     -- blank Target = 1. Caps are set per row after seeing AH prices.
     -- Item ID stretches to fill whatever the window width leaves.
     local addEB   = MakeEditBox(toolbar, "Item ID or drag an item, Enter to add", 130, true, 8, "Item ID",
-        L.ADDBOX_TOOLTIP or "Type an item ID, or drag an item from your bags onto this window.")
+        "Type an item ID (or drag an item from your bags onto this box) and press Enter. Add a Target first if you want more than 1.")
     local countEB = MakeEditBox(toolbar, "Target",   60, true, 5, "Target",
         "How many to keep in your bags. Blank = 1.")
     local addBox   = addEB.editBox
@@ -1447,8 +1448,8 @@ function MF:Build()
         GameTooltip:SetOwner(self, "ANCHOR_BOTTOM")
         local on = ADDON.DB:GetStuckOnly()
         GameTooltip:SetText((on and "|cff98FF98Filter ON|r  " or "") ..
-            L.FILTER_STUCK_ONLY, 1, 1, 1)
-        GameTooltip:AddLine(L.FILTER_STUCK_TOOLTIP, 0.7, 0.7, 0.7, true)
+            "Show only: items you're short on", 1, 1, 1)
+        GameTooltip:AddLine("Hide items you already have enough of in your bags.", 0.7, 0.7, 0.7, true)
         GameTooltip:Show()
     end)
     filterChip:SetScript("OnLeave", function()
@@ -1776,7 +1777,7 @@ function MF:Build()
     self.emptyText:SetJustifyV("TOP")
     self.emptyText:SetWordWrap(true)
     self.emptyText:SetSpacing(3)
-    self.emptyText:SetText(L.EMPTY_LIST or "No items tracked. Add one above.")
+    self.emptyText:SetText(EMPTY_LIST)
     self.emptyText:Hide()
 
     return f
@@ -1829,7 +1830,7 @@ function MF:_RefreshNow()
         -- log in repaint noise.
         self.emptyText:SetText(stuckOnly
             and "|cff888888Nothing is short. Click the filter icon to see the full list.|r"
-            or  L.EMPTY_LIST)
+            or  EMPTY_LIST)
         self.emptyText:Show()
         self:RefreshRestockBtn()
         return

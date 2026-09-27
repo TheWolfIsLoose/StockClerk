@@ -75,6 +75,7 @@ UnitRace = function() return "Human", "Human" end
 UnitFactionGroup = function() return "Alliance" end
 GetCurrentRegion = function() return 1 end
 GetLocale = function() return "enUS" end
+debugstack = function() return "file:1: in function\nfile:2" end
 IsLoggedIn = function() return false end
 print = function(...) end
 UISpecialFrames = {}

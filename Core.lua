@@ -1,70 +1,43 @@
 --[[
     Stock Clerk - Core.lua
-    Addon entry point. Registers slash commands and routes game events
-    to the appropriate module. No libraries: one event frame + SlashCmdList.
-
-    Load order (from TOC): Locale -> DB -> ItemResolver -> Inventory -> Core.
-    Modules attach themselves to ADDON.<Name>; Core wires them together
-    here without any module needing to know about the others.
+    Entry point: one event frame routes game events to the modules, plus the
+    /clerk slash command. Modules attach to ADDON.<Name>; no libraries.
 --]]
 
 local addonName = ...
 local ADDON     = _G[addonName]
-local L         = _G[addonName .. "_L"]
 
--- ---------------------------------------------------------------------------
--- ADDON-wide money helper. Renders copper as compact "#g #s #c" text using
--- letter suffixes instead of Blizzard's coin-icon textures, so users who
--- swap those textures out with alternative art still see consistent price
--- rendering inside SC. Lives in Core (early in load order) so every module
--- can call ADDON.MoneyText(copper) without a nil-guard.
---
--- precision:
---   "gold"   -> rounds to whole gold, e.g. "1219g"
---   "silver" -> shows silver when non-zero, drops copper, e.g. "1219g 80s"
---   "copper" -> full precision, e.g. "1219g 80s 66c" (default)
--- Zero always returns "0g"; sub-gold amounts drop the leading 0g so
--- "12s 34c" doesn't read as "0g 12s 34c".
--- ---------------------------------------------------------------------------
+-- Copper as "12g 34s 56c" (letters, not coin icons, so reskinned coin art
+-- doesn't matter). precision "silver" drops copper. Zero is "0g".
 function ADDON.MoneyText(copper, precision)
     copper = tonumber(copper) or 0
     if copper <= 0 then return "0g" end
-    precision = precision or "copper"
-    local g = math.floor(copper / 10000)
-    local s = math.floor((copper % 10000) / 100)
-    local c = copper % 100
-    if precision == "gold" then
-        return ("%dg"):format(g)
-    end
+    local g, s, c = math.floor(copper / 10000), math.floor(copper / 100) % 100, copper % 100
     local parts = {}
-    if g > 0 then parts[#parts + 1] = ("%dg"):format(g) end
-    if s > 0 then parts[#parts + 1] = ("%ds"):format(s) end
-    if precision == "copper" and c > 0 then
-        parts[#parts + 1] = ("%dc"):format(c)
-    end
-    if #parts == 0 then return "0g" end
-    return table.concat(parts, " ")
+    if g > 0 then parts[#parts + 1] = g .. "g" end
+    if s > 0 then parts[#parts + 1] = s .. "s" end
+    if c > 0 and precision ~= "silver" then parts[#parts + 1] = c .. "c" end
+    return #parts > 0 and table.concat(parts, " ") or "0g"
 end
-
-local StockClerk = ADDON
 
 function ADDON:Print(msg)
     print("|cff33ff99StockClerk|r: " .. tostring(msg))
 end
 
--- One frame dispatches every game event to its handler: fn(...) gets the
--- event payload (the event name itself is dropped). Errors are written to
--- the log (so a pasted /clerk log shows them) and then passed on unchanged
--- to the normal error handler (BugSack etc.).
+-- ---------------------------------------------------------------------------
+-- Events. Handler errors go to the log (so a pasted /clerk log shows them),
+-- then on to the normal error handler (BugSack etc.) unchanged.
 -- ponytail: only event-driven code is covered; errors raised directly in a
 -- button's OnClick skip the log. Wrap those entry points too if reports show gaps.
+-- ---------------------------------------------------------------------------
 local function LogError(err)
-    if ADDON.Log and ADDON.DB and ADDON.DB.global then
-        local stack = debugstack and debugstack(2, 3, 0) or ""
-        ADDON.Log:Emit("error", nil, { msg = tostring(err), stack = stack:gsub("\n", " | "):sub(1, 400) })
+    if ADDON.DB.global then
+        local stack = debugstack(2, 3, 0):gsub("\n", " | "):sub(1, 400)
+        ADDON.Log:Emit("error", nil, { msg = tostring(err), stack = stack })
     end
     geterrorhandler()(err)
 end
+
 local handlers = {}
 local eventFrame = CreateFrame("Frame")
 eventFrame:SetScript("OnEvent", function(_, event, ...)
@@ -76,72 +49,58 @@ local function On(event, fn)
     eventFrame:RegisterEvent(event)
 end
 
--- ---------------------------------------------------------------------------
--- Lifecycle: SavedVariables are ready at our ADDON_LOADED; the world (and
--- item/bag APIs) at PLAYER_LOGIN.
--- ---------------------------------------------------------------------------
+-- SavedVariables are ready at our ADDON_LOADED; item and bag APIs at PLAYER_LOGIN.
 On("ADDON_LOADED", function(name)
     if name ~= addonName then return end
     eventFrame:UnregisterEvent("ADDON_LOADED")
     ADDON.DB:Initialize()
 
     -- One log line per version change, so a report shows when an update landed.
-    local g = ADDON.DB.global
-    local version = C_AddOns.GetAddOnMetadata(addonName, "Version") or "?"
+    local g, version = ADDON.DB.global, C_AddOns.GetAddOnMetadata(addonName, "Version") or "?"
     if g.lastVersion ~= version then
         ADDON.Log:Emit("version", nil, { from = g.lastVersion, to = version })
         g.lastVersion = version
     end
 
     SLASH_STOCKCLERK1, SLASH_STOCKCLERK2, SLASH_STOCKCLERK3 = "/clerk", "/sc", "/stock"
-    SlashCmdList.STOCKCLERK = function(msg) StockClerk:OnSlashCommand(msg) end
-
-    StockClerk:Print(L.ADDON_NAME .. " loaded. Type |cffffff00/clerk|r to open.")
+    SlashCmdList.STOCKCLERK = function(msg) ADDON:OnSlashCommand(msg) end
+    ADDON:Print("Stock Clerk loaded. Type |cffffff00/clerk|r to open.")
 end)
 
 On("PLAYER_LOGIN", function()
-    -- Item cache resolution -- bounces through ItemResolver:OnItemInfoReceived.
-    On("GET_ITEM_INFO_RECEIVED", function(...) StockClerk:OnItemInfoReceived(...) end)
+    On("GET_ITEM_INFO_RECEIVED", function(itemID, success)
+        ADDON.ItemResolver:OnItemInfoReceived(itemID, success)
+        -- Fires for every item any addon asks about (thousands in an AH scan):
+        -- repaint only for ours, and only while the window shows.
+        local mf = ADDON.MainFrame
+        if ADDON.DB:GetItems()[itemID] and mf.frame and mf.frame:IsShown() then mf:Refresh() end
+    end)
 
-    -- Inventory invalidation, debounced 0.25s so bursts collapse into one call.
-    -- Retail 11.2 (Ghosts of K'aresh) removed the reagent bank; personal
-    -- banks are now tabs like the warband bank. Modern events:
-    --   BAG_UPDATE_DELAYED                    - normal bag changes
-    --   PLAYERBANKSLOTS_CHANGED               - character bank slot change
-    --   PLAYER_ACCOUNT_BANK_TAB_SLOTS_CHANGED - warband bank slot change
-    --   BANK_TABS_CHANGED                     - tab settings / purchase
-    --   BANKFRAME_OPENED                      - force refresh on open
-    local invPending = false
-    local function flushInventory()
-        invPending = false
-        ADDON.Debug("debug", "inventory debounce fired")
-        ADDON.Inventory:OnInventoryChanged()
-    end
-    for _, event in ipairs({
-        "BAG_UPDATE_DELAYED",
-        "PLAYERBANKSLOTS_CHANGED",
-        "PLAYER_ACCOUNT_BANK_TAB_SLOTS_CHANGED",
-        "BANK_TABS_CHANGED",
-        "BANKFRAME_OPENED",
-    }) do
+    -- Bag and bank changes, collapsed into one inventory refresh per 0.25s.
+    local pending = false
+    for _, event in ipairs({ "BAG_UPDATE_DELAYED", "PLAYERBANKSLOTS_CHANGED",
+                             "PLAYER_ACCOUNT_BANK_TAB_SLOTS_CHANGED", "BANK_TABS_CHANGED", "BANKFRAME_OPENED" }) do
         On(event, function()
-            if invPending then return end
-            invPending = true
-            C_Timer.After(0.25, flushInventory)
+            if pending then return end
+            pending = true
+            C_Timer.After(0.25, function()
+                pending = false
+                ADDON.Inventory:OnInventoryChanged()
+            end)
         end)
     end
 
-    -- AH and bank open/close. Retail routes every NPC window through the
-    -- Player Interaction Manager (Auctionator uses the same events). The
-    -- legacy AUCTION_HOUSE_SHOW/CLOSED pair used to be registered too, which
-    -- ran every open/close handler twice per visit.
-    On("PLAYER_INTERACTION_MANAGER_FRAME_SHOW", function(t) StockClerk:OnInteractionShow(t) end)
-    On("PLAYER_INTERACTION_MANAGER_FRAME_HIDE", function(t) StockClerk:OnInteractionHide(t) end)
+    -- Every NPC window (AH, bank) opens and closes through the Player
+    -- Interaction Manager; Auctionator uses the same events.
+    local Type = Enum.PlayerInteractionType
+    On("PLAYER_INTERACTION_MANAGER_FRAME_SHOW", function(t)
+        if t == Type.Auctioneer then ADDON:OnAuctionHouseShow() elseif t == Type.Banker then ADDON:OnBankShow() end
+    end)
+    On("PLAYER_INTERACTION_MANAGER_FRAME_HIDE", function(t)
+        if t == Type.Auctioneer then ADDON:OnAuctionHouseClosed() elseif t == Type.Banker then ADDON:OnBankClosed() end
+    end)
 
-    -- AH commodity search + buy events go straight to AH.lua's handler of
-    -- the same name (event payload passed through). AH.lua filters by
-    -- in-flight itemID/mode, so other addons' searches are harmless no-ops.
-    -- COMMODITY_PRICE_UPDATED carries (unitPrice, totalPrice), no itemID.
+    -- AH search and buy events go to AH.lua's method of the same name.
     for event, method in pairs({
         COMMODITY_SEARCH_RESULTS_UPDATED = "OnCommoditySearchUpdated",
         COMMODITY_PRICE_UPDATED          = "OnCommodityPriceUpdated",
@@ -152,154 +111,73 @@ On("PLAYER_LOGIN", function()
         On(event, function(...) ADDON.AH[method](ADDON.AH, ...) end)
     end
 
-    -- Mail-delivery gate: RestockLoop reconciles its persisted
-    -- pendingBuys ledger against actual mail contents on each inbox refresh.
     On("MAIL_INBOX_UPDATE", function() ADDON.RestockLoop:_OnMailInboxUpdate() end)
 end)
 
 -- ---------------------------------------------------------------------------
--- Event handlers (thin — delegate to modules)
+-- Auction House and bank. The window auto-opens when the setting is on, and
+-- closes with the NPC only if it was opened that way. It docks to the AH;
+-- at the bank it floats where the player left it (bag addons replace the
+-- bank window). ADDON.bankOpen is the "at a banker" flag.
 -- ---------------------------------------------------------------------------
-function StockClerk:OnItemInfoReceived(itemID, success)
-    ADDON.ItemResolver:OnItemInfoReceived(itemID, success)
-    -- This event fires for every item any addon asks about (thousands
-    -- during an AH scan). Repaint only when it's one of ours and the
-    -- window is showing; MF:Show() refreshes on open anyway.
-    local mf = ADDON.MainFrame
-    if ADDON.DB:GetItems()[itemID] and mf.frame and mf.frame:IsShown() then
-        mf:Refresh()
+function ADDON:OnAuctionHouseShow()
+    local mf, settings = self.MainFrame, self.DB:Settings()
+    mf:RefreshRestockBtn()
+    if settings.autoOpenAtAH then
+        C_AddOns.LoadAddOn("Blizzard_AuctionHouseUI")  -- load-on-demand; AuctionHouseFrame must exist
+        mf.openedByAH = true
+        mf:Show()  -- docks
+    elseif mf.frame and mf.frame:IsShown() then
+        mf:DockToAHIfOpen()
     end
-end
-
--- Banker (8) is what the 12.1 bank probe saw for both the character and
--- warband bank.
-function StockClerk:OnInteractionShow(interactionType)
-    if interactionType == Enum.PlayerInteractionType.Auctioneer then
-        self:OnAuctionHouseShow()
-    elseif interactionType == Enum.PlayerInteractionType.Banker then
-        self:OnBankShow()
-    end
-end
-
-function StockClerk:OnInteractionHide(interactionType)
-    if interactionType == Enum.PlayerInteractionType.Auctioneer then
-        self:OnAuctionHouseClosed()
-    elseif interactionType == Enum.PlayerInteractionType.Banker then
-        self:OnBankClosed()
-    end
-end
-
-function StockClerk:OnAuctionHouseShow()
-    -- Refresh the restock button state -- ahOpen is now true, so the
-    -- button should paint enabled if there's a shortfall. Independent
-    -- of the auto-open setting (button state matters even when SC is
-    -- already open on the user's schedule).
-    if ADDON.MainFrame and ADDON.MainFrame.RefreshRestockBtn then
-        ADDON.MainFrame:RefreshRestockBtn()
-    end
-
-    -- Auto-open the SC main frame if the user opted in.
-    if ADDON.DB:Settings().autoOpenAtAH then
-        -- The AH UI is load-on-demand; force it in so AuctionHouseFrame exists.
-        if not C_AddOns.IsAddOnLoaded("Blizzard_AuctionHouseUI") then
-            C_AddOns.LoadAddOn("Blizzard_AuctionHouseUI")
-        end
-        if ADDON.MainFrame then
-            ADDON.MainFrame.openedByAH = true
-            ADDON.MainFrame:Show()
-            if ADDON.MainFrame.DockToAHIfOpen then
-                ADDON.MainFrame:DockToAHIfOpen()
-            end
-        end
-    else
-        -- SC didn't auto-open, but if the user opened it manually already,
-        -- dock it now so it snaps to the AH edge the same as auto-open does.
-        if ADDON.MainFrame and ADDON.MainFrame.frame
-           and ADDON.MainFrame.frame:IsShown()
-           and ADDON.MainFrame.DockToAHIfOpen then
-            ADDON.MainFrame:DockToAHIfOpen()
-        end
-    end
-
-    -- Auto-restock: opt-in trigger for the restock loop on AH open. Fires
-    -- only when there's a shortfall to work through -- opening the AH with
-    -- everything stocked shouldn't kick off an empty loop that immediately
-    -- terminates. Small delay lets the AH frame settle before the search
-    -- query goes out.
-    if ADDON.DB:Settings().autoRestock then
+    -- Express-Restock: start buying once the AH frame settles, if anything is short.
+    if settings.autoRestock then
         C_Timer.After(0.3, function()
-            if not (AuctionHouseFrame and AuctionHouseFrame:IsShown()) then return end
-            if not ADDON.RestockLoop then return end
-            if ADDON.RestockLoop:IsActive() then return end
-            -- Use Loop:PreviewShortfallCount so this decision uses the SAME
-            -- shortfall math as Loop:BuildQueue -- _EffectiveHave, which
-            -- counts bags + unlooted purchase ledger. Two different calcs
-            -- previously drifted (Core used raw bags, Loop used effective),
-            -- which is how the phantom-restock bug crept in: Core said
-            -- "1 short" from stale ledger, Loop's BuildQueue found the
-            -- same 1 short, and it fired despite the user having looted
-            -- the mail. Same math both sides = same verdict.
-            local shortCount = ADDON.RestockLoop:PreviewShortfallCount()
-            if shortCount > 0 then
-                ADDON.RestockLoop:Start(true)  -- express
+            local loop = self.RestockLoop
+            if AuctionHouseFrame and AuctionHouseFrame:IsShown() and not loop:IsActive()
+               and loop:PreviewShortfallCount() > 0 then
+                loop:Start(true)
             end
         end)
     end
 end
 
-function StockClerk:OnAuctionHouseClosed()
-    -- Abort any in-flight AH operation before hiding UI.
-    if ADDON.AH        then ADDON.AH:OnAuctionHouseClosed() end
-    if ADDON.RestockLoop and ADDON.RestockLoop.IsActive and ADDON.RestockLoop:IsActive() then
-        ADDON.RestockLoop:Stop("AH closed")
-    end
-    if ADDON.MainFrame and ADDON.MainFrame.RefreshRestockBtn then
-        ADDON.MainFrame:RefreshRestockBtn()
-    end
-
-    -- Undock BEFORE hiding so a later reopen comes up where the user left
-    -- it; close only when WE opened it.
-    local mf = ADDON.MainFrame
-    if mf then
-        mf:Undock()
-        if mf.openedByAH then
-            mf.openedByAH = false
-            mf:Hide()
-        end
+function ADDON:OnAuctionHouseClosed()
+    self.AH:OnAuctionHouseClosed()
+    self.RestockLoop:Stop("AH closed")
+    local mf = self.MainFrame
+    mf:RefreshRestockBtn()
+    mf:Undock()  -- before hiding, so a later open comes up where the player left it
+    if mf.openedByAH then
+        mf.openedByAH = false
+        mf:Hide()
     end
 end
 
--- Bank: same auto-open/dock/close pattern as the AH. ADDON.bankOpen is
--- the source of truth for "at a banker" (Restock from Bank, v1.2).
--- No docking at the bank: bag addons (Baganator etc.) replace the bank
--- window, so the list floats wherever the user left it.
-function StockClerk:OnBankShow()
-    ADDON.bankOpen = true
-    local mf = ADDON.MainFrame
-    if not mf then return end
-    if ADDON.DB:Settings().autoOpenAtBank and not (mf.frame and mf.frame:IsShown()) then
+function ADDON:OnBankShow()
+    self.bankOpen = true
+    local mf = self.MainFrame
+    if self.DB:Settings().autoOpenAtBank and not (mf.frame and mf.frame:IsShown()) then
         mf.openedByBank = true
         mf:Show()
     end
-    if mf.RefreshRestockBtn then mf:RefreshRestockBtn() end
-    local n = ADDON.BankRestock:PullableCount()
-    if n > 0 and ADDON.DB:Settings().autoRestockBank then
-        -- Express-Restock at Bank. Short delay lets the bank frame settle,
-        -- same as the AH path. The pull reports its own result.
+    mf:RefreshRestockBtn()
+    local n = self.BankRestock:PullableCount()
+    if n > 0 and self.DB:Settings().autoRestockBank then
+        -- Express-Restock at Bank, once the bank frame settles; the pull reports itself.
         C_Timer.After(0.3, function()
-            if ADDON.bankOpen then ADDON.BankRestock:Start(true) end  -- express
+            if self.bankOpen then self.BankRestock:Start(true) end
         end)
     elseif n > 0 then
         mf:SetStatus(("%d short item%s can come from your bank."):format(n, n == 1 and "" or "s"), true)
     end
 end
 
-function StockClerk:OnBankClosed()
-    ADDON.bankOpen = false
-    ADDON.BankRestock:Stop("bank closed")
-    local mf = ADDON.MainFrame
-    if not mf then return end
-    if mf.RefreshRestockBtn then mf:RefreshRestockBtn() end
+function ADDON:OnBankClosed()
+    self.bankOpen = false
+    self.BankRestock:Stop("bank closed")
+    local mf = self.MainFrame
+    mf:RefreshRestockBtn()
     if mf.openedByBank then
         mf.openedByBank = false
         mf:Hide()
@@ -307,135 +185,56 @@ function StockClerk:OnBankClosed()
 end
 
 -- ---------------------------------------------------------------------------
--- Slash command router
+-- /clerk
 -- ---------------------------------------------------------------------------
-function StockClerk:OnSlashCommand(msg)
-    msg = (msg or ""):match("^%s*(.-)%s*$") -- trim
-    local cmd, rest = msg:match("^(%S+)%s*(.-)$")
-    cmd = cmd and cmd:lower() or ""
+local HELP = {
+    "|cff88ccffStock Clerk|r commands:",
+    "  /clerk  |cff888888— open the main window (also /sc, /stock)|r",
+    "  /clerk <item ID or link> |cff888888— add an item with target 1|r",
+    "  /clerk log [clear] |cff888888— open the log to copy into a bug report, or clear it|r",
+    "  /clerk debug |cff888888— record detailed steps into the log until /reload|r",
+    "  /clerk reset |cffff8888— wipe this character's list|r",
+}
+
+function ADDON:OnSlashCommand(msg)
+    msg = (msg or ""):match("^%s*(.-)%s*$")
+    local cmd, rest = msg:match("^(%S*)%s*(.-)$")
+    cmd = cmd:lower()
 
     if cmd == "" or cmd == "open" or cmd == "show" then
-        if ADDON.MainFrame then ADDON.MainFrame:Show() end
-        return
-    end
-
-    if cmd == "close" or cmd == "hide" then
-        if ADDON.MainFrame then ADDON.MainFrame:Hide() end
-        return
-    end
-
-    -- `/clerk log` opens the log popup; `/clerk log clear` empties the log.
-    if cmd == "log" then
-        local sub = (rest or ""):match("^(%S+)") or ""
-        if sub:lower() == "clear" then
-            if ADDON.Log and ADDON.Log.Clear then
-                ADDON.Log:Clear()
-                self:Print("Activity log cleared.")
-                if ADDON.Sidecar and ADDON.Sidecar:IsShown() then
-                    ADDON.Sidecar:Refresh()
-                end
-            end
+        self.MainFrame:Show()
+    elseif cmd == "close" or cmd == "hide" then
+        self.MainFrame:Hide()
+    elseif cmd == "log" then
+        if rest:lower() == "clear" then
+            self.Log:Clear()
+            self.Sidecar:OnActivity()
+            self:Print("Activity log cleared.")
         else
-            if ADDON.LogPopup and ADDON.LogPopup.Toggle then
-                ADDON.LogPopup:Toggle()
-            end
+            self.LogPopup:Toggle()
         end
-        return
-    end
-
-    if cmd == "help" or cmd == "?" then
-        for _, key in ipairs({ "HELP_TITLE", "HELP_OPEN", "HELP_SHORT", "HELP_ADD", "HELP_LOG",
-                               "HELP_PENDING", "HELP_DUMP", "HELP_RESET", "HELP_DEBUG" }) do
-            self:Print(L[key])
-        end
-        return
-    end
-
-    if cmd == "reset" then
-        ADDON.DB:ClearAll()
-        ADDON.Inventory:Invalidate()
-        if ADDON.MainFrame then ADDON.MainFrame:Refresh() end
+    elseif cmd == "help" or cmd == "?" then
+        for _, line in ipairs(HELP) do self:Print(line) end
+    elseif cmd == "reset" then
+        self.DB:ClearAll()
+        self.MainFrame:Refresh()
         self:Print("This character's list has been cleared.")
-        return
-    end
-
-    if cmd == "dump" then
-        local sorted = ADDON.DB:GetSortedItems()
-        if #sorted == 0 then
-            self:Print("List is empty.")
-            return
-        end
-        self:Print(("Tracking %d items:"):format(#sorted))
-        for _, it in ipairs(sorted) do
-            local bd = ADDON.Inventory:GetBreakdown(it.itemID)
-            local stashed = bd.bank + bd.warband
-            if stashed > 0 then
-                self:Print(("  [%d] %s — %d / %d  (+%d elsewhere)"):format(
-                    it.itemID, it.name, bd.bags, it.need, stashed))
-            else
-                self:Print(("  [%d] %s — %d / %d"):format(
-                    it.itemID, it.name, bd.bags, it.need))
-            end
-        end
-        return
-    end
-
-    -- Detailed recording: trace steps go into the log until toggled off or
-    -- /reload (ADDON.debug is never saved).
-    if cmd == "debug" then
-        ADDON.debug = not ADDON.debug
-        if ADDON.debug then
-            ADDON.Debug("debug", "detailed recording started")
+    elseif cmd == "debug" then
+        -- Trace steps go into the log until toggled off or /reload (never saved).
+        self.debug = not self.debug
+        if self.debug then
+            self.Debug("debug", "detailed recording started")
             self:Print("Detailed recording |cff98FF98ON|r until you /reload. Repeat the problem, then type /clerk log.")
         else
             self:Print("Detailed recording OFF.")
         end
-        return
-    end
-
-    -- Mail-delivery ledger inspection; `clear` empties it (bypasses the
-    -- auto-pass gate for testing).
-    if cmd == "pending" then
-        local sub = (rest or ""):match("^(%S+)") or ""
-        sub = sub:lower()
-        local ledger = ADDON.DB and ADDON.DB.char and ADDON.DB.char.pendingBuys or {}
-        if sub == "clear" then
-            if ADDON.DB and ADDON.DB.char then
-                ADDON.DB.char.pendingBuys = {}
-            end
-            self:Print("|cff98FF98Cleared.|r StockClerk no longer counts purchases waiting in the mail.")
-            return
-        end
-        -- No arg: print current pending items.
-        if not next(ledger) then
-            self:Print("|cff4ade80Nothing waiting in the mail.|r")
-            return
-        end
-        local now = GetServerTime and GetServerTime() or time()
-        local rows = {}
-        for id, p in pairs(ledger) do
-            local nm = C_Item.GetItemInfo(id) or ("item:" .. id)
-            local ageH = (p.boughtAt and ((now - p.boughtAt) / 3600)) or 0
-            rows[#rows + 1] = ("%s x%d (%.1fh ago)"):format(nm, p.qty, ageH)
-        end
-        table.sort(rows)
-        self:Print("|cffff8888Pending delivery:|r " .. table.concat(rows, ", "))
-        return
-    end
-
-    -- Fallback: assume the argument is an item to add.
-    if cmd ~= "" then
-        local input = msg
-        ADDON.ItemResolver:Resolve(input, function(itemID, name, _)
-            if not itemID then
-                self:Print("Couldn't resolve: " .. tostring(name)) -- name holds err msg on fail
-                return
-            end
-            -- Default target 1 (matches the toolbar Add-cluster default).
-            ADDON.DB:SetItem(itemID, 1)
+    else
+        -- Anything else is an item to add.
+        self.ItemResolver:Resolve(msg, function(itemID, name)
+            if not itemID then return self:Print("Couldn't add that: " .. tostring(name)) end
+            self.DB:SetItem(itemID, 1)
             self:Print(("Added %s (id %d) with target 1. Edit in the UI to change."):format(name, itemID))
-            if ADDON.MainFrame then ADDON.MainFrame:Refresh() end
+            self.MainFrame:Refresh()
         end)
-        return
     end
 end
