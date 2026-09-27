@@ -117,7 +117,8 @@ assert(SlashCmdList.STOCKCLERK and SLASH_STOCKCLERK1 == "/clerk", "slash not reg
 local st = ADDON.DB:Settings()
 assert(st.autoOpenAtAH == false, "saved setting lost")
 assert(st.autoRestock == false and st.lastPriceTTL == 86400, "defaults not filled")
-assert(#ADDON.DB.global.log == 1 and ADDON.DB.char.items[111].need == 5, "saved data lost")
+assert(#ADDON.DB.global.log == 2 and ADDON.DB.global.log[2].kind == "version", "saved log lost / no version entry")
+assert(ADDON.DB.char.items[111].need == 5, "saved data lost")
 assert(ADDON.DB.char.pendingBuys and ADDON.DB.char.ui, "char defaults not filled")
 do -- "Add common consumables": adds the rest at target 1, never touches tracked items
   local items, list = ADDON.DB.char.items, ADDON.CommonConsumables
@@ -159,9 +160,39 @@ local mail = 0
 ADDON.RestockLoop._OnMailInboxUpdate = function() mail = mail + 1 end
 fire("MAIL_INBOX_UPDATE"); assert(mail == 1, "mail not routed")
 ADDON.debug = true
-local printed
-print = function(s) printed = s end
-ADDON.Debug("AH", "x", 1); assert(printed == "|cff98FF98[SC:AH]|r x 1", tostring(printed))
+ADDON.Debug("AH", "x", 1)
+local last = ADDON.DB.global.log[#ADDON.DB.global.log]
+assert(last.kind == "trace" and last.payload.text == "x 1" and ADDON.Log:Format(last) == "[AH] x 1", "trace not recorded")
+ADDON.debug = false
+do -- Plain-language wording, report header, error capture
+  local Log = ADDON.Log
+  local F = function(kind, p, id) return Log:Format({ kind = kind, payload = p, itemID = id }) end
+  assert(Log.Money(42550000) == "4,255g" and Log.Money(123400) == "12g 34s" and Log.Money(5000) == "50s", "money")
+  assert(F("buy_success", { qty = 20, spentCopper = 4120000 }, 7) == "Bought 20 item 7 for 412g", F("buy_success", { qty = 20, spentCopper = 4120000 }, 7))
+  assert(F("cap_change", { toCopper = 1500000 }, 7) == "item 7: cap set to 150g", "cap set")
+  assert(F("cap_change", { fromCopper = 1500000 }, 7) == "item 7: cap removed", "cap removed")
+  assert(F("loop_stop", { reason = "user_stop", touched = 0 }) == "Restock stopped by you, nothing bought", "loop stop")
+  assert(F("loop_stop", { reason = "done", touched = 3, spentCopper = 6120000, stillShort = 1 })
+         == "Restock finished, bought 3 items for 612g, 1 still short", "loop done")
+  assert(F("buy_skip", { reason = "cap out (silent)" }, 7) == "Skipped item 7: cheapest price is above your cap", "skip")
+  assert(Log:Format({ kind = "bank_pull", payload = { qty = 5 }, itemID = 7 }, true) == "Pulled 5 item 7 [7] from your bank", "full ids")
+  for kind in pairs(Log.LEVEL) do assert(type(F(kind, {}, 7)) == "string", "format " .. kind) end
+  local report = Log:Report()
+  assert(report:find("StockClerk report", 1, true) and report:find("Settings: ", 1, true)
+         and report:find("> [AH] x 1", 1, true), "report")
+  -- Event handler errors land in the log, then reach the normal error handler
+  local seen
+  local geh = geterrorhandler
+  geterrorhandler = function() return function(e) seen = e end end
+  local hs = evFrame.scripts.OnEvent
+  SlashCmdList = SlashCmdList or {}
+  evFrame.events.SMOKE_BOOM = true
+  -- inject a failing handler through the real dispatcher
+  local ok = pcall(hs, evFrame, "SMOKE_BOOM")  -- no handler: indexing nil errors inside xpcall
+  geterrorhandler = geh
+  local e = ADDON.DB.global.log[#ADDON.DB.global.log]
+  assert(ok and seen and e.kind == "error" and Log.LEVEL.error == "activity", "error not captured")
+end
 io.stdout:write("smoke OK\n")
 end
 local capturedInit
@@ -264,17 +295,15 @@ MF.Refresh = function() rf = rf + 1 end
 MF.frame._shown = false; fire("GET_ITEM_INFO_RECEIVED", 42, true); assert(rf == 0, "refreshed while hidden")
 MF.frame._shown = true;  fire("GET_ITEM_INFO_RECEIVED", 999, true); assert(rf == 0, "refreshed for foreign item")
 fire("GET_ITEM_INFO_RECEIVED", 42, true); assert(rf == 1, "did not refresh for our item")
--- Sidecar repaints only for feed kinds; LogPopup once per emit
-local sc, lp = 0, 0
+-- Sidecar repaints only for activity-level entries
+local sc = 0
 ADDON.Sidecar.Refresh = function() sc = sc + 1 end
-ADDON.LogPopup.Refresh = function() lp = lp + 1 end
 ADDON.Sidecar.frame._shown = true
-if ADDON.LogPopup.frame then ADDON.LogPopup.frame._shown = true end
 ADDON.Log.Emit = hookedEmit
 ADDON.Log:Emit("status", nil, { text = "x" })
-assert(sc == 0 and lp == 1, ("status: sidecar %d, logpopup %d"):format(sc, lp))
+assert(sc == 0, ("status repainted the feed %d"):format(sc))
 ADDON.Log:Emit("buy_success", 42, { qty = 1 })
-assert(sc == 1 and lp == 2, ("buy: sidecar %d, logpopup %d"):format(sc, lp))
+assert(sc == 1, ("buy: feed repaints %d"):format(sc))
 do -- Footer keeps the last action through redraws; the short count is on the button
   local mf = ADDON.MainFrame
   local bar = { SetText = function(self, t) self.t = t end }

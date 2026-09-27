@@ -26,17 +26,6 @@ local ApplyFill, AddBlackBorder = ADDON.MainFrame.ApplyFill, ADDON.MainFrame.Add
 
 local WIDTH = 260
 
--- Log kinds the activity feed shows.
-local FEED_KINDS = {
-    buy_success = true,
-    buy_fail    = true,
-    cap_change  = true,
-    auto_refuse = true,
-    loop_start  = true,
-    loop_stop   = true,
-    bank_pull   = true,
-}
-
 -- -------------------------------------------------------------------------
 -- Build the Sidecar panel lazily.
 -- -------------------------------------------------------------------------
@@ -75,7 +64,9 @@ local function Build(anchor)
         text:SetPoint("LEFT", c, "RIGHT", 2, 0)
         text:SetText(label)
         c:SetScript("OnClick", function(self)
-            ADDON.DB:Settings()[key] = self:GetChecked() and true or false
+            local on = self:GetChecked() and true or false
+            ADDON.DB:Settings()[key] = on
+            ADDON.Log:Emit("setting", nil, { key = key, on = on })
         end)
         if tipTitle then
             c:SetScript("OnEnter", function(self)
@@ -147,11 +138,42 @@ local function Build(anchor)
     feedTitle:SetPoint("TOPLEFT", 12, -192)
     feedTitle:SetText("|cff98FF98Recent Activity|r")
 
-    -- "log" hint anchored to feedTitle's right so the user can find the
-    -- full log dump.
-    local feedHint = f:CreateFontString(nil, "OVERLAY", "StockClerkFontDisableSmall")
-    feedHint:SetPoint("TOPRIGHT", -12, -196)
-    feedHint:SetText("|cff6a6a6a/clerk log|r")
+    -- Hovering the title explains the feed and how to send a bug report;
+    -- the "/clerk log" link opens the full log.
+    local feedHelp = CreateFrame("Frame", nil, f)
+    feedHelp:SetAllPoints(feedTitle)
+    feedHelp:EnableMouse(true)
+    local function ShowFeedHelp(owner)
+        GameTooltip:SetOwner(owner, "ANCHOR_RIGHT")
+        GameTooltip:SetText("Recent Activity", 1, 1, 1)
+        GameTooltip:AddLine("What StockClerk did, newest first.", 0.8, 0.8, 0.8, true)
+        GameTooltip:AddLine(" ")
+        GameTooltip:AddLine("Something not working?", 1, 1, 1)
+        GameTooltip:AddLine("1. Type /clerk log (or click the link) and press Ctrl+C.", 0.8, 0.8, 0.8, true)
+        GameTooltip:AddLine("2. Paste it into your bug report.", 0.8, 0.8, 0.8, true)
+        GameTooltip:AddLine(" ")
+        GameTooltip:AddLine("If the problem happens again and again: type /clerk debug first, repeat the problem, then /clerk log.", 0.8, 0.8, 0.8, true)
+        GameTooltip:Show()
+    end
+    feedHelp:SetScript("OnEnter", ShowFeedHelp)
+    feedHelp:SetScript("OnLeave", GameTooltip_Hide)
+
+    local feedLink = CreateFrame("Button", nil, f)
+    feedLink:SetPoint("TOPRIGHT", -12, -194)
+    feedLink:SetSize(60, 14)
+    local feedHint = feedLink:CreateFontString(nil, "OVERLAY", "StockClerkFontDisableSmall")
+    feedHint:SetPoint("RIGHT")
+    feedHint:SetText("/clerk log")
+    feedHint:SetTextColor(0.42, 0.42, 0.42, 1)
+    feedLink:SetScript("OnEnter", function(self)
+        feedHint:SetTextColor(Palette.brand[1], Palette.brand[2], Palette.brand[3], 1)
+        ShowFeedHelp(self)
+    end)
+    feedLink:SetScript("OnLeave", function()
+        feedHint:SetTextColor(0.42, 0.42, 0.42, 1)
+        GameTooltip:Hide()
+    end)
+    feedLink:SetScript("OnClick", function() ADDON.LogPopup:Toggle() end)
 
     -- Scrollframe hosts the feed rows. Simple, no fancy pooling -- the
     -- panel is bounded and refreshes on Emit, so ~30 rows is the ceiling.
@@ -174,54 +196,10 @@ local function Build(anchor)
     return f
 end
 
--- -------------------------------------------------------------------------
--- Format one log entry as one line of feed text. Deliberately short -- the
--- sidecar is a preview, not the full log. Phase D adds tag prefixes
--- ([BUY]/[CAP]/[AUTO-BLOCK]) and cap-change debouncing.
--- -------------------------------------------------------------------------
+-- One feed line: grey time, then the log's plain wording. Failures red.
 local function FormatEntry(entry)
-    local kind = entry.kind or "?"
-    local pay  = entry.payload or {}
-    local itemLink = nil
-    if entry.itemID then
-        -- GetItemInfo may return nil if the client hasn't cached this id
-        -- yet; fall back to id string in that case.
-        local _, link = GetItemInfo(entry.itemID)
-        itemLink = link or ("item:" .. entry.itemID)
-    end
-    local when = date("%H:%M", entry.ts or time())
-
-    if kind == "buy_success" then
-        local g = math.floor((pay.spentCopper or 0) / 10000)
-        return ("|cff98FF98[%s] [BUY]|r %sx%s (%dg)"):format(when, itemLink or "?", pay.qty or "?", g)
-    elseif kind == "bank_pull" then
-        return ("|cff98FF98[%s] [BANK]|r %sx%s from bank"):format(when, itemLink or "?", pay.qty or "?")
-    elseif kind == "cap_change" then
-        local from = pay.fromCopper and math.floor(pay.fromCopper / 10000) .. "g" or "unset"
-        local to   = pay.toCopper   and math.floor(pay.toCopper   / 10000) .. "g" or "unset"
-        return ("|cffe5e0a5[%s] [CAP]|r %s -> %s on %s"):format(when, from, to, itemLink or "?")
-    elseif kind == "auto_refuse" then
-        return ("|cffe5624a[%s] [AUTO-BLOCK]|r %s"):format(when, pay.reason or "?")
-    elseif kind == "buy_fail" then
-        return ("|cffe5624a[%s] [BUY-FAIL]|r %s (%s)"):format(when, itemLink or "?", pay.reason or "?")
-    elseif kind == "target_change" then
-        return ("|cffcccccc[%s]|r target %s -> %s on %s"):format(when, pay.from or "?", pay.to or "?", itemLink or "?")
-    elseif kind == "add" then
-        return ("|cffcccccc[%s]|r added %s (need %s)"):format(when, itemLink or "?", pay.need or "?")
-    elseif kind == "remove" then
-        return ("|cff888888[%s]|r removed %s|r"):format(when, itemLink or "?")
-    elseif kind == "loop_start" then
-        return ("|cff98FF98[%s]|r loop start (%s, %s items)"):format(when, pay.mode or "?", pay.queueSize or 0)
-    elseif kind == "loop_stop" then
-        local g = math.floor((pay.spentCopper or 0) / 10000)
-        return ("|cff888888[%s]|r loop stop: %s (%dg spent)"):format(when, pay.reason or "?", g)
-    elseif kind == "auto_toggle" then
-        return ("|cffcccccc[%s]|r auto %s"):format(when, pay.on and "ON" or "OFF")
-    elseif kind == "status" then
-        return ("|cff888888[%s]|r %s"):format(when, pay.text or "")
-    else
-        return ("|cff888888[%s]|r %s|r"):format(when, kind)
-    end
+    local color = (entry.kind == "error" or entry.kind == "buy_fail") and "|cffff8888" or "|cffffffff"
+    return ("|cff888888%s|r  %s%s|r"):format(date("%H:%M", entry.ts or time()), color, ADDON.Log:Format(entry))
 end
 
 -- -------------------------------------------------------------------------
@@ -235,12 +213,9 @@ function Sidecar:Refresh()
     -- Settings widgets
     for _, c in ipairs(f._checks) do c:SetChecked(s[c._key] and true or false) end
 
-    -- Activity feed. Two-tier model per v0.7 spec:
-    -- * BASIC (this sidecar): curated action-focused entries only.
-    --   Buys, cap changes (debounced 10s per item), and auto-blocks.
-    --   Cap-change debouncing collapses rapid retyping of the cap edit
-    --   box so the feed doesn't churn on every keystroke.
-    -- * VERBOSE (LogPopup / `/clerk log`): everything, unfiltered.
+    -- Activity feed: activity-level entries only (the log window has the
+    -- rest). Cap changes on one item within 10s collapse to the newest so
+    -- retyping a cap doesn't flood the feed.
     for _, r in ipairs(f._feedRows) do r:Hide() end
 
     local raw = {}
@@ -254,7 +229,7 @@ function Sidecar:Refresh()
     local lastCapByItem = {}  -- itemID -> ts of last kept cap_change
     for i = 1, #raw do
         local e = raw[i]
-        if FEED_KINDS[e.kind] then
+        if ADDON.Log.LEVEL[e.kind] == "activity" then
             if e.kind == "cap_change" and e.itemID then
                 local prev = lastCapByItem[e.itemID]
                 -- Raw is newest-first, so "prev" is a NEWER kept entry;
@@ -348,7 +323,7 @@ do
             origEmit(self, kind, itemID, payload)
             -- Only kinds the feed shows; status messages (most emits)
             -- would rebuild the feed for no visible change.
-            if FEED_KINDS[kind] and Sidecar.frame and Sidecar.frame:IsShown() then
+            if ADDON.Log.LEVEL[kind] == "activity" and Sidecar.frame and Sidecar.frame:IsShown() then
                 -- Guard: avoid recursive refresh if a Refresh() call ends
                 -- up emitting its own log entry (nothing today does, but
                 -- cheap insurance for future changes).

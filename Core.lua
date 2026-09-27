@@ -53,10 +53,24 @@ function ADDON:Print(msg)
 end
 
 -- One frame dispatches every game event to its handler: fn(...) gets the
--- event payload (the event name itself is dropped).
+-- event payload (the event name itself is dropped). Errors are written to
+-- the log (so a pasted /clerk log shows them) and then passed on unchanged
+-- to the normal error handler (BugSack etc.).
+-- ponytail: only event-driven code is covered; errors raised directly in a
+-- button's OnClick skip the log. Wrap those entry points too if reports show gaps.
+local function LogError(err)
+    if ADDON.Log and ADDON.DB and ADDON.DB.global then
+        local stack = debugstack and debugstack(2, 3, 0) or ""
+        ADDON.Log:Emit("error", nil, { msg = tostring(err), stack = stack:gsub("\n", " | "):sub(1, 400) })
+    end
+    geterrorhandler()(err)
+end
 local handlers = {}
 local eventFrame = CreateFrame("Frame")
-eventFrame:SetScript("OnEvent", function(_, event, ...) handlers[event](...) end)
+eventFrame:SetScript("OnEvent", function(_, event, ...)
+    local args, n = { ... }, select("#", ...)
+    xpcall(function() handlers[event](unpack(args, 1, n)) end, LogError)
+end)
 local function On(event, fn)
     handlers[event] = fn
     eventFrame:RegisterEvent(event)
@@ -70,6 +84,14 @@ On("ADDON_LOADED", function(name)
     if name ~= addonName then return end
     eventFrame:UnregisterEvent("ADDON_LOADED")
     ADDON.DB:Initialize()
+
+    -- One log line per version change, so a report shows when an update landed.
+    local g = ADDON.DB.global
+    local version = C_AddOns.GetAddOnMetadata(addonName, "Version") or "?"
+    if g.lastVersion ~= version then
+        ADDON.Log:Emit("version", nil, { from = g.lastVersion, to = version })
+        g.lastVersion = version
+    end
 
     SLASH_STOCKCLERK1, SLASH_STOCKCLERK2, SLASH_STOCKCLERK3 = "/clerk", "/sc", "/stock"
     SlashCmdList.STOCKCLERK = function(msg) StockClerk:OnSlashCommand(msg) end
@@ -225,7 +247,7 @@ function StockClerk:OnAuctionHouseShow()
             -- the mail. Same math both sides = same verdict.
             local shortCount = ADDON.RestockLoop:PreviewShortfallCount()
             if shortCount > 0 then
-                ADDON.RestockLoop:Start()
+                ADDON.RestockLoop:Start(true)  -- express
             end
         end)
     end
@@ -271,7 +293,7 @@ function StockClerk:OnBankShow()
         -- Express-Restock at Bank. Short delay lets the bank frame settle,
         -- same as the AH path. The pull reports its own result.
         C_Timer.After(0.3, function()
-            if ADDON.bankOpen then ADDON.BankRestock:Start() end
+            if ADDON.bankOpen then ADDON.BankRestock:Start(true) end  -- express
         end)
     elseif n > 0 then
         mf:SetStatus(("%d short item%s can come from your bank."):format(n, n == 1 and "" or "s"), true)
@@ -364,9 +386,16 @@ function StockClerk:OnSlashCommand(msg)
         return
     end
 
+    -- Detailed recording: trace steps go into the log until toggled off or
+    -- /reload (ADDON.debug is never saved).
     if cmd == "debug" then
         ADDON.debug = not ADDON.debug
-        self:Print("Debug: " .. (ADDON.debug and "ON" or "OFF"))
+        if ADDON.debug then
+            ADDON.Debug("debug", "detailed recording started")
+            self:Print("Detailed recording |cff98FF98ON|r until you /reload. Repeat the problem, then type /clerk log.")
+        else
+            self:Print("Detailed recording OFF.")
+        end
         return
     end
 

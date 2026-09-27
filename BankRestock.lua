@@ -128,13 +128,14 @@ local function refreshUI()
     if mf and mf.RefreshRestockBtn then mf:RefreshRestockBtn() end
 end
 
-function BR:Start()
+function BR:Start(express)
     if self.active then return end
     local mf = ADDON.MainFrame
     if not ADDON.bankOpen then mf:SetStatus("Open the bank first."); return end
     if InCombatLockdown() then mf:SetStatus("|cffff8888Can't restock from the bank in combat.|r"); return end
     if GetCursorInfo() then mf:SetStatus("|cffff8888Put down the item on your cursor first.|r"); return end
     self.active, self.pulled, self.run = true, {}, (self.run or 0) + 1
+    self.mode = express and "express" or "manual"
     refreshUI()
     self:_Step(self.run)
 end
@@ -149,6 +150,7 @@ function BR:Stop(reason)
         items = items + 1
         ADDON.Log:Emit("bank_pull", itemID, { qty = qty })
     end
+    ADDON.Log:Emit("bank_run", nil, { items = items, reason = reason, mode = self.mode })
     ADDON.Inventory:Invalidate()
     local stillShort = #self:Shortfalls()
     local msg = items == 0 and "Nothing pulled from the bank."

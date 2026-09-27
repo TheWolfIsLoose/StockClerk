@@ -36,11 +36,12 @@ local ADDON     = _G[addonName] or {}
 _G[addonName]   = ADDON
 
 -- Debug print, gated on `/clerk debug`. Shows as [SC:<tag>].
+-- Trace step, recorded into the log only while /clerk debug is on.
 function ADDON.Debug(tag, ...)
-    if not ADDON.debug then return end
+    if not ADDON.debug or not ADDON.Log then return end
     local parts = {}
     for i = 1, select("#", ...) do parts[i] = tostring(select(i, ...)) end
-    print("|cff98FF98[SC:" .. tag .. "]|r " .. table.concat(parts, " "))
+    ADDON.Log:Emit("trace", nil, { tag = tag, text = table.concat(parts, " ") })
 end
 
 local DB = {}

@@ -1,24 +1,9 @@
 --[[
     Stock Clerk - UI/LogPopup.lua
 
-    v0.7: replaces UI/LogFrame.lua. Instead of a full mini-app with filters
-    and a live tail, this is a simple copy-friendly dump popup summoned by
-    `/clerk log`. Design goals:
-
-    * 500x400 popup, one big multi-line EditBox showing every log entry
-    * EditBox pre-selects all text on show so Ctrl+C copies immediately
-    * Escape closes; a Close button in the corner as a fallback
-    * Entries prefixed with tag glyphs ([BUY]/[CAP]/[AUTO-BLOCK]/etc) so
-      the copy-paste output is greppable for support conversations
-
-    Two-tier model with the Sidecar's Recent Activity feed:
-    * Sidecar shows a live, curated preview (~30 entries, action-focused)
-    * This popup shows the FULL log (up to Log.MAX_ENTRIES, currently 500)
-      for the user who wants everything
-
-    LogFrame.lua was the v0.6 log surface. LogPopup replaced it in v0.7
-    (kept alongside for one release to give any external callers a grace
-    period) and LogFrame.lua was deleted in v0.8.
+    `/clerk log`: the support report (Log:Report) in a copyable text box,
+    pre-selected so Ctrl+C works at once. A snapshot taken when it opens;
+    it doesn't refresh live, so a selection survives while copying.
 ]]
 
 local addonName = ...
@@ -28,89 +13,6 @@ local LogPopup = {}
 ADDON.LogPopup = LogPopup
 
 local Palette = ADDON.MainFrame.Palette
-
--- -------------------------------------------------------------------------
--- Tag glyph per kind. Uppercase-in-brackets for greppability. Kept in one
--- table so extending the log with a new kind is a one-line change here.
--- -------------------------------------------------------------------------
-local TAGS = {
-    buy_success   = "[BUY]",
-    buy_fail      = "[BUY-FAIL]",
-    buy_skip      = "[BUY-SKIP]",
-    buy_attempt   = "[BUY-TRY]",
-    cap_change    = "[CAP]",
-    target_change = "[TARGET]",
-    add           = "[ADD]",
-    remove        = "[REMOVE]",
-    ah_search     = "[SEARCH]",
-    loop_start    = "[LOOP-START]",
-    loop_stop     = "[LOOP-STOP]",
-    auto_toggle   = "[AUTO]",
-    auto_refuse   = "[AUTO-BLOCK]",
-    bank_pull     = "[BANK]",
-    status        = "[STATUS]",
-}
-
--- -------------------------------------------------------------------------
--- One-line renderer. Compact but human-readable. Item names resolved via
--- GetItemInfo, with itemID fallback if the client hasn't cached the name
--- yet. Gold values shown as whole gold (matches the addon-wide preference
--- for legibility over precision when the last few silver don't matter).
--- -------------------------------------------------------------------------
-local function FormatLine(entry)
-    local tag = TAGS[entry.kind] or ("[" .. (entry.kind or "?"):upper() .. "]")
-    local when = date("%Y-%m-%d %H:%M:%S", entry.ts or time())
-    local pay = entry.payload or {}
-
-    local who = ""
-    if entry.itemID then
-        local name = GetItemInfo(entry.itemID)
-        who = " " .. (name or ("item:" .. entry.itemID))
-    end
-
-    local extra = ""
-    if entry.kind == "buy_success" then
-        extra = (" qty=%d spent=%dg"):format(pay.qty or 0, math.floor((pay.spentCopper or 0)/10000))
-    elseif entry.kind == "bank_pull" then
-        extra = (" qty=%d"):format(pay.qty or 0)
-    elseif entry.kind == "buy_fail" or entry.kind == "buy_skip" then
-        extra = " reason=" .. tostring(pay.reason or "?")
-    elseif entry.kind == "buy_attempt" then
-        extra = (" qty=%d planned=%dg"):format(pay.qty or 0, math.floor((pay.plannedSpendCopper or 0)/10000))
-    elseif entry.kind == "cap_change" then
-        local from = pay.fromCopper and (math.floor(pay.fromCopper/10000) .. "g") or "unset"
-        local to   = pay.toCopper   and (math.floor(pay.toCopper/10000)   .. "g") or "unset"
-        extra = (" %s -> %s"):format(from, to)
-    elseif entry.kind == "target_change" then
-        extra = (" %s -> %s"):format(tostring(pay.from), tostring(pay.to))
-    elseif entry.kind == "add" then
-        extra = " need=" .. tostring(pay.need or 0)
-    elseif entry.kind == "loop_start" then
-        extra = (" mode=%s queue=%d"):format(pay.mode or "?", pay.queueSize or 0)
-    elseif entry.kind == "loop_stop" then
-        extra = (" reason=%s spent=%dg touched=%d short=%d"):format(
-            pay.reason or "?",
-            math.floor((pay.spentCopper or 0)/10000),
-            pay.touched or 0,
-            pay.stillShort or 0)
-    elseif entry.kind == "auto_toggle" then
-        extra = " on=" .. tostring(pay.on)
-    elseif entry.kind == "auto_refuse" then
-        extra = " reason=" .. tostring(pay.reason or "?")
-    elseif entry.kind == "ah_search" then
-        local u = pay.unitPriceCopper and (math.floor(pay.unitPriceCopper/10000) .. "g") or "?"
-        extra = (" unit=%s listings=%d"):format(u, pay.listings or 0)
-    elseif entry.kind == "status" then
-        -- Strip WoW color codes from status text so the dump stays plain
-        -- (color codes copy as raw |cffXXXXXX...|r markers into the
-        -- clipboard which is ugly when pasting into a bug report).
-        local text = tostring(pay.text or "")
-        text = text:gsub("|c%x%x%x%x%x%x%x%x", ""):gsub("|r", "")
-        extra = " " .. text
-    end
-
-    return ("%s %s%s%s"):format(when, tag, who, extra)
-end
 
 -- -------------------------------------------------------------------------
 -- Build the popup lazily. UIParent-parented, DIALOG strata so it floats
@@ -162,11 +64,11 @@ local function Build()
     -- Title
     local title = f:CreateFontString(nil, "OVERLAY", "StockClerkFontNormal")
     title:SetPoint("TOPLEFT", 12, -10)
-    title:SetText("|cff98FF98Stock Clerk - Activity Log|r")
+    title:SetText("|cff98FF98Stock|r|cffffffffClerk|r log")
 
     local hint = f:CreateFontString(nil, "OVERLAY", "StockClerkFontDisableSmall")
     hint:SetPoint("TOPLEFT", 12, -28)
-    hint:SetText("|cff6a6a6aText below is pre-selected. Press Ctrl+C to copy. Esc to close.|r")
+    hint:SetText("|cff888888Everything is selected: press Ctrl+C and paste it into your bug report.|r")
 
     -- Close X button, upper right
     local closeX = CreateFrame("Button", nil, f)
@@ -244,22 +146,7 @@ end
 function LogPopup:Refresh()
     local f = self.frame
     if not f then return end
-
-    local entries = {}
-    if ADDON.Log and ADDON.Log.Query then
-        entries = ADDON.Log:Query()  -- newest-first
-    end
-
-    if #entries == 0 then
-        f._edit:SetText("(log is empty)")
-        return
-    end
-
-    local lines = {}
-    for i = 1, #entries do
-        lines[i] = FormatLine(entries[i])
-    end
-    f._edit:SetText(table.concat(lines, "\n"))
+    f._edit:SetText(ADDON.Log:Report())
     -- Reset scroll to top so the user sees the newest entry immediately.
     f._scroll:SetVerticalScroll(0)
 end
@@ -279,27 +166,4 @@ end
 function LogPopup:Toggle()
     local f = self.frame or Build()
     if f:IsShown() then f:Hide() else f:Show() end
-end
-
--- -------------------------------------------------------------------------
--- Hook Log:Emit so a live popup refreshes when new entries land. Chained
--- after Sidecar's hook so both surfaces stay current; each hook checks
--- IsShown before doing any work, so a hidden popup costs nothing per
--- emit beyond a single frame:IsShown call.
--- -------------------------------------------------------------------------
-do
-    if ADDON.Log and ADDON.Log.Emit and not ADDON.Log._logpopup_hook then
-        local origEmit = ADDON.Log.Emit
-        ADDON.Log.Emit = function(self, kind, itemID, payload)
-            origEmit(self, kind, itemID, payload)
-            if LogPopup.frame and LogPopup.frame:IsShown() then
-                if not LogPopup._refreshing then
-                    LogPopup._refreshing = true
-                    pcall(LogPopup.Refresh, LogPopup)
-                    LogPopup._refreshing = false
-                end
-            end
-        end
-        ADDON.Log._logpopup_hook = true
-    end
 end

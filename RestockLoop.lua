@@ -261,7 +261,7 @@ function Loop:PreviewShortfallCount()
     return n
 end
 
-function Loop:Start()
+function Loop:Start(express)
     if self.state.active then
         ADDON.Debug("Loop", "already active, ignoring Start")
         return
@@ -292,7 +292,7 @@ function Loop:Start()
     ADDON.Debug("Loop", ("started items=%d"):format(#q))
 
     if ADDON.Log then
-        ADDON.Log:Emit("loop_start", nil, { queueSize = #q })
+        ADDON.Log:Emit("loop_start", nil, { queueSize = #q, mode = express and "express" or "manual" })
     end
 
     self:Advance()

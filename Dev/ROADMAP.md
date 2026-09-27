@@ -268,9 +268,24 @@ Your list, caps and settings carry over unchanged.
 - U6 wording: no internal terms in player-facing text (Seen tooltip,
   restock-stopped toast, `/clerk pending`).
 
-**Still to do for beta2:** C1-C4 below; `Dev/STYLE.md` (the rules above).
-**Parked (v1.3 log rework):** activity feed wording ("loop start (?, 2
-items)", "user_stop", "unset -> 150g").
+**Log rework (pulled in from v1.3, Decided 2026-09-27; built on `dev`):**
+- One plain-language formatter (`Log:Format`) for the side panel feed and
+  `/clerk log`. Levels: **activity** (feed), **detail** (AH searches,
+  purchase attempts, footer messages, settings, updates, bank-run
+  summaries with stop reason), **trace** (recorded only while
+  `/clerk debug` is on; off again after /reload).
+- New entries: `bank_run`, `setting`, `version` (once per version
+  change), `error` (event-handler errors, logged then passed on to
+  BugSack), `trace`. Buffer 500 → 1,000.
+- `/clerk log` = support report: version, WoW build, locale, character,
+  list size, settings, relevant addons, recording state, then every
+  entry (details marked `.`, recorded steps `>`, item IDs included).
+  Snapshot, pre-selected for Ctrl+C.
+- Help tooltip on "Recent Activity"; the "/clerk log" label is a link.
+- **Known limit:** errors raised outside event handlers (button clicks,
+  timers) reach BugSack but not the log. Extend if reports show gaps.
+
+**Still to do for beta2:** flat checkboxes; C1-C4 below; `Dev/STYLE.md`.
 
 ### Audit (2026-09-26)
 
@@ -348,31 +363,11 @@ brutalist. Every pixel and every control has to earn its place.
 
 ---
 
-## v1.3.0 — Activity log: useful to players, usable for support
+## v1.3.0 — Activity log
 
-**Question to answer first:** is the activity log doing anything useful?
-It has never clearly told the player, in plain terms, what happened and
-what Stock Clerk did.
-
-What we want it to be:
-
-- **For players:** a readable history of what happened ("Bought 20 Light's
-  Potential for 412g", "Pulled 5 Flask of the Shattered Sun from your
-  warband bank", "Skipped Liquid Luster: above your 30g cap").
-- **For support:** when someone reports a problem, the same log should be
-  enough to see what went on, without shipping dev tools or asking them
-  to turn on debug output.
-
-To decide:
-
-- Which events are worth a line at all; drop the noise (status echoes,
-  searches, internal loop start/stop).
-- Plain-language wording for every entry, one style for the side panel
-  feed and `/clerk log`.
-- An easy way for a player to hand over the log (copyable text in the
-  log window), and how much detail it needs for support without
-  becoming a debug dump.
-- Or: cut it down to the side panel feed and drop the full log window.
+Pulled into v1.2.0-beta2 (see the beta2 section). Left for later, only
+if support reports call for it: cover errors from button clicks and
+timers too.
 
 ---
 
