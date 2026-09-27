@@ -131,7 +131,7 @@ function BR:Start(express)
     if GetCursorInfo() then mf:SetStatus("|cffff8888Put down the item on your cursor first.|r"); return end
     self.active, self.pulled, self.run = true, {}, (self.run or 0) + 1
     self.mode = express and "express" or "manual"
-    ADDON.MainFrame:RefreshRestockBtn()
+    mf:ClearMarks()
     self:_Step(self.run)
 end
 
@@ -140,7 +140,11 @@ function BR:Stop(reason)
     if not self.active then return end
     self.active = false
     if GetCursorInfo() then ClearCursor() end
-    local items = 0
+    local mf, items = ADDON.MainFrame, 0
+    for itemID, m in pairs(mf.marks) do  -- stopped mid-move: that row isn't "current" any more
+        local n = self.pulled[itemID]
+        if m.kind == "current" then mf:Mark(itemID, n and "done", n and ("Pulled %d from your bank"):format(n)) end
+    end
     for itemID, qty in pairs(self.pulled) do  -- one log entry per item pulled
         items = items + 1
         ADDON.Log:Emit("bank_pull", itemID, { qty = qty })
@@ -158,8 +162,8 @@ function BR:Stop(reason)
     if stillShort > 0 and reason ~= "not enough bag space" then  -- they're in the bank, not the AH
         msg = msg .. (" %d still short, restock at the AH."):format(stillShort)
     end
-    ADDON.MainFrame:SetStatus(msg)
-    ADDON.MainFrame:RefreshRestockBtn()
+    mf:SetCheckout(nil)
+    mf:SetStatus(msg)
 end
 
 function BR:_Step(run)
@@ -179,6 +183,15 @@ function BR:_Step(run)
         return self:Stop(left and "not enough bag space" or nil)
     end
 
+    -- Same pattern as the AH checkout: the row being filled is current, and
+    -- ticks once something has landed.
+    local mf, name = ADDON.MainFrame, C_Item.GetItemNameByID(m.itemID) or ("item " .. m.itemID)
+    mf:Mark(m.itemID, "current", "Moving from your bank")
+    local pulledItems = 0
+    for _ in pairs(self.pulled) do pulledItems = pulledItems + 1 end
+    mf:SetCheckout(("Pulling %d \195\151 %s"):format(m.count, name),
+        ("|cff999999%d item%s pulled so far|r"):format(pulledItems, pulledItems == 1 and "" or "s"))
+
     local before = C_Item.GetItemCount(m.itemID)
     if m.whole then
         C_Container.PickupContainerItem(m.fromBag, m.fromSlot)
@@ -192,6 +205,7 @@ function BR:_Step(run)
         if not self.active or run ~= self.run then return end
         if C_Item.GetItemCount(m.itemID) >= before + m.count and not GetCursorInfo() then
             self.pulled[m.itemID] = (self.pulled[m.itemID] or 0) + m.count
+            mf:Mark(m.itemID, "done", ("Pulled %d from your bank"):format(self.pulled[m.itemID]))
             return self:_Step(run)
         end
         if GetTime() - t0 > MOVE_TIMEOUT then return self:Stop("a move didn't finish") end

@@ -2,13 +2,15 @@
     Stock Clerk - UI/MainFrame.lua
     The shopping-list window: header (title, side panel, close), toolbar
     (Item ID, Target, bulk import), the list (ScrollBox of rows), and a
-    footer (last action + Restock button), plus the buy confirm flyout
-    below the window. Style rules: Dev/STYLE.md. The helpers here are shared
-    with the side panel, bulk import and log windows (MF.*).
+    footer (last action + Restock button; the checkout bar during a
+    restock). Style rules: Dev/STYLE.md. The helpers here are shared with
+    the side panel, bulk import and log windows (MF.*).
 
     Row: [grip] [icon] name ........ have (+stash)  [need]  [cap]  seen  [x]
     Click Need or Cap to edit; shift-click to link; with the AH open, click
     to search. Drag the grip to reorder (list order = restock priority).
+    During and after a restock the grip shows the row's mark instead
+    (queued, current, bought, over cap...).
 --]]
 
 local addonName = ...
@@ -188,15 +190,16 @@ local function DrawGlyph(frame, bars)
     return tint
 end
 
--- Header icon button: drawn glyph, mint on hover, one-line tooltip.
+-- Header icon button: drawn glyph, mint on hover, one-line tooltip (below
+-- unless anchor says otherwise).
 local CLOSE_GLYPH = { { 12, 2, 0, math.pi / 4 }, { 12, 2, 0, -math.pi / 4 } }
-local function HeaderIcon(parent, bars, tip, onClick)
+local function HeaderIcon(parent, bars, tip, onClick, anchor)
     local btn = CreateFrame("Button", nil, parent)
     btn:SetSize(26, 24)
     local tint = DrawGlyph(btn, bars)
     btn:SetScript("OnEnter", function(self)
         tint(Palette.brand)
-        GameTooltip:SetOwner(self, "ANCHOR_BOTTOM")
+        GameTooltip:SetOwner(self, anchor or "ANCHOR_BOTTOM")
         GameTooltip:SetText(tip)
         GameTooltip:Show()
     end)
@@ -314,6 +317,21 @@ local CELL_FILL_IDLE   = { 0, 0, 0, 0.35 }
 local CELL_FILL_HOVER  = { Palette.bgMedium[1], Palette.bgMedium[2], Palette.bgMedium[3], 1 }
 local CELL_BORDER_IDLE = { Palette.brand[1], Palette.brand[2], Palette.brand[3], 0 }
 
+-- Restock marks: kind -> { shape, colour }. Shapes are drawn bars.
+MF.marks = {}  -- itemID -> { kind, tip }
+local MARK_SHAPES = {
+    check   = { { 5, 2, -1.5, -math.pi / 4, -2.5 }, { 9, 2, 0, math.pi / 4, 1.5 } },
+    chevron = { { 6, 2, 2, -math.pi / 4 }, { 6, 2, -2, math.pi / 4 } },
+    dot     = { { 3, 3, 0 } },
+    dash    = { { 8, 2, 0 } },
+}
+local MARK_GREY, MARK_AMBER = { 0.55, 0.55, 0.55 }, { 1.0, 0.66, 0.4 }
+local MARK_STYLES = {
+    queued  = { "dot", MARK_GREY },       current = { "chevron", Palette.brand },
+    done    = { "check", Palette.brand }, skipped = { "dash", MARK_GREY },
+    over    = { "dash", MARK_AMBER },     failed  = { "dash", Palette.short },
+}
+
 local function SetRowHover(row, on)
     row._wash:SetShown(on)
     row.trash:SetShown(on)
@@ -365,13 +383,33 @@ local function BuildRow(row)
     row.grip:SetSize(GRIP_W, ROW_HEIGHT - 6)
     row.grip:SetPoint("LEFT", 2, 0)
     row.grip:RegisterForDrag("LeftButton")
-    local tintGrip = DrawGlyph(row.grip, { { 8, 1, 3 }, { 8, 1, 0 }, { 8, 1, -3 } })
+    row.gripGlyph = CreateFrame("Frame", nil, row.grip)
+    row.gripGlyph:SetAllPoints()
+    local tintGrip = DrawGlyph(row.gripGlyph, { { 8, 1, 3 }, { 8, 1, 0 }, { 8, 1, -3 } })
     tintGrip(GRIP_REST, 0.85)
+    -- Restock marks take the grip's place; one drawn glyph per shape.
+    row.markGlyphs = {}
+    for shape, bars in pairs(MARK_SHAPES) do
+        local g = CreateFrame("Frame", nil, row.grip)
+        g:SetAllPoints()
+        g:Hide()
+        g.tint = DrawGlyph(g, bars)
+        row.markGlyphs[shape] = g
+    end
+    row._current = Solid(row, "ARTWORK", 6, { Palette.brand[1], Palette.brand[2], Palette.brand[3], 0.08 })
+    row._current:SetPoint("TOPLEFT", 1, -1)
+    row._current:SetPoint("BOTTOMRIGHT", -1, 1)
+    row._current:Hide()
     row.grip:SetScript("OnEnter", function(self)
         OnChildEnter(self)
         tintGrip(Palette.brand)
         GameTooltip:SetOwner(self, "ANCHOR_TOP")
-        GameTooltip:SetText("Drag to reorder", 1, 1, 1)
+        -- A marked row leads with its restock result; hints return after the run.
+        local mark = MF.marks[self:GetParent()._itemID]
+        if mark then GameTooltip:SetText(mark.tip, 1, 1, 1, 1, true) end
+        if MF:Busy() then return GameTooltip:Show() end
+        if mark then GameTooltip:AddLine(" ") end
+        GameTooltip[mark and "AddLine" or "SetText"](GameTooltip, "Drag to reorder", 1, 1, 1)
         GameTooltip:AddLine("List order sets restock priority.", 0.7, 0.7, 0.7, true)
         GameTooltip:AddLine(" ")
         GameTooltip:AddLine("Shift+click a row to link it in chat.", 0.7, 0.7, 0.7, true)
@@ -380,7 +418,9 @@ local function BuildRow(row)
         GameTooltip:Show()
     end)
     row.grip:SetScript("OnLeave", function(self) tintGrip(GRIP_REST, 0.85); OnChildLeave(self) end)
-    row.grip:SetScript("OnDragStart", function(self) MF:BeginRowDrag(self:GetParent()) end)
+    row.grip:SetScript("OnDragStart", function(self)
+        if not MF:Busy() then MF:BeginRowDrag(self:GetParent()) end  -- the run's queue is fixed
+    end)
     row.grip:SetScript("OnDragStop", function() MF:EndRowDrag() end)
 
     -- Icon with a 1px quality border (Baganator style), coloured when bound.
@@ -509,7 +549,8 @@ local function BuildRow(row)
             local edit = ChatEdit_ChooseBoxForSend()
             ChatEdit_ActivateChat(edit)
             edit:Insert(self._itemLink)
-        elseif AuctionHouseFrame and AuctionHouseFrame:IsShown() then  -- browse, never buys
+        elseif AuctionHouseFrame and AuctionHouseFrame:IsShown() and not MF:Busy() then  -- browse, never buys;
+            -- not during a restock, whose own search it would cancel
             MF:SetStatus(("Searching AH for %s..."):format(self.name:GetText()))
             ADDON.AH:SearchItem(self._itemID, function(ok, results)
                 if not ok then return MF:SetStatus("|cffff8888AH search failed: " .. tostring(results) .. "|r") end
@@ -683,8 +724,17 @@ local function InitializeRow(row, data)
     row.accent:SetColorTexture(unpack(short > 0 and { 0xe5 / 255, 0x62 / 255, 0x4a / 255 } or { 0x4a / 255, 0xde / 255, 0x80 / 255 }))
     row.need:SetText(("|cffCCCCCC%d|r"):format(data.need))
 
+    -- Restock mark in the grip's place; the current item gets a mint wash.
+    local mark = MF.marks[itemID]
+    local style = mark and MARK_STYLES[mark.kind]
+    row.gripGlyph:SetShown(not style)
+    for shape, g in pairs(row.markGlyphs) do g:SetShown(style and style[1] == shape) end
+    if style then row.markGlyphs[style[1]].tint(style[2]) end
+    row._current:SetShown(mark and mark.kind == "current" or false)
+    if mark and mark.kind == "current" then row.accent:SetColorTexture(unpack(Palette.brand)) end
+
     -- Cap: mint "Ng"; red when last seen is above it (a buy would be refused);
-    -- a dash when unset (buys at market; the flyout warns "No cap set").
+    -- a dash when unset (buys at market; checkout warns "No cap set").
     local lp = data.lastPrice
     if data.maxPrice then
         local over = lp and lp.copper > data.maxPrice
@@ -747,8 +797,8 @@ function MF:Build()
     -- must never leave every game key swallowed.
     f:EnableKeyboard(true)
     f:SetScript("OnKeyDown", function(self, key)
-        local consumed = key == "ESCAPE" and ADDON.RestockLoop:IsActive()
-        if consumed then pcall(ADDON.RestockLoop.Stop, ADDON.RestockLoop, "user_esc") end
+        local consumed = key == "ESCAPE" and MF:Busy()
+        if consumed then pcall(MF.StopRun, "user_esc") end
         self:SetPropagateKeyboardInput(not consumed)
     end)
 
@@ -938,9 +988,9 @@ function MF:Build()
     ApplyBand(footer, Palette.bandTint)
     AddRule(footer, "TOP")
 
-    -- Restock: "Restock at AH (N)", "Restock from Bank (N)" at a banker, or
-    -- "Stop ..." while running. Buying happens in the flyout, so a double
-    -- click here can't buy.
+    -- Restock: "Restock at AH (N)", or "Restock from Bank (N)" at a banker.
+    -- During an AH restock the same button is Buy (right edge fixed, so the
+    -- cursor never moves); RestockLoop debounces it against a double click.
     local restockBtn = CreateFrame("Button", nil, footer)
     restockBtn:SetSize(160, 22)
     restockBtn:SetPoint("RIGHT", -12, 0)
@@ -948,8 +998,8 @@ function MF:Build()
     restockBtn:SetMotionScriptsWhileDisabled(true)  -- a disabled button still explains itself
     restockBtn:SetScript("OnClick", function()
         local loop, br = ADDON.RestockLoop, ADDON.BankRestock
-        if br:IsActive() then br:Stop("stopped by you")
-        elseif loop:IsActive() then loop:Stop("user_stop")
+        if loop:IsActive() then loop:Fire()
+        elseif br:IsActive() then return
         elseif ADDON.bankOpen then br:Start()
         else loop:Start() end
     end)
@@ -976,7 +1026,33 @@ function MF:Build()
     statusBar:SetMaxLines(1)
     self.statusBar = statusBar
 
-    self:BuildToast(f)
+    -- Checkout bar (during a restock, in place of the status text):
+    --   [x]  16 x Flask of the Shattered Sun          [Skip] [Buy]
+    --        7,424g  2 of 4 (or amber warnings)
+    -- x (far from Buy) and Escape are the only ways to stop a run.
+    local stopX = HeaderIcon(footer, { { 9, 2, 0, math.pi / 4 }, { 9, 2, 0, -math.pi / 4 } },
+        "Stop (or press Escape)", function() MF.StopRun("user_stop") end, "ANCHOR_TOP")
+    stopX:SetSize(20, 24)
+    stopX:SetPoint("LEFT", 3, 0)
+    local skipBtn = CreateFrame("Button", nil, footer)
+    skipBtn:SetSize(50, 22)
+    skipBtn:SetPoint("RIGHT", restockBtn, "LEFT", -6, 0)
+    StyleButton(skipBtn)
+    skipBtn:SetText("Skip")
+    skipBtn:SetScript("OnClick", function() ADDON.RestockLoop:Skip() end)
+    local function CheckoutLine(font, point, y)
+        local fs = footer:CreateFontString(nil, "OVERLAY", font)
+        fs:SetPoint(point .. "LEFT", 24, y)
+        fs:SetPoint("RIGHT", skipBtn, "LEFT", -8, 0)
+        fs:SetJustifyH("LEFT")
+        fs:SetWordWrap(false)
+        fs:Hide()
+        return fs
+    end
+    self.checkout = { CheckoutLine("StockClerkFont", "TOP", -3), CheckoutLine("StockClerkFontSmall", "BOTTOM", 3),
+                      stopX = stopX, skip = skipBtn }
+    stopX:Hide()
+    skipBtn:Hide()
 
     -- ---- Resize grip (Blizzard's chat-frame size grabber art) -------------
     local grip = CreateFrame("Button", nil, f)
@@ -1051,6 +1127,11 @@ function MF:_RefreshNow()
     end
     self.scrollBox:SetDataProvider(provider, ScrollBoxConstants.RetainScrollPosition)
     self.dataProvider = provider
+    if self._scrollTo then  -- the restock's current item
+        local id = self._scrollTo
+        self._scrollTo = nil
+        self.scrollBox:ScrollToElementDataByPredicate(function(d) return d.itemID == id end, ScrollBoxConstants.AlignNearest)
+    end
     local empty = provider:GetSize() == 0
     self.emptyText:SetShown(empty)
     if empty then
@@ -1065,9 +1146,18 @@ end
 function MF:RestockState()
     local loop, br = ADDON.RestockLoop, ADDON.BankRestock
     if br:IsActive() then
-        return { label = "Stop pulling", enabled = true, tip = "Stop pulling", lines = { "Stops after the item currently moving." } }
+        return { label = "Pulling...", enabled = false, tip = "Restock from Bank",
+                 lines = { "Moving what you're short into your bags. Press Escape or the x to stop." } }
     elseif loop:IsActive() then
-        return { label = "Stop restock", enabled = true, tip = "Stop restock", lines = { "Ends the current walk. Any armed buy is discarded." } }
+        local wait, plan = loop:BuyWait(), loop.state.armedPlan
+        local st = { label = "Buy", enabled = wait == 0, tip = "Buy",
+                     lines = { "Buy this item, then move on to the next.", "Skip passes on it; Escape or the x stops." } }
+        if wait then  -- armed: say what, and why Buy may be waiting
+            if wait > 0 and #plan.warnings > 0 then st.label = ("Buy (%d)"):format(math.ceil(wait)) end
+            st.tip = ("Buy %d %s for %s"):format(plan.planQuantity, plan.name, MoneyText(plan.plannedSpend))
+            for _, w in ipairs(plan.warnings) do st.lines[#st.lines + 1] = "|cffffa866" .. w .. "|r" end
+        end
+        return st
     elseif ADDON.bankOpen then
         local n = br:PullableCount()
         return { label = n > 0 and ("Restock from Bank (%d)"):format(n) or "Restock from Bank", enabled = n > 0,
@@ -1079,7 +1169,7 @@ function MF:RestockState()
     local ahOpen = AuctionHouseFrame and AuctionHouseFrame:IsShown()
     return { label = n > 0 and ("Restock at AH (%d)"):format(n) or "Restock at AH", enabled = ahOpen and n > 0,
              tip = "Restock at AH",
-             lines = { "Walks your shortlist and prompts for each buy.", "Rows priced above your cap are skipped silently." },
+             lines = { "Goes down your list in order; you click Buy for each item.", "Items above your cap are marked and passed over." },
              reason = not ahOpen and "Auction House isn't open."
                    or n == 0 and "Nothing to restock -- every row is at or above its need." or nil }
 end
@@ -1089,6 +1179,46 @@ function MF:RefreshRestockBtn()
     local state = self:RestockState()
     self.restockBtn:SetText(state.label)
     self.restockBtn:SetEnabled(state.enabled)
+    self.checkout.skip:SetEnabled(ADDON.RestockLoop:BuyWait() ~= nil)
+end
+
+-- ---------------------------------------------------------------------------
+-- Restock runs (RestockLoop at the AH, BankRestock at the bank)
+-- ---------------------------------------------------------------------------
+function MF:Busy()
+    return ADDON.RestockLoop:IsActive() or ADDON.BankRestock:IsActive()
+end
+
+-- reason: "user_esc" or "user_stop" (the x).
+function MF.StopRun(reason)
+    if ADDON.RestockLoop:IsActive() then ADDON.RestockLoop:Stop(reason) end
+    if ADDON.BankRestock:IsActive() then ADDON.BankRestock:Stop("stopped by you") end
+end
+
+-- Row mark for itemID (kind = nil removes it); "current" scrolls it into view.
+function MF:Mark(itemID, kind, tip)
+    self.marks[itemID] = kind and { kind = kind, tip = tip } or nil
+    if kind == "current" then self._scrollTo = itemID end
+    self:Refresh()
+end
+
+function MF:ClearMarks()
+    if not next(self.marks) then return end
+    wipe(self.marks)
+    self:Refresh()
+end
+
+-- Footer as the checkout bar (two lines), or back to the status text (nil).
+function MF:SetCheckout(line1, line2)
+    if not self.frame then return end
+    local on, co = line1 ~= nil, self.checkout
+    self.statusBar:SetShown(not on)
+    co[1]:SetShown(on); co[2]:SetShown(on); co.stopX:SetShown(on)
+    co.skip:SetShown(on and ADDON.RestockLoop:IsActive())
+    -- Narrower Buy, same right edge: it still covers where Restock was clicked.
+    self.restockBtn:SetWidth(on and 100 or 160)
+    if on then co[1]:SetText(line1); co[2]:SetText(line2 or "") end
+    self:RefreshRestockBtn()
 end
 
 -- ---------------------------------------------------------------------------
@@ -1118,178 +1248,6 @@ end
 function MF:SetStatus(text, skipLog)
     if self.statusBar then self.statusBar:SetText(text or "") end
     if not skipLog and text and text ~= "" then ADDON.Log:Emit("status", nil, { text = text }) end
-end
-
--- ---------------------------------------------------------------------------
--- Confirm flyout, below the window (away from the rows, so a misclick can't
--- hit Buy). Called from RestockLoop:
---   ShowArmedToast(plan, handlers)  plan, then [Skip] [Buy]; Buy unlocks after
---                                   1.5s. handlers: onBuy, onSkip, onStop
---   ShowSummaryToast({ title, sub }) end-of-run recap, auto-closes after 3s
---   HideToast()
--- Right-click the body to stop the run.
--- ---------------------------------------------------------------------------
-local AMBER = { 1.0, 0.66, 0.4, 1 }
-local TOAST_MINT = { Palette.brand[1], Palette.brand[2], Palette.brand[3], 0.85 }
-
-function MF:BuildToast(f)
-    local toast = CreateFrame("Frame", nil, f)
-    toast:SetSize(360, 44)
-    toast:SetPoint("TOPRIGHT", f, "BOTTOMRIGHT", 0, -1)
-    toast:SetFrameLevel(f:GetFrameLevel() + 20)
-    toast:EnableMouse(true)
-    toast:Hide()
-    ApplyFill(toast, { 0.055, 0.075, 0.055, 0.98 })
-    AddBlackBorder(toast, TOAST_MINT)
-
-    local function Text(font, anchor)
-        local fs = toast:CreateFontString(nil, "OVERLAY", font)
-        fs:SetPoint("TOPLEFT", anchor or toast, anchor and "BOTTOMLEFT" or "TOPLEFT", anchor and 0 or 10, anchor and -1 or -6)
-        fs:SetPoint("RIGHT", toast, "RIGHT", -160, 0)
-        fs:SetJustifyH("LEFT")
-        fs:SetWordWrap(false)
-        return fs
-    end
-    self._toastTitle = Text("StockClerkFont")
-    self._toastStash = Text("StockClerkFontSmall", self._toastTitle)  -- "already have some" lines
-    self._toastStash:SetWordWrap(true)
-    self._toastStash:SetTextColor(unpack(AMBER))
-    self._toastSub = Text("StockClerkFontSmall", self._toastStash)
-    -- Text stops before the buttons: two in armed mode, one in summary mode.
-    function self._toastTextRight(x)
-        for _, fs in ipairs({ self._toastTitle, self._toastStash, self._toastSub }) do fs:SetPoint("RIGHT", toast, "RIGHT", x, 0) end
-    end
-
-    local function Button(label, width, x, onClick)
-        local b = CreateFrame("Button", nil, toast)
-        b:SetSize(width, 22)
-        b:SetPoint("RIGHT", x, 0)
-        StyleButton(b)
-        b:SetText(label)
-        b:SetScript("OnClick", onClick)
-        return b
-    end
-    self._toastSkip = Button("Skip", 64, -78, function()
-        if self._toastHandlers then self._toastHandlers.onSkip() end
-    end)
-    -- Armed: "Buy (1s)" then "Buy" (mint). Summary: "Close (3s)".
-    self._toastPrimary = Button("Buy", 70, -8, function()
-        if self._toastMode == "armed" and self._toastArmReady then
-            self:_StopToastPulse()
-            self._toastHandlers.onBuy()
-        elseif self._toastMode == "summary" then
-            self:HideToast()
-        end
-    end)
-    self._toastPrimaryFill = Solid(self._toastPrimary, "ARTWORK", 0, { Palette.brand[1], Palette.brand[2], Palette.brand[3], 0.35 })
-    self._toastPrimaryFill:SetPoint("TOPLEFT", 1, -1)
-    self._toastPrimaryFill:SetPoint("BOTTOMRIGHT", -1, 1)
-
-    toast:SetScript("OnMouseUp", function(_, button)
-        if button == "RightButton" and self._toastHandlers then self._toastHandlers.onStop() end
-    end)
-    toast:SetScript("OnEnter", function()
-        if self._toastMode ~= "armed" then return end
-        GameTooltip:SetOwner(toast, "ANCHOR_TOP")
-        GameTooltip:SetText("Confirm purchase", 1, 1, 1)
-        GameTooltip:AddLine("Buy: complete this purchase. Waits a beat to prevent accidents.", 0.7, 0.7, 0.7, true)
-        GameTooltip:AddLine("Skip: pass on this item, keep going.", 0.7, 0.7, 0.7, true)
-        GameTooltip:AddLine("Right-click: stop the whole restock.", 0.7, 0.7, 0.7, true)
-        GameTooltip:Show()
-    end)
-    toast:SetScript("OnLeave", GameTooltip_Hide)
-    self.confirmToast = toast
-end
-
--- Cancel the running countdown (Buy unlock or summary auto-close) and pulse.
-function MF:_StopToastTimers()
-    if self._toastTicker then self._toastTicker:Cancel(); self._toastTicker = nil end
-    self:_StopToastPulse()
-end
-
--- Stash warning: pulse the border mint/amber every 0.5s until Buy, Skip or hide.
-function MF:_StopToastPulse()
-    if self._toastPulse then self._toastPulse:Cancel(); self._toastPulse = nil end
-    SetBorderColor(self.confirmToast, TOAST_MINT)
-end
-
--- Count down `seconds` in 0.5s ticks, updating the label, then call done.
-function MF:_ToastCountdown(fmt, seconds, done)
-    local remaining = seconds
-    self._toastPrimary:SetText(fmt:format(math.ceil(remaining)))
-    self._toastTicker = C_Timer.NewTicker(0.5, function()
-        remaining = remaining - 0.5
-        if remaining > 0 then
-            self._toastPrimary:SetText(fmt:format(math.ceil(remaining)))
-        else
-            self._toastTicker:Cancel()
-            self._toastTicker = nil
-            done()
-        end
-    end)
-end
-
-function MF:ShowArmedToast(plan, handlers)
-    self:_StopToastTimers()
-    self._toastMode, self._toastHandlers, self._toastArmReady = "armed", handlers, false
-
-    local stash = {}
-    if plan.stashBank > 0 then stash[#stash + 1] = ("You have %d in bank (this character)"):format(plan.stashBank) end
-    if plan.stashWarband > 0 then stash[#stash + 1] = ("You have %d in warband bank (account-wide)"):format(plan.stashWarband) end
-    self._toastStash:SetText(table.concat(stash, "\n"))
-    self.confirmToast:SetHeight(44 + #stash * 13)
-
-    local name = #plan.name > 22 and plan.name:sub(1, 21) .. "\226\128\166" or plan.name
-    self._toastTitle:SetText(("%d x %s"):format(plan.planQuantity, name))
-    local total = MoneyText(plan.plannedSpend)
-    if plan.maxPrice then
-        self._toastSub:SetText(("%s  \194\183  Cap %s / unit"):format(total, MoneyText(plan.maxPrice, "silver")))
-        self._toastSub:SetTextColor(0.78, 0.78, 0.78)
-    else
-        self._toastSub:SetText(("%s  \194\183  No cap set"):format(total))
-        self._toastSub:SetTextColor(unpack(AMBER))
-    end
-
-    self._toastTextRight(-160)
-    self._toastSkip:Show()
-    self._toastPrimary:Disable()
-    self._toastPrimaryFill:Hide()
-    self.confirmToast:Show()
-    if #stash > 0 then
-        local amber = false
-        self._toastPulse = C_Timer.NewTicker(0.5, function()
-            amber = not amber
-            SetBorderColor(self.confirmToast, amber and AMBER or TOAST_MINT)
-        end)
-    end
-    self:_ToastCountdown("Buy (%ds)", 1.5, function()
-        self._toastArmReady = true
-        self._toastPrimary:SetText("Buy")
-        self._toastPrimary:Enable()
-        self._toastPrimaryFill:Show()
-    end)
-end
-
-function MF:ShowSummaryToast(summary)
-    self:_StopToastTimers()
-    self._toastMode, self._toastHandlers, self._toastArmReady = "summary", nil, false
-    self._toastStash:SetText("")
-    self.confirmToast:SetHeight(44)
-    self._toastTitle:SetText(summary.title)
-    self._toastSub:SetText(summary.sub)
-    self._toastSub:SetTextColor(0.78, 0.78, 0.78)
-    self._toastTextRight(-100)
-    self._toastSkip:Hide()
-    self._toastPrimary:Enable()
-    self._toastPrimaryFill:Hide()
-    self.confirmToast:Show()
-    self:_ToastCountdown("Close (%ds)", 3, function() self:HideToast() end)
-end
-
-function MF:HideToast()
-    self:_StopToastTimers()
-    self._toastMode, self._toastHandlers, self._toastArmReady = nil, nil, false
-    self.confirmToast:Hide()
 end
 
 -- ---------------------------------------------------------------------------

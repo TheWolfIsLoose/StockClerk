@@ -11,6 +11,11 @@ disagree), **Open** (needs an answer before build).
 
 ## Next session: start here
 
+**Update 2026-09-27 ~17:30 ET:** beta3's in-game log looked clean (an AH
+restock, cap/target edits, no StockClerk errors since it loaded). Checkout
+mode is built for beta4 (see its section, "As built" and the in-game
+checklist); it waits on the beta3 cut decision so beta3 doesn't ship with it.
+
 **Handoff 2026-09-27 ~01:40 ET.** In order:
 
 1. **Beta3 check.** `dev` holds the full Ponytail pass for `v1.2.0-beta3`
@@ -37,7 +42,7 @@ attached with push access (add_repo), then `git push origin dev`.
 
 ---
 
-## Checkout mode (v1.2.0-beta4): replace the AH buy flyout (Designed 2026-09-27, not built)
+## Checkout mode (v1.2.0-beta4): replace the AH buy flyout (Built 2026-09-27 on `dev`, awaiting in-game check)
 
 Every AH purchase needs a player click (hardware event), so the run is
 always one click per item; this redesigns everything around that click.
@@ -76,6 +81,56 @@ like ticking off a paper shopping list.
   juggling (~150 lines).
 - Open detail: lock drag-reorder during a run (the queue is a snapshot);
   keep Cap editing live.
+
+**As built (2026-09-27).** Smoke covers the run end to end (risk lock,
+debounce, double click, marks, receipt, over cap, late results after Stop).
+- The Restock button *is* Buy during a run: it narrows 160 → 100px with
+  the same right edge, so it still covers where Restock was clicked. Skip
+  (50px) sits left of it; the × is at the footer's far left, away from
+  both. Footer stays 30px: line 1 "20 × Name", line 2 "4,880g" + grey
+  "2 of 4 · spent 2,420g" or amber warnings.
+- **Default:** Buy locks 1.5s (label "Buy (2)") only with a warning: copies
+  in bank/warband, no cap, or average unit price > 125% of the Last Seen
+  read *before* this search. Otherwise Buy is live, except within 0.5s of
+  the player's last click (Restock, Buy, Skip), which stops a double-click
+  on Restock from buying. Buy's tooltip repeats the warnings in full.
+- Marks sit in the grip's slot (drawn: dot, chevron, check, dash); the
+  current row gets a faint mint wash and mint accent and scrolls into view.
+  Grip tooltip leads with the mark's detail ("Bought 20 for 4,880g, on its
+  way by mail", "Over your cap: cheapest is 465g 98s"). Rows the run never
+  reached lose their marks on Stop; the rest clear when the AH/bank closes.
+- **Decided (open detail):** drag-reorder is locked during a run; Cap
+  editing stays live (the next run uses it). Also: clicking a row to search
+  is off during a run (it would cancel the run's own search).
+- Receipt in the footer: "Done: bought 3 for 1,219g · 1 over cap · 1 not
+  bought · check your mail" (Stopped / AH closed variants). Long receipts
+  truncate at min width; the log has the detail.
+- Bank: same bar ("Pulling 20 × Name", "2 items pulled so far"), button
+  reads "Pulling..." (disabled), × or Escape stops; rows tick as items land.
+- Flyout, its countdown/pulse tickers and right-click stop removed:
+  MainFrame 1,370 → 1,328 lines with the marks and checkout bar added.
+- `AH:BuyUpTo` now returns the cheapest price as a third value when every
+  listing is over the cap (replaces matching the error text).
+
+**In-game checklist:** Restock at AH with 3+ short items (one capped
+below market, one uncapped, one with bank copies): marks, current row
+scrolls into view, Buy stays under the cursor, "Buy (2)" only on the
+risky ones, Skip, × and Escape, receipt. Double-click Restock must not
+buy. Restock from Bank: rows tick, × stops. Footer text legibility at
+the 420px minimum width (two lines in 30px).
+
+**v1.2.0-beta4 CHANGELOG (draft):**
+```
+## v1.2.0-beta4
+
+- New: **checkout at the Auction House.** Restock at AH now works like ticking off a shopping list. The item and its price show at the bottom of the window, and **Buy** appears right where the Restock button was, so you can buy item after item without moving the mouse.
+- Rows tick off as you go: bought, skipped, or over your cap (hover the mark to see the cheapest price, then set a new cap right there).
+- Buy only waits a moment when something needs a second look: you have copies in your bank, the item has no cap, or the price is well above what you last saw.
+- Stop any time with Escape or the x at the bottom left. The end-of-run receipt stays at the bottom of the window.
+- Restock from Bank ticks rows off the same way.
+
+Your list, caps and settings carry over unchanged.
+```
 
 **Rejected / shelved (Decided):**
 - A third docked "restock" panel: duplicates the visible list, and at the

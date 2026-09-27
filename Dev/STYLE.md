@@ -48,7 +48,14 @@ place. New UI follows these rules; the helpers named here already exist in
   (`/clerk log`).
 - Timestamps are bracketed: `[14:24]` in the feed, `[14:24:10]` in the log.
 - Footer = feedback on the last action; it stays until the next one. No
-  centre-screen alert text.
+  centre-screen alert text. During a restock it is the checkout bar (item
+  and price over total and progress or amber warnings; Skip; Buy in the
+  Restock button's place, same right edge) and the end-of-run receipt
+  lands there. No flyouts or popups for a run.
+- Run state lives in the list: a mark in the grip's slot (dot queued,
+  mint chevron current, mint check done, grey/amber/red dash for skipped,
+  over cap, not bought), its detail in the grip tooltip. Marks last until
+  the AH or bank closes.
 
 ## Behaviour
 - Tooltips: `HookScript` (never `SetScript`) on styled buttons, or the hover

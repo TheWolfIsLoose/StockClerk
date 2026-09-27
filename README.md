@@ -28,16 +28,19 @@ Retail only (Midnight). No library dependencies.
   breakdown.
 - **Price caps.** Give any item a max gold per unit and Stock Clerk
   won't buy it above that. Items with no cap buy at the going price;
-  the confirm step flags them with an amber "No cap set".
+  checkout flags them with an amber "No cap set".
 - **Restock from Bank.** At a banker, one click moves exactly what
   you're short from your bank, then your warband bank, into your bags.
   No gold spent, never more than you need.
-- **Auction House restock.** At the AH, click a row to search for that
-  item, or press **Restock at AH** to walk every short item in list
-  order. Each purchase waits for you to press **Buy** (after a short
-  countdown) or **Skip**.
-- **Stash warning.** If you already own copies in your bank or warband
-  bank, the confirm step says so before you spend gold.
+- **Auction House checkout.** At the AH, click a row to search for that
+  item, or press **Restock at AH** to go down every short item in list
+  order, like ticking off a shopping list. The footer shows the item and
+  price, and **Buy** appears right where Restock was, so it's one click
+  per item without moving the mouse (or **Skip**). Rows tick off as you
+  buy; items above your cap are marked and passed over.
+- **Second look when it matters.** If you already own copies in your
+  bank or warband bank, have no cap set, or the price is well above what
+  you last saw, checkout says so and Buy waits a moment.
 - **Mail-aware.** Purchases waiting in your mailbox count toward your
   targets, so nothing gets bought twice.
 - **Short-items filter.** The funnel icon hides everything you already
@@ -54,7 +57,7 @@ order.
 ## Screenshots
 
 <p align="center">
-  <img src=".assets/screenshots/hero.jpg" alt="Stock Clerk main window with restock flyout and sidecar" width="900">
+  <img src=".assets/screenshots/hero.jpg" alt="Stock Clerk main window and sidecar" width="900">
   <br>
   <em>Shopping list with the Skip/Buy confirm step and the settings and
   activity side panel.</em>

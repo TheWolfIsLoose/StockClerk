@@ -8,10 +8,14 @@ local addonName = ...
 local ADDON     = _G[addonName]
 
 -- Copper as "12g 34s 56c" (letters, not coin icons, so reskinned coin art
--- doesn't matter). precision "silver" drops copper. Zero is "0g".
+-- doesn't matter). precision "silver" drops copper; "gold" is whole gold with
+-- thousands commas ("7,424g") from 1g up. Zero is "0g".
 function ADDON.MoneyText(copper, precision)
     copper = tonumber(copper) or 0
     if copper <= 0 then return "0g" end
+    if precision == "gold" and copper >= 10000 then
+        return (tostring(math.floor(copper / 10000)):reverse():gsub("(%d%d%d)", "%1,"):reverse():gsub("^,", "")) .. "g"
+    end
     local g, s, c = math.floor(copper / 10000), math.floor(copper / 100) % 100, copper % 100
     local parts = {}
     if g > 0 then parts[#parts + 1] = g .. "g" end
@@ -146,6 +150,7 @@ function ADDON:OnAuctionHouseClosed()
     self.AH:OnAuctionHouseClosed()
     self.RestockLoop:Stop("AH closed")
     local mf = self.MainFrame
+    mf:ClearMarks()  -- a restock's row marks last until you leave the AH
     mf:RefreshRestockBtn()
     mf:Undock()  -- before hiding, so a later open comes up where the player left it
     if mf.openedByAH then
@@ -177,6 +182,7 @@ function ADDON:OnBankClosed()
     self.bankOpen = false
     self.BankRestock:Stop("bank closed")
     local mf = self.MainFrame
+    mf:ClearMarks()
     mf:RefreshRestockBtn()
     if mf.openedByBank then
         mf.openedByBank = false

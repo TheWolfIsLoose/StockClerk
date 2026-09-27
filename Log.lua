@@ -118,7 +118,7 @@ local FORMAT = {
     buy_success   = function(p, item) return ("Bought %s %s for %s"):format(p.qty or "?", item, Money(p.spentCopper)) end,
     buy_fail      = function(p, item) return ("Couldn't buy %s: %s"):format(item, Plain(p.reason or "unknown reason")) end,
     buy_skip      = function(p, item)
-        if p.reason == "cap out (silent)" then return ("Skipped %s: cheapest price is above your cap"):format(item) end
+        if p.reason == "over cap" or p.reason == "cap out (silent)" then return ("Skipped %s: cheapest price is above your cap"):format(item) end
         if p.reason == "user skipped" then return ("Skipped %s (you chose Skip)"):format(item) end
         return ("Skipped %s: %s"):format(item, Plain(p.reason or "?"))
     end,

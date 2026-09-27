@@ -341,35 +341,67 @@ assert(bd.bags == 7 and bd.bank == 0 and bd.warband == 0, "fast path")
 ADDON.DB.char.items[42] = ADDON.DB.char.items[42] or { need = 30, sortOrder = 20 }
 ADDON.DB.char.pendingBuys = {}
 assert(ADDON.RestockLoop:PreviewShortfallCount() == 1, "shortfall count")
-do -- Restock run: search -> arm -> Buy (double click buys once) -> mail ledger -> done; stop ignores late results
+do -- Checkout: search -> arm -> Buy (risk lock, debounce, double click buys once) -> marks -> receipt
   local L, AH, mf = ADDON.RestockLoop, ADDON.AH, ADDON.MainFrame
-  local saved = { AuctionHouseFrame, AH.BuyUpTo, AH.ExecutePurchase, mf.ShowArmedToast, mf.ShowSummaryToast, mf.HideToast }
+  local saved = { AuctionHouseFrame, AH.BuyUpTo, AH.ExecutePurchase, mf.SetStatus, GetTime }
   AuctionHouseFrame = { IsShown = function() return true end }
-  local search, execs, armed, summary = nil, {}, nil, nil
+  local now, search, execs, footer = 10, nil, {}, nil
+  GetTime = function() return now end
   AH.BuyUpTo = function(_, id, qty, cap, cb) search = { id = id, qty = qty, cb = cb } end
   AH.ExecutePurchase = function(_, id, qty, spend, cb) execs[#execs + 1] = cb end
-  mf.ShowArmedToast = function(_, plan, h) armed = { plan = plan, h = h } end
-  mf.ShowSummaryToast = function(_, sm) summary = sm end
-  mf.HideToast = function() end
+  mf.SetStatus = function(_, t) footer = t end
+  local function flush(from) for i = from + 1, #timers do timers[i]() end end
+  local plan = function() return { itemID = 42, planQuantity = 23, plannedSpend = 2300, worstUnitPrice = 100 } end
+
   L:Start()
   assert(search and search.id == 42 and search.qty == 23, "loop searches the short item for its shortfall")
-  search.cb(true, { itemID = 42, planQuantity = 23, plannedSpend = 2300, worstUnitPrice = 100 })
-  assert(armed and armed.plan.name, "loop arms the flyout")
-  armed.h.onBuy(); armed.h.onBuy()
+  assert(mf.marks[42] and mf.marks[42].kind == "current", "searching item is current")
+  search.cb(true, plan())                                   -- no cap set: a warning, so Buy waits
+  assert(L.state.armedPlan and L.state.armedPlan.warnings[1] == "No cap set", "no-cap warning")
+  L:Fire()
+  assert(#execs == 0, "risky buy must wait")
+  assert(mf:RestockState().label == "Buy (2)", "countdown label: " .. mf:RestockState().label)
+  now = 12
+  assert(mf:RestockState().label == "Buy" and mf:RestockState().enabled, "Buy unlocks")
+  L:Fire(); L:Fire()
   assert(#execs == 1, "double click must buy once")
   local mark = #timers
   execs[1](true)
   assert(ADDON.DB.char.pendingBuys[42].qty == 23 and L:PreviewShortfallCount() == 0, "mail ledger counts the buy")
-  for i = mark + 1, #timers do timers[i]() end
-  assert(summary and summary.title:find("Restock complete") and not L:IsActive(), "run finishes")
+  assert(mf.marks[42].kind == "done", "bought row is ticked")
+  flush(mark)
+  assert(not L:IsActive() and footer:find("bought 1 for") and footer:find("check your mail"), "receipt: " .. tostring(footer))
+
+  -- Capped, no warnings: Buy is live at once, but not within 0.5s of the Restock click.
   ADDON.DB.char.pendingBuys = {}
-  armed = nil
+  ADDON.DB.char.items[42].maxPrice = 1000
+  L:Start(); search.cb(true, plan())
+  assert(#L.state.armedPlan.warnings == 0, "capped buy has no warnings")
+  L:Fire(); assert(#execs == 1, "Buy within the debounce of the Restock click")
+  now = 12.6; L:Fire(); assert(#execs == 2, "Buy after the debounce")
+  L:Stop("user_stop")
+
+  -- Price well above last seen warns; over cap marks the row and moves on.
+  ADDON.DB.char.items[42].lastPrice = { copper = 50, seenAt = 0 }
+  L:Start(); search.cb(true, plan())
+  assert(L.state.armedPlan.warnings[1] == "100% above last seen", "price jump warning")
+  L:Stop("user_stop")
+  ADDON.DB.char.items[42].lastPrice = nil
+  L:Start(); mark = #timers
+  search.cb(false, "cheapest is above your cap", 5000)
+  assert(mf.marks[42].kind == "over" and mf.marks[42].tip:find("50s"), "over-cap mark")
+  flush(mark)
+  assert(not L:IsActive() and footer:find("1 over cap"), "over-cap receipt: " .. tostring(footer))
+
+  -- Stopping: late search results don't arm; unreached rows lose their marks.
   L:Start()
   local late = search.cb
   L:Stop("user_stop")
-  late(true, { itemID = 42, planQuantity = 23, plannedSpend = 2300, worstUnitPrice = 100 })
-  assert(armed == nil and not L:IsActive(), "a search finishing after Stop must not arm")
-  AuctionHouseFrame, AH.BuyUpTo, AH.ExecutePurchase, mf.ShowArmedToast, mf.ShowSummaryToast, mf.HideToast = unpack(saved, 1, 6)
+  late(true, plan())
+  assert(L.state.armedPlan == nil and not L:IsActive(), "a search finishing after Stop must not arm")
+  assert(mf.marks[42] == nil, "unreached row keeps a mark")
+  ADDON.DB.char.items[42].maxPrice = nil
+  AuctionHouseFrame, AH.BuyUpTo, AH.ExecutePurchase, mf.SetStatus, GetTime = unpack(saved, 1, 5)
 end
 -- Item-info refresh only for our items while shown
 local rf = 0
@@ -390,7 +422,7 @@ do -- Footer keeps the last action through redraws; the short count is on the bu
   local mf = ADDON.MainFrame
   local bar = { SetText = function(self, t) self.t = t end }
   local saved, sb, cdp, gii = mf.statusBar, mf.scrollBox, CreateDataProvider, C_Item.GetItemInfo
-  mf.statusBar, mf.scrollBox = bar, { SetDataProvider = function() end }
+  mf.statusBar, mf.scrollBox = bar, { SetDataProvider = function() end, ScrollToElementDataByPredicate = function() end }
   CreateDataProvider = function() return { Insert = function() end, GetSize = function() return 1 end } end
   C_Item.GetItemInfo = gii or function() end
   mf:SetStatus("Added 12 items"); mf:_RefreshNow()
@@ -398,13 +430,11 @@ do -- Footer keeps the last action through redraws; the short count is on the bu
   assert(mf.restockBtn:GetText() == "Restock at AH (1)", "button count: " .. tostring(mf.restockBtn:GetText()))
   mf.statusBar, mf.scrollBox, CreateDataProvider, C_Item.GetItemInfo = saved, sb, cdp, gii
 end
-do -- Flyout, drag and dock paths run without errors (layout itself needs the game)
+do -- Checkout bar, marks, drag and dock paths run without errors (layout itself needs the game)
   local mf = ADDON.MainFrame
-  local plan = { itemID = 42, planQuantity = 5, plannedSpend = 50000, name = "Test Potion", maxPrice = nil, stashBank = 2, stashWarband = 0 }
-  local bought
-  mf:ShowArmedToast(plan, { onBuy = function() bought = true end, onSkip = function() end, onStop = function() end })
-  mf:ShowSummaryToast({ title = "Restock complete", sub = "" })
-  mf:HideToast()
+  mf:SetCheckout("5 x Test Potion", "500g"); mf:SetCheckout(nil)
+  mf:Mark(42, "done", "Bought"); mf:ClearMarks()
+  assert(ADDON.MoneyText(74240000, "gold") == "7,424g" and ADDON.MoneyText(5000, "gold") == "50s", "gold text")
   local ahf = AuctionHouseFrame
   AuctionHouseFrame = { IsShown = function() return true end }
   mf:DockToAHIfOpen(); mf:Undock()
@@ -434,7 +464,7 @@ end
 do -- Filter chip: shows only short items (items 111 need 5, 42 need 30; bags hold 7)
   local mf, shown = ADDON.MainFrame, nil
   local sb = mf.scrollBox
-  mf.scrollBox = { SetDataProvider = function(_, p) shown = p end }
+  mf.scrollBox = { SetDataProvider = function(_, p) shown = p end, ScrollToElementDataByPredicate = function() end }
   local origCDP = CreateDataProvider
   CreateDataProvider = function() local t = { n = {} }; function t:Insert(x) self.n[#self.n + 1] = x.itemID end; function t:GetSize() return #self.n end; return t end
   local gii = C_Item.GetItemInfo; C_Item.GetItemInfo = gii or function() end

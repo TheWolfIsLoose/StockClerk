@@ -56,8 +56,9 @@ function AH:SearchItem(itemID, callback, priceSource)
 end
 
 -- Plan a buy of up to `quantity` at or below maxUnitPrice (nil = no cap) from a
--- fresh search. callback(true, plan) or callback(false, reason). The plan may
--- cover less than asked for if cheap listings run out.
+-- fresh search. callback(true, plan) or callback(false, reason, overCapCheapest):
+-- the third value is set only when every listing is above the cap. The plan
+-- may cover less than asked for if cheap listings run out.
 function AH:BuyUpTo(itemID, quantity, maxUnitPrice, callback)
     self:SearchItem(itemID, function(ok, results)
         if not ok then return callback(false, "search failed: " .. tostring(results)) end
@@ -74,7 +75,7 @@ function AH:BuyUpTo(itemID, quantity, maxUnitPrice, callback)
         if not cheapest then return callback(false, "no auctions listed") end
         if maxUnitPrice then
             return callback(false, ("cheapest %s is above your %dg cap"):format(
-                ADDON.MoneyText(cheapest), math.floor(maxUnitPrice / 10000)))
+                ADDON.MoneyText(cheapest), math.floor(maxUnitPrice / 10000)), cheapest)
         end
         callback(false, "cheapest " .. ADDON.MoneyText(cheapest) .. " but no quantity available")
     end, "loop")
