@@ -21,9 +21,9 @@ disagree), **Open** (needs an answer before build).
 2. **Cut `v1.2.0-beta3`:** replace CHANGELOG.md with the drafted beta3
    notes (in the beta3 section), add the Dev/HISTORY.md entry, push `dev`
    (the push releases it).
-3. **Then build "Checkout mode"** (the next section; design decided,
-   nothing built yet). Decide with the player whether it lands in beta4
-   or waits for after stable v1.2.0.
+3. **Then build "Checkout mode" as `v1.2.0-beta4`** (the next section;
+   design decided, nothing built yet). **Decided:** it ships in beta4 and
+   is part of stable v1.2.0.
 
 State: `main` is still v1.1.1 plus the `update.bat` fix. `v1.2.0-beta2`
 is the latest release.
@@ -37,7 +37,7 @@ attached with push access (add_repo), then `git push origin dev`.
 
 ---
 
-## Checkout mode: replace the AH buy flyout (Designed 2026-09-27, not built)
+## Checkout mode (v1.2.0-beta4): replace the AH buy flyout (Designed 2026-09-27, not built)
 
 Every AH purchase needs a player click (hardware event), so the run is
 always one click per item; this redesigns everything around that click.
