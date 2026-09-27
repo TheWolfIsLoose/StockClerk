@@ -10,6 +10,30 @@ or, where it had no entry, from that version's GitHub release notes.
 > There is no v1.1.2 stable: the v1.1.2 alphas are the start of v1.2.0
 > (efficiency pass). v1.2.0 plan: `Dev/ROADMAP.md`.
 
+## v1.2.0-beta3 (2026-09-27)
+
+Full Ponytail pass (whole-repo audit, all 22 findings applied); behaviour
+unchanged unless noted. Lua ~5,650 → ~3,330 lines (-41%), one file fewer.
+
+- Every file rewritten or tightened: AH 328→150, Core 441→240,
+  RestockLoop 526→248, MainFrame 2,390→1,370, plus DB, Log, Inventory,
+  ItemResolver and the panels. Guards for always-present modules, dead
+  fields/params/functions and stale headers removed.
+- Fixed: the font objects copied themselves (a bulk rename hit the table
+  pointing at Blizzard's fonts; showed as "Invalid font height" in
+  beta2). Now 3 white fonts + a grey disabled font; same look.
+- Locale.lua inlined and removed (no localization planned). `/clerk dump`
+  and `/clerk pending` removed; the `/clerk log` report lists the items
+  (bags/target, cap) and purchases waiting in the mail.
+- Log window: redundant Close button removed (× and Escape close it).
+- Side panel, bulk import and log window share the docked-panel helpers.
+- Smoke covers AH buy planning, confirm-or-cancel, a full restock run,
+  the report, and the flyout/drag/dock paths. A RestockLoop regression
+  (a restock stopped mid-search could arm the flyout) was caught by it
+  before shipping.
+- In-game check 2026-09-27: clean AH restock, cap/target edits and
+  removes, no StockClerk errors.
+
 ## v1.2.0-beta2 (2026-09-27)
 
 Ponytail sweep + UI/UX consistency pass + log rework (pulled in from v1.3).
