@@ -424,6 +424,10 @@ local function BuildRow(row)
         GameTooltip:SetOwner(self, "ANCHOR_TOP")
         GameTooltip:SetText("Drag to reorder", 1, 1, 1)
         GameTooltip:AddLine("List order sets restock priority.", 0.7, 0.7, 0.7, true)
+        GameTooltip:AddLine(" ")
+        GameTooltip:AddLine("Shift+click a row to link it in chat.", 0.7, 0.7, 0.7, true)
+        GameTooltip:AddLine("Click Need or Cap to edit it.", 0.7, 0.7, 0.7, true)
+        GameTooltip:AddLine("With the AH open, click a row to search for it.", 0.7, 0.7, 0.7, true)
         GameTooltip:Show()
     end)
     row.grip:SetScript("OnLeave", function(self)
@@ -451,18 +455,13 @@ local function BuildRow(row)
     row.icon:SetPoint("LEFT", GRIP_W + 8, 0)
     row.icon:SetTexCoord(0.08, 0.92, 0.08, 0.92)   -- trim default 5% border
 
-    -- Colored quality frame around the icon,
-    -- matching WoW bags / Baganator convention. Players identify items by
-    -- the quality chit at a glance, and it doubles as a mitigation for
-    -- names that ellipsize (the quality color is normally at the end of
-    -- the name -- e.g. "[Foo Potion]" in green -- so truncating the name
-    -- loses that signal). Using WhiteIconFrame (a stock Blizzard 1px
-    -- outline atlas) tinted with C_Item.GetItemQualityColor.
-    row.iconBorder = row:CreateTexture(nil, "OVERLAY", nil, 1)
-    row.iconBorder:SetTexture("Interface\\Common\\WhiteIconFrame")
-    row.iconBorder:SetSize(22, 22)  -- slightly larger than the 18x18 icon so the frame reads clearly
-    row.iconBorder:SetPoint("CENTER", row.icon, "CENTER", 0, 0)
-    row.iconBorder:Hide()  -- shown by SetText path when quality is known and >= common
+    -- 1px quality border (Baganator style): a solid square 2px larger than
+    -- the icon, drawn just below it. Quality colour for uncommon+, black
+    -- otherwise so every icon gets the same crisp edge.
+    row.iconBorder = row:CreateTexture(nil, "OVERLAY", nil, -1)
+    row.iconBorder:SetColorTexture(0, 0, 0, 1)
+    row.iconBorder:SetPoint("TOPLEFT", row.icon, "TOPLEFT", -1, 1)
+    row.iconBorder:SetPoint("BOTTOMRIGHT", row.icon, "BOTTOMRIGHT", 1, -1)
 
     -- Name (fills leftmost region up to the Have column). The right edge
     -- stops at -220 to leave room for four right-aligned columns (Have,
@@ -1017,23 +1016,13 @@ local function InitializeRow(row, data)
     local icon = tex or select(5, C_Item.GetItemInfoInstant(data.itemID)) or QUESTION_ICON
     row.icon:SetTexture(icon)
 
-    -- Tint the border with quality color.
-    -- Hide entirely for quality nil (cold cache) or 0/1 (poor/common) --
-    -- WoW's own bag UI treats those as no-frame, matching player expectation.
-    -- A GET_ITEM_INFO_RECEIVED refresh will re-run this row once quality
-    -- resolves; no explicit event handler needed here because Refresh()
-    -- already re-runs on that event via ItemResolver's callback path.
-    --
-    -- C_Item.GetItemQualityColor returns multiple values (r, g, b, hex),
-    -- NOT a ColorMixin table, so destructure. Default to white on nil.
-    if row.iconBorder then
-        if quality and quality >= 2 and C_Item and C_Item.GetItemQualityColor then
-            local r, g, b = C_Item.GetItemQualityColor(quality)
-            row.iconBorder:SetVertexColor(r or 1, g or 1, b or 1, 1)
-            row.iconBorder:Show()
-        else
-            row.iconBorder:Hide()
-        end
+    -- Quality colour for uncommon+, black for poor/common/unknown. A cold
+    -- item re-runs this row once GET_ITEM_INFO_RECEIVED resolves quality.
+    if quality and quality >= 2 then
+        local r, g, b = C_Item.GetItemQualityColor(quality)
+        row.iconBorder:SetColorTexture(r, g, b, 1)
+    else
+        row.iconBorder:SetColorTexture(0, 0, 0, 1)
     end
     row._itemLink = link
     if link then
@@ -1214,19 +1203,14 @@ end
 -- reverse. Placeholder is a FontString overlay, NOT the EditBox's real
 -- text, so :GetText() still returns "" when the user hasn't typed — no
 -- special case needed at read time.
-local function MakeEditBox(parent, labelText, width, isNumeric, maxLetters, placeholder)
+-- No label above the box: the placeholder names the field and the hover
+-- tooltip (tipTitle / tipBody) explains it.
+local function MakeEditBox(parent, placeholder, width, isNumeric, maxLetters, tipTitle, tipBody)
     local row = CreateFrame("Frame", nil, parent)
-    row:SetSize(width, 38)
-
-    local label = row:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-    label:SetPoint("TOPLEFT", 0, 0)
-    label:SetText(labelText)
-    label:SetTextColor(Palette.textSecondary[1], Palette.textSecondary[2], Palette.textSecondary[3], 1)
+    row:SetSize(width, 22)
 
     local container = CreateFrame("Frame", nil, row)
-    container:SetHeight(22)
-    container:SetPoint("TOPLEFT", label, "BOTTOMLEFT", 0, -3)
-    container:SetPoint("TOPRIGHT", row, "TOPRIGHT", 0, -14)
+    container:SetAllPoints()
 
     local eb = CreateFrame("EditBox", nil, container)
     eb:SetPoint("TOPLEFT", 6, -3)
@@ -1269,9 +1253,27 @@ local function MakeEditBox(parent, labelText, width, isNumeric, maxLetters, plac
     eb:HookScript("OnHide", function(self)
         if self:HasFocus() then self:ClearFocus() end
     end)
+    -- Tooltip anchored 4px above the box: ANCHOR_TOP overlaps the box and
+    -- flickers (cursor lands on the tooltip, OnLeave, repeat). Hidden only
+    -- once the cursor leaves both the border area and the input.
+    if tipTitle then
+        container:HookScript("OnEnter", function()
+            GameTooltip:SetOwner(container, "ANCHOR_NONE")
+            GameTooltip:ClearAllPoints()
+            GameTooltip:SetPoint("BOTTOM", container, "TOP", 0, 4)
+            GameTooltip:SetText(tipTitle, 1, 1, 1)
+            if tipBody then GameTooltip:AddLine(tipBody, 0.8, 0.8, 0.8, true) end
+            GameTooltip:Show()
+        end)
+        eb:HookScript("OnEnter", function() container:GetScript("OnEnter")(container) end)
+        local function hide()
+            if not container:IsMouseOver() and not eb:IsMouseOver() then GameTooltip:Hide() end
+        end
+        container:HookScript("OnLeave", hide)
+        eb:HookScript("OnLeave", hide)
+    end
     row.editBox = eb
     row.container = container
-    row.label = label
     return row
 end
 
@@ -1585,7 +1587,7 @@ function MF:Build()
     -- provide enough visual weight. Ends with a 1px black bottom border
     -- separating it from the list.
     local toolbar = CreateFrame("Frame", nil, f)
-    toolbar:SetHeight(48)
+    toolbar:SetHeight(30)
     toolbar:SetPoint("TOPLEFT", header, "BOTTOMLEFT", 0, 0)
     toolbar:SetPoint("TOPRIGHT", header, "BOTTOMRIGHT", 0, 0)
     -- Layer 1: subtle brighter band so the toolbar reads as its own strip
@@ -1620,9 +1622,12 @@ function MF:Build()
     -- 8-digit input and the placeholder "e.g. 212283"). Target 100 -> 60,
     -- Price Cap 120 -> 80. "Price Cap / Unit" label shortened to "Cap"
     -- (the /unit context is documented in the tooltip and the CHANGELOG).
-    local addEB   = MakeEditBox(toolbar, "Item ID", 130, true, 8, "e.g. 212283")
-    local countEB = MakeEditBox(toolbar, "Target",   60, true, 5, "e.g. 20")
-    local priceEB = MakeEditBox(toolbar, "Cap",      80, true, 7, "none")
+    local addEB   = MakeEditBox(toolbar, "Item ID", 130, true, 8, "Item ID",
+        L.ADDBOX_TOOLTIP or "Type an item ID, or drag an item from your bags onto this window.")
+    local countEB = MakeEditBox(toolbar, "Target",   60, true, 5, "Target",
+        "How many to keep in your bags. Blank = 1.")
+    local priceEB = MakeEditBox(toolbar, "Cap",      80, true, 7, "Cap (optional)",
+        "Most you'll pay per unit, in gold. Leave blank for no cap.")
     local addBox   = addEB.editBox
     local countBox = countEB.editBox
     local priceBox = priceEB.editBox
@@ -1633,7 +1638,7 @@ function MF:Build()
 
     local addBtn = CreateFrame("Button", nil, toolbar)
     addBtn:SetSize(72, 22)
-    addBtn:SetPoint("LEFT", priceEB, "RIGHT", 10, -6)
+    addBtn:SetPoint("LEFT", priceEB, "RIGHT", 10, 0)
     StyleButton(addBtn)
     local addBtnText = addBtn:CreateFontString(nil, "OVERLAY", "GameFontNormal")
     addBtnText:SetPoint("CENTER")
@@ -2001,44 +2006,6 @@ function MF:Build()
         for _, edge in ipairs(dropEdges) do edge:SetShown(show) end
     end)
 
-    -- Tooltip on the addBox container so first-time users discover the
-    -- drag path without a wall of on-screen text. The same handler is
-    -- mirrored onto the EditBox itself, because the EditBox eats hover for
-    -- the whole interior; the tooltip stays anchored to dropTarget so it
-    -- doesn't jump around.
-    -- HookScript (not SetScript) preserves the border-hover animation
-    -- that StyleEditBoxContainer already installed on OnEnter/OnLeave.
-    -- ANCHOR_TOP places the tooltip
-    -- flush against the top edge of dropTarget. On very tight vertical
-    -- layouts (or when the user's cursor drifts upward slightly), the
-    -- rendered tooltip rectangle overlaps the top edge of the addBox
-    -- container -- so the cursor hits the tooltip surface instead of
-    -- addBox, which registers as "left addBox" and fires the OnLeave
-    -- hide. The tooltip then vanishes, cursor is over addBox again,
-    -- OnEnter fires, tooltip reappears -- classic show/hide flicker
-    -- loop. Fix: anchor the tooltip manually with a 4px vertical gap so
-    -- there's no overlap between the tooltip rectangle and dropTarget.
-    local function showAddBoxTooltip()
-        GameTooltip:SetOwner(dropTarget, "ANCHOR_NONE")
-        GameTooltip:ClearAllPoints()
-        GameTooltip:SetPoint("BOTTOM", dropTarget, "TOP", 0, 4)
-        GameTooltip:SetText(L.ADDBOX_TOOLTIP or
-            "Type an item ID or drag an item from your bags.",
-            1, 1, 1, 1, true)
-        GameTooltip:Show()
-    end
-    local function hideAddBoxTooltip()
-        -- Only hide if the cursor has left BOTH the container and the
-        -- editbox -- otherwise moving the mouse from the border area
-        -- onto the input surface would blink the tooltip out and back.
-        if not dropTarget:IsMouseOver() and not addBox:IsMouseOver() then
-            GameTooltip:Hide()
-        end
-    end
-    dropTarget:HookScript("OnEnter", showAddBoxTooltip)
-    dropTarget:HookScript("OnLeave", hideAddBoxTooltip)
-    addBox:HookScript("OnEnter", showAddBoxTooltip)
-    addBox:HookScript("OnLeave", hideAddBoxTooltip)
 
     -- Save toolbar boxes on self so BuildRow's inline editors can reach
     -- them for unified Tab navigation across toolbar + row-body cells.
@@ -2075,18 +2042,8 @@ function MF:Build()
         end
     end)
 
-    -- ---- Hint (below toolbar) ------------------------------------------
-    local hint = f:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
-    hint:SetPoint("TOPLEFT", toolbar, "BOTTOMLEFT", 12, -6)
-    hint:SetPoint("TOPRIGHT", toolbar, "BOTTOMRIGHT", -12, -6)
-    hint:SetJustifyH("LEFT")
-    -- Dimmer than the toolbar band so this recedes visually — it's help text,
-    -- not primary content. Alpha via a slightly darker grey than before.
-    -- "Shift+Click" here means shift-clicking a ROW to link it in chat.
-    hint:SetText("|cff6a6a6aShift+Click a row to link \194\183 Click a value to edit \194\183 Row-click (AH open) to search|r")
-
     -- ---- Column headers -----------------------------------------------
-    -- Sits under the hint; no fill (matches atrocity's headerless section
+    -- Sits under the toolbar; no fill (matches atrocity's headerless section
     -- headers — the labels themselves + the 1px bottom border are enough).
     -- Labels in brand mint (accent = section-header rule).
     -- Header frame stretches FULL window width (TOPRIGHT anchored to `f`'s
@@ -2105,7 +2062,7 @@ function MF:Build()
     local ROW_RIGHT_INSET = 22
     local headers = CreateFrame("Frame", nil, f)
     headers:SetHeight(20)
-    headers:SetPoint("TOPLEFT", hint, "BOTTOMLEFT", -12, -4)
+    headers:SetPoint("TOPLEFT", toolbar, "BOTTOMLEFT", 0, 0)
     headers:SetPoint("TOPRIGHT", f, "TOPRIGHT", 0, 0)
     -- Same whisper-band as the toolbar. Reads as "column-header strip" so
     -- the labels have visual weight even without a colored fill of their own.
