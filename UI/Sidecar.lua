@@ -330,31 +330,7 @@ function Sidecar:IsShown()
     return self.frame and self.frame:IsShown()
 end
 
--- -------------------------------------------------------------------------
--- Bridge: when the log emits a new entry AND the sidecar is open, refresh
--- the feed. Log.lua already has a hook that refreshes LogFrame if it's
--- open; we ride the same convention by having Log check for us too.
--- Rather than editing Log.lua to know about a second consumer, we hook
--- Log:Emit here at file-load time.
--- -------------------------------------------------------------------------
-do
-    if ADDON.Log and ADDON.Log.Emit and not ADDON.Log._sidecar_hook then
-        local origEmit = ADDON.Log.Emit
-        ADDON.Log.Emit = function(self, kind, itemID, payload)
-            origEmit(self, kind, itemID, payload)
-            -- Only kinds the feed shows; status messages (most emits)
-            -- would rebuild the feed for no visible change.
-            if ADDON.Log.LEVEL[kind] == "activity" and Sidecar.frame and Sidecar.frame:IsShown() then
-                -- Guard: avoid recursive refresh if a Refresh() call ends
-                -- up emitting its own log entry (nothing today does, but
-                -- cheap insurance for future changes).
-                if not Sidecar._refreshing then
-                    Sidecar._refreshing = true
-                    pcall(Sidecar.Refresh, Sidecar)
-                    Sidecar._refreshing = false
-                end
-            end
-        end
-        ADDON.Log._sidecar_hook = true
-    end
+-- Log calls this for each new activity entry.
+function Sidecar:OnActivity()
+    if self:IsShown() then self:Refresh() end
 end

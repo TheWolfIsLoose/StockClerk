@@ -21,6 +21,14 @@ local ADDON     = _G[addonName]
 local Log = {}
 ADDON.Log = Log
 
+-- Trace step: recorded into the log only while /clerk debug is on.
+function ADDON.Debug(tag, ...)
+    if not ADDON.debug then return end
+    local parts = {}
+    for i = 1, select("#", ...) do parts[i] = tostring(select(i, ...)) end
+    Log:Emit("trace", nil, { tag = tag, text = table.concat(parts, " ") })
+end
+
 Log.MAX_ENTRIES = 1000
 
 Log.LEVEL = {
@@ -32,9 +40,8 @@ Log.LEVEL = {
     trace = "trace",
 }
 
-local function GetBuffer()
+local function Buffer()
     local g = ADDON.DB.global
-    if not g then return nil end
     g.log = g.log or {}
     return g.log
 end
@@ -45,8 +52,7 @@ function Log:Emit(kind, itemID, payload)
         if ADDON.debug then print("|cffff8888[SC:Log]|r unknown kind: " .. tostring(kind)) end
         return
     end
-    local buf = GetBuffer()
-    if not buf then return end
+    local buf = Buffer()
     buf[#buf + 1] = {
         ts = time(), kind = kind, itemID = itemID,
         char = UnitName("player"), realm = GetRealmName(),
@@ -54,37 +60,18 @@ function Log:Emit(kind, itemID, payload)
     }
     -- ponytail: table.remove(t, 1) shifts the whole buffer; fine at 1000 entries.
     while #buf > self.MAX_ENTRIES do table.remove(buf, 1) end
+    if self.LEVEL[kind] == "activity" then ADDON.Sidecar:OnActivity() end
 end
 
--- Newest-first copy of the buffer. filter = { kinds = {...}, itemID, since, level }.
-function Log:Query(filter)
-    local buf = GetBuffer()
-    if not buf then return {} end
-    filter = filter or {}
-    local kindSet
-    if filter.kinds then
-        kindSet = {}
-        for _, k in ipairs(filter.kinds) do kindSet[k] = true end
-    end
-    local out = {}
-    for i = #buf, 1, -1 do
-        local e = buf[i]
-        if  (not kindSet      or kindSet[e.kind])
-        and (not filter.itemID or e.itemID == filter.itemID)
-        and (not filter.since  or e.ts >= filter.since)
-        and (not filter.level  or self.LEVEL[e.kind] == filter.level) then
-            out[#out + 1] = e
-        end
-    end
+-- Newest-first copy of the buffer.
+function Log:Query()
+    local buf, out = Buffer(), {}
+    for i = #buf, 1, -1 do out[#out + 1] = buf[i] end
     return out
 end
 
 function Log:Clear()
-    local buf = GetBuffer()
-    if buf then wipe(buf) end
-    if ADDON.LogPopup and ADDON.LogPopup.frame and ADDON.LogPopup.frame:IsShown() then
-        ADDON.LogPopup:Refresh()
-    end
+    wipe(Buffer())
 end
 
 -- ---------------------------------------------------------------------------
@@ -177,13 +164,19 @@ local FORMAT = {
 -- Log:Format(entry, full, color) -> one line, no timestamp.
 -- full adds item IDs (support needs them; names can be ambiguous);
 -- color tints the item name by quality (display only: codes copy as junk).
+-- Item name and quality from the cache, else the name saved with the entry.
+local function ItemInfo(itemID, savedName)
+    local name, _, quality = C_Item.GetItemInfo(itemID)
+    if type(name) ~= "string" then return savedName or ("item " .. itemID), nil end
+    return name, quality
+end
+
 function Log:Format(e, full, color)
     local item
     if e.itemID then
-        local name, _, quality = C_Item.GetItemInfo(e.itemID)
-        if type(name) ~= "string" then name, quality = e.payload and e.payload.name, nil end
+        local name, quality = ItemInfo(e.itemID, e.payload and e.payload.name)
         -- [Name] like chat links: marks the name even when it's white (Common).
-        item = "[" .. (name or ("item " .. e.itemID)) .. "]"
+        item = "[" .. name .. "]"
         if full then item = ("%s (#%d)"):format(item, e.itemID) end
         if color and type(quality) == "number" then
             local r, g, b = C_Item.GetItemQualityColor(quality)
@@ -206,11 +199,9 @@ local WATCHED_ADDONS = {
 }
 
 function Log:Report()
-    local A = C_AddOns or {}
-    local version = A.GetAddOnMetadata and A.GetAddOnMetadata(addonName, "Version") or "?"
+    local version = C_AddOns.GetAddOnMetadata(addonName, "Version") or "?"
     if version:sub(1, 1) == "@" then version = "dev (git checkout)" end
-    local wowVersion, build = "?", "?"
-    if GetBuildInfo then wowVersion, build = GetBuildInfo() end
+    local wowVersion, build = GetBuildInfo()
 
     local s = ADDON.DB:Settings()
     local settings = {}
@@ -218,28 +209,42 @@ function Log:Report()
         settings[#settings + 1] = SETTING_LABELS[key] .. " " .. (s[key] and "on" or "off")
     end
 
-    local items, short = #ADDON.DB:GetSortedItems(), "?"
-    local ok, list = pcall(function() return ADDON.BankRestock:Shortfalls() end)
-    if ok and list then short = #list end
+    local list = ADDON.DB:GetSortedItems()
+    local short = #ADDON.BankRestock:Shortfalls()
 
-    local loaded, total = {}, A.GetNumAddOns and A.GetNumAddOns() or 0
-    local count = 0
-    for i = 1, total do if A.IsAddOnLoaded and A.IsAddOnLoaded(i) then count = count + 1 end end
+    local count, loaded = 0, {}
+    for i = 1, C_AddOns.GetNumAddOns() do
+        if C_AddOns.IsAddOnLoaded(i) then count = count + 1 end
+    end
     for _, name in ipairs(WATCHED_ADDONS) do
-        if A.IsAddOnLoaded and A.IsAddOnLoaded(name) then loaded[#loaded + 1] = name end
+        if C_AddOns.IsAddOnLoaded(name) then loaded[#loaded + 1] = name end
     end
 
     local lines = {
         "StockClerk report, " .. date("%Y-%m-%d %H:%M"),
         ("StockClerk %s | WoW %s (build %s) | %s"):format(version, tostring(wowVersion), tostring(build),
-            GetLocale and GetLocale() or "?"),
-        ("Character: %s-%s | list: %d items, %s short"):format(UnitName("player") or "?",
-            GetRealmName() or "?", items, tostring(short)),
+            GetLocale()),
+        ("Character: %s-%s | list: %d items, %d short"):format(UnitName("player"), GetRealmName(), #list, short),
         "Settings: " .. table.concat(settings, ", "),
         ("Addons loaded: %d. Relevant: %s"):format(count, #loaded > 0 and table.concat(loaded, ", ") or "none"),
         "Detailed recording (/clerk debug): " .. (ADDON.debug and "ON" or "off"),
-        "Lines marked . are details, > are recorded steps. Newest first.",
     }
+
+    -- The list as it stands, and purchases still waiting in the mail (they
+    -- count as owned until looted).
+    local rows = {}
+    for _, it in ipairs(list) do
+        local bd = ADDON.Inventory:GetBreakdown(it.itemID)
+        rows[#rows + 1] = ("%s (#%d) %d/%d%s"):format((ItemInfo(it.itemID)), it.itemID, bd.bags, it.need,
+            it.maxPrice and (" cap " .. Money(it.maxPrice)) or "")
+    end
+    lines[#lines + 1] = "List (bags/target): " .. (#rows > 0 and table.concat(rows, "; ") or "empty")
+    local mail = {}
+    for id, p in pairs(ADDON.DB.char.pendingBuys) do
+        mail[#mail + 1] = ("%s (#%d) x%d"):format((ItemInfo(id)), id, p.qty)
+    end
+    lines[#lines + 1] = "Waiting in the mail: " .. (#mail > 0 and table.concat(mail, "; ") or "nothing")
+    lines[#lines + 1] = "Lines marked . are details, > are recorded steps. Newest first."
 
     -- A date line per day; bracketed times keep the column even.
     local PREFIX = { activity = "  ", detail = ". ", trace = "> " }

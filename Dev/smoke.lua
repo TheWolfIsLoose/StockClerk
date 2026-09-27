@@ -52,7 +52,8 @@ CreateFrame = function(_, _, parent) local f = Frame(parent); frames[#frames + 1
 C_Timer = { After = function(d, fn) timers[#timers + 1] = fn end,
             NewTimer = function(d, fn) timers[#timers + 1] = fn; return { Cancel = function() end } end,
             NewTicker = function() return { Cancel = function() end } end }
-C_AddOns = { GetAddOnMetadata = function() return "1.1.2" end, IsAddOnLoaded = function() return true end, LoadAddOn = function() end }
+C_AddOns = { GetAddOnMetadata = function() return "1.1.2" end, IsAddOnLoaded = function() return true end, LoadAddOn = function() end,
+             GetNumAddOns = function() return 2 end }
 GetAddOnMetadata = C_AddOns.GetAddOnMetadata
 securecallfunction = function(f, ...) return f(...) end
 geterrorhandler = function() return function(e) error(e, 0) end end
@@ -207,7 +208,12 @@ do -- Plain-language wording, report header, error capture
   assert(F("buy_skip", { reason = "cap out (silent)" }, 7) == "Skipped [item 7]: cheapest price is above your cap", "skip")
   assert(Log:Format({ kind = "bank_pull", payload = { qty = 5 }, itemID = 7 }, true) == "Pulled 5 [item 7] (#7) from your bank", "full ids")
   for kind in pairs(Log.LEVEL) do assert(type(F(kind, {}, 7)) == "string", "format " .. kind) end
+  local gb = ADDON.Inventory.GetBreakdown
+  ADDON.Inventory.GetBreakdown = function() return { bags = 2, bank = 0, warband = 0 } end
+  ADDON.DB.char.pendingBuys[111] = { qty = 3, baseHave = 0, boughtAt = 0 }
   local report = Log:Report()
+  ADDON.Inventory.GetBreakdown, ADDON.DB.char.pendingBuys[111] = gb, nil
+  assert(report:find("(#111) 2/5", 1, true) and report:find("Waiting in the mail: item 111 (#111) x3", 1, true), "report list/mail")
   assert(report:find("StockClerk report", 1, true) and report:find("Settings: ", 1, true)
          and report:find("> [AH] x 1", 1, true), "report")
   assert(report:find("\n%-%- %a%a%a %d%d%d%d%-%d%d%-%d%d %-%-\n") and report:find("\n%[%d%d:%d%d:%d%d%] "), "report layout")
