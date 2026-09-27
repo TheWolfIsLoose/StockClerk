@@ -42,24 +42,8 @@ local function Build()
     -- window and main frame.
     tinsert(UISpecialFrames, "StockClerkLogPopup")
 
-    -- Bg + black frame edges
-    local bg = f:CreateTexture(nil, "BACKGROUND", nil, -8)
-    bg:SetAllPoints()
-    bg:SetColorTexture(Palette.panelBg[1], Palette.panelBg[2], Palette.panelBg[3], Palette.panelBg[4] or 1)
-
-    for _, side in ipairs({ "top", "bottom", "left", "right" }) do
-        local t = f:CreateTexture(nil, "OVERLAY", nil, 6)
-        t:SetColorTexture(0, 0, 0, 1)
-        if side == "top" then
-            t:SetHeight(1); t:SetPoint("TOPLEFT", 0, 0); t:SetPoint("TOPRIGHT", 0, 0)
-        elseif side == "bottom" then
-            t:SetHeight(1); t:SetPoint("BOTTOMLEFT", 0, 0); t:SetPoint("BOTTOMRIGHT", 0, 0)
-        elseif side == "left" then
-            t:SetWidth(1); t:SetPoint("TOPLEFT", 0, 0); t:SetPoint("BOTTOMLEFT", 0, 0)
-        else
-            t:SetWidth(1); t:SetPoint("TOPRIGHT", 0, 0); t:SetPoint("BOTTOMRIGHT", 0, 0)
-        end
-    end
+    ADDON.MainFrame.ApplyFill(f, Palette.panelBg)
+    ADDON.MainFrame.AddBlackBorder(f)
 
     -- Title
     local title = f:CreateFontString(nil, "OVERLAY", "StockClerkFontNormal")
@@ -70,17 +54,9 @@ local function Build()
     hint:SetPoint("TOPLEFT", 12, -28)
     hint:SetText("|cff888888Everything is selected: press Ctrl+C and paste it into your bug report.|r")
 
-    -- Close X button, upper right
-    local closeX = CreateFrame("Button", nil, f)
-    closeX:SetSize(28, 22)
-    closeX:SetPoint("TOPRIGHT", -6, -6)
-    local xText = closeX:CreateFontString(nil, "OVERLAY", "StockClerkFontNormalLarge")
-    xText:SetPoint("CENTER")
-    xText:SetText("X")
-    xText:SetTextColor(0.85, 0.85, 0.85, 1)
-    closeX:SetScript("OnEnter", function() xText:SetTextColor(1.0, 0.6, 0.6, 1) end)
-    closeX:SetScript("OnLeave", function() xText:SetTextColor(0.85, 0.85, 0.85, 1) end)
-    closeX:SetScript("OnClick", function() f:Hide() end)
+    local closeX = ADDON.MainFrame.HeaderIcon(f, { { 12, 2, 0, math.pi / 4 }, { 12, 2, 0, -math.pi / 4 } },
+        "Close", function() f:Hide() end)
+    closeX:SetPoint("TOPRIGHT", -4, -4)
 
     -- ScrollFrame containing the multi-line EditBox
     local scrollBg = f:CreateTexture(nil, "BACKGROUND")

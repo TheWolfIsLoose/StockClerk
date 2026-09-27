@@ -326,6 +326,41 @@ end
 -- transparent). Wires up brand-mint border animation on hover/focus.
 MF.StyleButton = StyleButton
 
+-- Drawn icons (x, hamburger, plus, funnel, grip): flat bars instead of font
+-- glyphs, so they stay crisp and tint as one. bars = { { w, h, y, angle }, ... }
+-- centred on the frame. Returns tint(color, alpha).
+local ICON_REST = { 0.85, 0.85, 0.85 }
+local function DrawGlyph(frame, bars)
+    local tex = {}
+    for i, b in ipairs(bars) do
+        local t = frame:CreateTexture(nil, "OVERLAY", nil, 7)
+        t:SetSize(b[1], b[2])
+        t:SetPoint("CENTER", 0, b[3] or 0)
+        if b[4] then t:SetRotation(b[4]) end
+        tex[i] = t
+    end
+    local function tint(c, a) for _, t in ipairs(tex) do t:SetColorTexture(c[1], c[2], c[3], a or 1) end end
+    tint(ICON_REST)
+    return tint
+end
+
+-- Header icon button: drawn glyph, mint on hover, one-line tooltip.
+local function HeaderIcon(parent, bars, tip, onClick)
+    local btn = CreateFrame("Button", nil, parent)
+    btn:SetSize(26, 24)
+    local tint = DrawGlyph(btn, bars)
+    btn:SetScript("OnEnter", function(self)
+        tint(Palette.brand)
+        GameTooltip:SetOwner(self, "ANCHOR_BOTTOM")
+        GameTooltip:SetText(tip)
+        GameTooltip:Show()
+    end)
+    btn:SetScript("OnLeave", function() tint(ICON_REST); GameTooltip:Hide() end)
+    btn:SetScript("OnClick", onClick)
+    return btn
+end
+MF.HeaderIcon = HeaderIcon
+
 local function StyleEditBoxContainer(container, editBox)
     -- Deeper well fill (Palette.fieldFill = near-black @ 55%) so the box
     -- reads as an interactive sunken input even when it sits on top of a
@@ -440,20 +475,11 @@ local function BuildRow(row)
     row.grip:SetPoint("LEFT", 2, 0)
     row.grip:RegisterForDrag("LeftButton")
     row.grip:RegisterForClicks("LeftButtonUp")
-    -- Three little bars, drawn as color-textures so we don't ship an
-    -- atlas asset. 8px wide, 1px tall, spaced 3px vertically.
-    row.grip._bars = {}
-    for i = 1, 3 do
-        local t = row.grip:CreateTexture(nil, "OVERLAY")
-        t:SetColorTexture(0.55, 0.55, 0.55, 0.85)
-        t:SetSize(8, 1)
-        t:SetPoint("CENTER", row.grip, "CENTER", 0, (i - 2) * 3)
-        row.grip._bars[i] = t
-    end
+    local GRIP_REST = { 0.55, 0.55, 0.55 }
+    local tintGrip = DrawGlyph(row.grip, { { 8, 1, 3 }, { 8, 1, 0 }, { 8, 1, -3 } })
+    tintGrip(GRIP_REST, 0.85)
     row.grip:SetScript("OnEnter", function(self)
-        for _, b in ipairs(self._bars) do
-            b:SetColorTexture(Palette.brand[1], Palette.brand[2], Palette.brand[3], 1)
-        end
+        tintGrip(Palette.brand)
         -- ANCHOR_TOP for consistency.
         GameTooltip:SetOwner(self, "ANCHOR_TOP")
         GameTooltip:SetText("Drag to reorder", 1, 1, 1)
@@ -465,9 +491,7 @@ local function BuildRow(row)
         GameTooltip:Show()
     end)
     row.grip:SetScript("OnLeave", function(self)
-        for _, b in ipairs(self._bars) do
-            b:SetColorTexture(0.55, 0.55, 0.55, 0.85)
-        end
+        tintGrip(GRIP_REST, 0.85)
         -- Hide unconditionally. If the
         -- pointer is still on the row body, row's OnEnter will re-fire
         -- and paint the native item tooltip.
@@ -1562,64 +1586,12 @@ function MF:Build()
     versionLabel:SetText(versionColor .. versionText .. "|r")
     versionLabel:SetShadowOffset(0, 0)
 
-    -- Close X: two drawn bars rotated 45 degrees, same recipe as the
-    -- hamburger and funnel so all header icons match and tint on hover.
-    local closeX = CreateFrame("Button", nil, header)
-    closeX:SetSize(26, 24)
+    local closeX = HeaderIcon(header, { { 12, 2, 0, math.pi / 4 }, { 12, 2, 0, -math.pi / 4 } },
+        "Close", function() MF:Hide() end)
     closeX:SetPoint("RIGHT", header, "RIGHT", -4, 0)
-    local xBars = {}
-    for i, angle in ipairs({ math.pi / 4, -math.pi / 4 }) do
-        local bar = closeX:CreateTexture(nil, "OVERLAY")
-        bar:SetColorTexture(0.85, 0.85, 0.85, 1)
-        bar:SetSize(12, 2)
-        bar:SetPoint("CENTER")
-        bar:SetRotation(angle)
-        xBars[i] = bar
-    end
-    local function tintX(c) for _, bar in ipairs(xBars) do bar:SetColorTexture(c[1], c[2], c[3], 1) end end
-    closeX:SetScript("OnEnter", function(self)
-        tintX(Palette.brand)
-        GameTooltip:SetOwner(self, "ANCHOR_BOTTOM")
-        GameTooltip:SetText("Close")
-        GameTooltip:Show()
-    end)
-    closeX:SetScript("OnLeave", function()
-        tintX({ 0.85, 0.85, 0.85 })
-        GameTooltip:Hide()
-    end)
-    closeX:SetScript("OnClick", function() MF:Hide() end)
-
-    -- Hamburger button toggles the Sidecar (Settings + Activity).
-    -- Glyph is three drawn mint bars (WoW's stock fonts don't include
-    -- U+2261, and SetColorTexture rectangles tint cleanly on hover).
-    local hamburgerBtn = CreateFrame("Button", nil, header)
-    hamburgerBtn:SetSize(26, 24)
+    local hamburgerBtn = HeaderIcon(header, { { 14, 2, 4 }, { 14, 2, 0 }, { 14, 2, -4 } },
+        "Settings & Activity", function(self) ADDON.Sidecar:Toggle(self) end)
     hamburgerBtn:SetPoint("RIGHT", closeX, "LEFT", -2, 0)
-    local hamburgerGlyph = {}
-    for i = 1, 3 do
-        local bar = hamburgerBtn:CreateTexture(nil, "OVERLAY")
-        bar:SetColorTexture(0.85, 0.85, 0.85, 1)
-        bar:SetSize(14, 2)
-        bar:SetPoint("CENTER", 0, 4 - (i - 1) * 4)
-        hamburgerGlyph[i] = bar
-    end
-    hamburgerBtn:SetScript("OnEnter", function(self)
-        for _, b in ipairs(hamburgerGlyph) do
-            b:SetColorTexture(Palette.brand[1], Palette.brand[2], Palette.brand[3], 1)
-        end
-        GameTooltip:SetOwner(self, "ANCHOR_BOTTOM")
-        GameTooltip:SetText("Settings & Activity")
-        GameTooltip:Show()
-    end)
-    hamburgerBtn:SetScript("OnLeave", function()
-        for _, b in ipairs(hamburgerGlyph) do
-            b:SetColorTexture(0.85, 0.85, 0.85, 1)
-        end
-        GameTooltip:Hide()
-    end)
-    hamburgerBtn:SetScript("OnClick", function(self)
-        ADDON.Sidecar:Toggle(self)
-    end)
     MF._hamburgerBtn = hamburgerBtn
 
     -- ---- Toolbar (add item + controls) ---------------------------------
@@ -1662,15 +1634,7 @@ function MF:Build()
     addEB:SetPoint("LEFT", toolbar, "LEFT", 12, 0)
     addEB:SetPoint("RIGHT", countEB, "LEFT", -8, 0)
     StyleButton(addBtn)
-    local plusBars = {}
-    for i, size in ipairs({ { 10, 2 }, { 2, 10 } }) do
-        local bar = addBtn:CreateTexture(nil, "OVERLAY", nil, 7)
-        bar:SetColorTexture(1, 1, 1, 0.9)
-        bar:SetSize(size[1], size[2])
-        bar:SetPoint("CENTER")
-        plusBars[i] = bar
-    end
-    local function tintPlus(c) for _, bar in ipairs(plusBars) do bar:SetColorTexture(c[1], c[2], c[3], 1) end end
+    local tintPlus = DrawGlyph(addBtn, { { 10, 2 }, { 2, 10 } })
     addBtn:HookScript("OnEnter", function(self)  -- Hook, not Set: keeps StyleButton's hover wash
         tintPlus(Palette.brand)
         GameTooltip:SetOwner(self, "ANCHOR_TOP")
@@ -1678,7 +1642,7 @@ function MF:Build()
         GameTooltip:AddLine("Or press Enter in any box.", 0.8, 0.8, 0.8, true)
         GameTooltip:Show()
     end)
-    addBtn:HookScript("OnLeave", function() GameTooltip:Hide(); tintPlus({ 1, 1, 1 }) end)
+    addBtn:HookScript("OnLeave", function() GameTooltip:Hide(); tintPlus(ICON_REST) end)
 
     local function DoAdd()
         local raw = addBox:GetText()
@@ -2091,46 +2055,15 @@ function MF:Build()
     MakeHeader("Cap",  "right",   -106)   -- cell right -100 - 6 inset
     MakeHeader("Seen", "right",   -30)    -- Seen text right edge
 
-    -- "Show only short items" filter chip (was "stuck above cap" until v1.2) — now ICON-ONLY (was a 150w text
-    -- pill in v0.6). At the compressed 420 width there isn't room for a
-    -- 150-pixel text chip in the headers strip; the funnel glyph is a
-    -- universal filter affordance and hover-tooltip carries the meaning.
-    --
-    -- Icon: three thin mint bars stacked in a funnel shape (top widest,
-    -- bottom narrowest). Same construction pattern as the hamburger button
-    -- above -- WoW's stock fonts don't reliably ship a funnel glyph, and
-    -- drawn rectangles tint cleanly on hover / ON state.
-    --
-    -- Position: tucked to the right of the "Item" header label on the
-    -- LEFT side of the headers strip. Anchored to headers.LEFT + 62 so
-    -- the icon stays put regardless of window width.
+    -- "Show only short items" filter: drawn funnel next to the Item header.
+    -- Dim mint = off, bright mint = on; the tooltip carries the meaning.
     local filterChip = CreateFrame("Button", nil, headers)
     filterChip:SetSize(18, 16)
     filterChip:SetPoint("LEFT", headers, "LEFT", 62, 0)
     filterChip:EnableMouse(true)
 
-    local chipMint = { 0x98/255, 0xFF/255, 0x98/255 }
-
-    -- Funnel glyph: three horizontal bars, widths 12/8/4, stacked vertically.
-    local chipBars = {}
-    local barWidths = { 12, 8, 4 }
-    for i = 1, 3 do
-        local bar = filterChip:CreateTexture(nil, "OVERLAY")
-        bar:SetColorTexture(chipMint[1], chipMint[2], chipMint[3], 0.55)
-        bar:SetSize(barWidths[i], 2)
-        bar:SetPoint("CENTER", 0, 4 - (i - 1) * 4)
-        chipBars[i] = bar
-    end
-
-    -- Applies the current DB state to the chip's visuals: OFF = dim mint
-    -- outline ("filter available"), ON = solid bright mint ("filter active").
-    local function paintChip()
-        local on = ADDON.DB:GetStuckOnly()
-        local alpha = on and 1.0 or 0.55
-        for _, b in ipairs(chipBars) do
-            b:SetColorTexture(chipMint[1], chipMint[2], chipMint[3], alpha)
-        end
-    end
+    local tintChip = DrawGlyph(filterChip, { { 12, 2, 4 }, { 8, 2, 0 }, { 4, 2, -4 } })
+    local function paintChip() tintChip(Palette.brand, ADDON.DB:GetStuckOnly() and 1 or 0.55) end
 
     filterChip:SetScript("OnClick", function()
         ADDON.DB:SetStuckOnly(not ADDON.DB:GetStuckOnly())
@@ -2138,11 +2071,7 @@ function MF:Build()
         MF:Refresh()
     end)
     filterChip:SetScript("OnEnter", function(self)
-        -- Brighten to full mint on hover regardless of ON/OFF state so
-        -- the icon reads as "clickable".
-        for _, b in ipairs(chipBars) do
-            b:SetColorTexture(chipMint[1], chipMint[2], chipMint[3], 1)
-        end
+        tintChip(Palette.brand)  -- full mint on hover, on or off
         GameTooltip:SetOwner(self, "ANCHOR_BOTTOM")
         local on = ADDON.DB:GetStuckOnly()
         GameTooltip:SetText((on and "|cff98FF98Filter ON|r  " or "") ..
