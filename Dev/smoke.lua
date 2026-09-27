@@ -341,6 +341,36 @@ assert(bd.bags == 7 and bd.bank == 0 and bd.warband == 0, "fast path")
 ADDON.DB.char.items[42] = ADDON.DB.char.items[42] or { need = 30, sortOrder = 20 }
 ADDON.DB.char.pendingBuys = {}
 assert(ADDON.RestockLoop:PreviewShortfallCount() == 1, "shortfall count")
+do -- Restock run: search -> arm -> Buy (double click buys once) -> mail ledger -> done; stop ignores late results
+  local L, AH, mf = ADDON.RestockLoop, ADDON.AH, ADDON.MainFrame
+  local saved = { AuctionHouseFrame, AH.BuyUpTo, AH.ExecutePurchase, mf.ShowArmedToast, mf.ShowSummaryToast, mf.HideToast }
+  AuctionHouseFrame = { IsShown = function() return true end }
+  local search, execs, armed, summary = nil, {}, nil, nil
+  AH.BuyUpTo = function(_, id, qty, cap, cb) search = { id = id, qty = qty, cb = cb } end
+  AH.ExecutePurchase = function(_, id, qty, spend, cb) execs[#execs + 1] = cb end
+  mf.ShowArmedToast = function(_, plan, h) armed = { plan = plan, h = h } end
+  mf.ShowSummaryToast = function(_, sm) summary = sm end
+  mf.HideToast = function() end
+  L:Start()
+  assert(search and search.id == 42 and search.qty == 23, "loop searches the short item for its shortfall")
+  search.cb(true, { itemID = 42, planQuantity = 23, plannedSpend = 2300, worstUnitPrice = 100 })
+  assert(armed and armed.plan.name, "loop arms the flyout")
+  armed.h.onBuy(); armed.h.onBuy()
+  assert(#execs == 1, "double click must buy once")
+  local mark = #timers
+  execs[1](true)
+  assert(ADDON.DB.char.pendingBuys[42].qty == 23 and L:PreviewShortfallCount() == 0, "mail ledger counts the buy")
+  for i = mark + 1, #timers do timers[i]() end
+  assert(summary and summary.title:find("Restock complete") and not L:IsActive(), "run finishes")
+  ADDON.DB.char.pendingBuys = {}
+  armed = nil
+  L:Start()
+  local late = search.cb
+  L:Stop("user_stop")
+  late(true, { itemID = 42, planQuantity = 23, plannedSpend = 2300, worstUnitPrice = 100 })
+  assert(armed == nil and not L:IsActive(), "a search finishing after Stop must not arm")
+  AuctionHouseFrame, AH.BuyUpTo, AH.ExecutePurchase, mf.ShowArmedToast, mf.ShowSummaryToast, mf.HideToast = unpack(saved, 1, 6)
+end
 -- Item-info refresh only for our items while shown
 local rf = 0
 MF.Refresh = function() rf = rf + 1 end

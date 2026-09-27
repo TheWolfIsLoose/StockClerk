@@ -2046,7 +2046,7 @@ function MF:ShowArmedToast(plan, handlers)
 
     -- One amber line per source holding copies, then start the pulse.
     local shownStashLines = 0
-    if plan.hasStash then
+    if (plan.stashBank + plan.stashWarband) > 0 then
         if (plan.stashBank or 0) > 0 then
             self._toastStashBank:ClearAllPoints()
             self._toastStashBank:SetPoint("TOPLEFT", self._toastTitle, "BOTTOMLEFT", 0, -1)
@@ -2113,7 +2113,7 @@ function MF:ShowArmedToast(plan, handlers)
 
     self.confirmToast:Show()
 
-    if plan.hasStash then
+    if (plan.stashBank + plan.stashWarband) > 0 then
         self:_StartToastPulse()
     end
 
