@@ -1,13 +1,13 @@
 --[[
     Stock Clerk - UI/Sidecar.lua
 
-    Side panel: settings, list builders and the Recent Activity feed.
+    Side panel: settings, "Add common consumables" and Recent Activity.
     Toggled by the header hamburger; hangs off the main window's right edge.
 
     Layout:
       * ~260w fixed, height matches MainFrame
       * Top section: Settings (auto-open and Express-Restock toggles) and
-        the list builders (common consumables, bulk import).
+        "Add common consumables".
       * Hairline 1px divider
       * Bottom section: Recent Activity feed (newest first): buys, cap
         changes and restock start/stop. `/clerk log` shows everything.
@@ -103,7 +103,7 @@ local function Build(anchor)
             "When you open your bank and something is short, pull it from your bank and warband bank right away."),
     }
 
-    -- List builders. Same button recipe as the main window.
+    -- Side panel buttons use the main window's button recipe.
     local function Button(y, label, tipTitle, tipBody, onClick)
         local b = CreateFrame("Button", nil, f)
         b:SetPoint("TOPLEFT", 12, y)
@@ -132,20 +132,17 @@ local function Build(anchor)
                 and ("Added %d items. Remove any you don't need with the red X on each row."):format(n)
                 or  "All the common consumables are already on your list.")
         end)
-    Button(-152, "Bulk import item IDs", "Bulk import item IDs",
-        "Paste a list of item IDs, one per line, to add them all at once.",
-        function() ADDON.BulkImport:Open() end)
 
     -- ---- Divider -----------------------------------------------------
     local divider = f:CreateTexture(nil, "OVERLAY", nil, 6)
     divider:SetColorTexture(0, 0, 0, 1)
     divider:SetHeight(1)
-    divider:SetPoint("TOPLEFT", 8, -184)
-    divider:SetPoint("TOPRIGHT", -8, -184)
+    divider:SetPoint("TOPLEFT", 8, -158)
+    divider:SetPoint("TOPRIGHT", -8, -158)
 
     -- ---- Activity feed section --------------------------------------
     local feedTitle = f:CreateFontString(nil, "OVERLAY", "StockClerkFontNormal")
-    feedTitle:SetPoint("TOPLEFT", 12, -192)
+    feedTitle:SetPoint("TOPLEFT", 12, -166)
     feedTitle:SetText("|cff98FF98Recent Activity|r")
 
     -- Hovering the title explains the feed and how to send a bug report;
@@ -169,7 +166,7 @@ local function Build(anchor)
     feedHelp:SetScript("OnLeave", GameTooltip_Hide)
 
     local feedLink = CreateFrame("Button", nil, f)
-    feedLink:SetPoint("TOPRIGHT", -12, -194)
+    feedLink:SetPoint("TOPRIGHT", -12, -168)
     feedLink:SetSize(60, 14)
     local feedHint = feedLink:CreateFontString(nil, "OVERLAY", "StockClerkFontDisableSmall")
     feedHint:SetPoint("RIGHT")
@@ -189,11 +186,11 @@ local function Build(anchor)
     -- panel is bounded and refreshes on Emit, so ~30 rows is the ceiling.
     local scrollBg = f:CreateTexture(nil, "BACKGROUND")
     scrollBg:SetColorTexture(Palette.bgDark[1], Palette.bgDark[2], Palette.bgDark[3], 0.6)
-    scrollBg:SetPoint("TOPLEFT", 8, -214)
+    scrollBg:SetPoint("TOPLEFT", 8, -188)
     scrollBg:SetPoint("BOTTOMRIGHT", -8, 8)
 
     local scrollFrame = CreateFrame("ScrollFrame", "StockClerkSidecarScroll", f, "UIPanelScrollFrameTemplate")
-    scrollFrame:SetPoint("TOPLEFT", 10, -216)
+    scrollFrame:SetPoint("TOPLEFT", 10, -190)
     scrollFrame:SetPoint("BOTTOMRIGHT", -28, 10)  -- -28 leaves room for the scrollbar
 
     local feedContent = CreateFrame("Frame", nil, scrollFrame)

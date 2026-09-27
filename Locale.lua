@@ -13,7 +13,7 @@ L.EMPTY_LIST             = "No items yet.\n\nAdd items by:\n |cffffffff1.|r Typi
 L.ITEM_NOT_FOUND         = "Item not found or not yet cached. Try opening its tooltip in-game first, then re-add."
 
 -- Item ID input box hints
-L.ADDBOX_TOOLTIP         = "Type an item ID, or drag an item from your bags onto this window."
+L.ADDBOX_TOOLTIP         = "Type an item ID (or drag an item from your bags onto this box) and press Enter. Add a Target first if you want more than 1."
 
 -- Shopping list filter chip
 L.FILTER_STUCK_ONLY      = "Show only: items you're short on"

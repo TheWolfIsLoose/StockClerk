@@ -286,15 +286,15 @@ end
 MF.StyleButton = StyleButton
 
 -- Drawn icons (x, hamburger, plus, funnel, grip): flat bars instead of font
--- glyphs, so they stay crisp and tint as one. bars = { { w, h, y, angle }, ... }
--- centred on the frame. Returns tint(color, alpha).
+-- glyphs, so they stay crisp and tint as one. bars = { { w, h, y, angle, x }, ... }
+-- centred on the frame (y, angle, x optional). Returns tint(color, alpha).
 local ICON_REST = { 0.85, 0.85, 0.85 }
 local function DrawGlyph(frame, bars)
     local tex = {}
     for i, b in ipairs(bars) do
         local t = frame:CreateTexture(nil, "OVERLAY", nil, 7)
         t:SetSize(b[1], b[2])
-        t:SetPoint("CENTER", 0, b[3] or 0)
+        t:SetPoint("CENTER", b[5] or 0, b[3] or 0)
         if b[4] then t:SetRotation(b[4]) end
         tex[i] = t
     end
@@ -1072,9 +1072,8 @@ function MF:Build()
     end)
 
     -- Every close path (Escape, x, /clerk) ends in Hide, so this is the one
-    -- place to release keyboard capture: a focused hidden edit box, or a
-    -- Tab-focused Add button left holding the keyboard, would otherwise
-    -- swallow keys game-wide.
+    -- place to release keyboard capture: a focused hidden edit box would
+    -- otherwise swallow keys game-wide.
     f:SetScript("OnHide", function()
         -- Close the side panel first (it's UIParent-parented); pcall so an
         -- error there can't skip the keyboard reset below.
@@ -1087,8 +1086,6 @@ function MF:Build()
 
         local focused = GetCurrentKeyBoardFocus and GetCurrentKeyBoardFocus()
         if focused and focused.ClearFocus then focused:ClearFocus() end
-        -- Unconditional: safe when already blurred, and covers a desynced flag.
-        if MF.BlurAddButton then MF:BlurAddButton() end
 
         -- A drag must not survive a close (its ticker would poll forever).
         if MF._dragTicker then
@@ -1208,32 +1205,35 @@ function MF:Build()
     -- Item ID + Target. Item ID only (names are ambiguous across ranks);
     -- blank Target = 1. Caps are set per row after seeing AH prices.
     -- Item ID stretches to fill whatever the window width leaves.
-    local addEB   = MakeEditBox(toolbar, "Item ID", 130, true, 8, "Item ID",
+    local addEB   = MakeEditBox(toolbar, "Item ID, Enter to add", 130, true, 8, "Item ID",
         L.ADDBOX_TOOLTIP or "Type an item ID, or drag an item from your bags onto this window.")
     local countEB = MakeEditBox(toolbar, "Target",   60, true, 5, "Target",
         "How many to keep in your bags. Blank = 1.")
     local addBox   = addEB.editBox
     local countBox = countEB.editBox
 
-    -- Add: square icon button with a drawn plus (the font "+" sits small
-    -- and off-centre), turning brand mint on hover like the header icons.
-    -- Bulk import lives in the side panel next to "Add common consumables".
-    local addBtn = CreateFrame("Button", nil, toolbar)
-    addBtn:SetSize(22, 22)
-    addBtn:SetPoint("RIGHT", toolbar, "RIGHT", -12, 0)
-    countEB:SetPoint("RIGHT", addBtn, "LEFT", -8, 0)
+    -- Enter in either box adds the item. The square button is bulk import:
+    -- a drawn "list +" icon (three lines, a plus at the bottom right).
+    local bulkBtn = CreateFrame("Button", nil, toolbar)
+    bulkBtn:SetSize(22, 22)
+    bulkBtn:SetPoint("RIGHT", toolbar, "RIGHT", -12, 0)
+    countEB:SetPoint("RIGHT", bulkBtn, "LEFT", -8, 0)
     addEB:SetPoint("LEFT", toolbar, "LEFT", 12, 0)
     addEB:SetPoint("RIGHT", countEB, "LEFT", -8, 0)
-    StyleButton(addBtn)
-    local tintPlus = DrawGlyph(addBtn, { { 10, 2 }, { 2, 10 } })
-    addBtn:HookScript("OnEnter", function(self)  -- Hook, not Set: keeps StyleButton's hover wash
-        tintPlus(Palette.brand)
+    StyleButton(bulkBtn)
+    local tintBulk = DrawGlyph(bulkBtn, {
+        { 10, 2, 5, nil, -2 }, { 10, 2, 1, nil, -2 }, { 5, 2, -3, nil, -4.5 },  -- list
+        { 7, 2, -4, nil, 4 }, { 2, 7, -4, nil, 4 },                               -- plus
+    })
+    bulkBtn:HookScript("OnEnter", function(self)  -- Hook, not Set: keeps StyleButton's hover wash
+        tintBulk(Palette.brand)
         GameTooltip:SetOwner(self, "ANCHOR_TOP")
-        GameTooltip:SetText("Add to list", 1, 1, 1)
-        GameTooltip:AddLine("Or press Enter in any box.", 0.8, 0.8, 0.8, true)
+        GameTooltip:SetText("Bulk import", 1, 1, 1)
+        GameTooltip:AddLine("Paste a list of item IDs, one per line, to add them all at once.", 0.8, 0.8, 0.8, true)
         GameTooltip:Show()
     end)
-    addBtn:HookScript("OnLeave", function() GameTooltip:Hide(); tintPlus(ICON_REST) end)
+    bulkBtn:HookScript("OnLeave", function() GameTooltip:Hide(); tintBulk(ICON_REST) end)
+    bulkBtn:SetScript("OnClick", function() ADDON.BulkImport:Open() end)
 
     local function DoAdd()
         local raw = addBox:GetText()
@@ -1268,102 +1268,6 @@ function MF:Build()
             countBox:ClearFocus()
             MF:SetStatus(("Added %s (need %d)"):format(name, need))
             MF:Refresh()
-        end)
-    end
-    addBtn:SetScript("OnClick", DoAdd)
-
-    -- ---- Add button as a Tab stop -----------------------------------------
-    -- Buttons don't take keyboard focus, so Tab into Add shows a mint ring
-    -- and turns on the keyboard for Tab / Shift+Tab / Enter / Space / Escape
-    -- (MF:FocusAddButton / MF:BlurAddButton).
-    local ring = addBtn:CreateTexture(nil, "OVERLAY")
-    ring:SetPoint("TOPLEFT", addBtn, "TOPLEFT", -2, 2)
-    ring:SetPoint("BOTTOMRIGHT", addBtn, "BOTTOMRIGHT", 2, -2)
-    ring:SetColorTexture(0, 0, 0, 0) -- transparent center; edges drawn via 4 sub-textures below
-    ring:Hide()
-    -- Blizzard textures don't support border-only strokes, so build the
-    -- ring from four 1px mint edges rather than a filled rect.
-    local function edge(parent, r, g, b, a)
-        local t = parent:CreateTexture(nil, "OVERLAY")
-        t:SetColorTexture(r, g, b, a)
-        return t
-    end
-    local mint = { 0x98/255, 0xFF/255, 0x98/255, 1 }
-    local edgeT = edge(addBtn, mint[1], mint[2], mint[3], mint[4])
-    local edgeB = edge(addBtn, mint[1], mint[2], mint[3], mint[4])
-    local edgeL = edge(addBtn, mint[1], mint[2], mint[3], mint[4])
-    local edgeR = edge(addBtn, mint[1], mint[2], mint[3], mint[4])
-    edgeT:SetPoint("TOPLEFT", -2, 2); edgeT:SetPoint("TOPRIGHT", 2, 2); edgeT:SetHeight(1)
-    edgeB:SetPoint("BOTTOMLEFT", -2, -2); edgeB:SetPoint("BOTTOMRIGHT", 2, -2); edgeB:SetHeight(1)
-    edgeL:SetPoint("TOPLEFT", -2, 2); edgeL:SetPoint("BOTTOMLEFT", -2, -2); edgeL:SetWidth(1)
-    edgeR:SetPoint("TOPRIGHT", 2, 2); edgeR:SetPoint("BOTTOMRIGHT", 2, -2); edgeR:SetWidth(1)
-    edgeT:Hide(); edgeB:Hide(); edgeL:Hide(); edgeR:Hide()
-
-    local function setRing(shown)
-        edgeT:SetShown(shown); edgeB:SetShown(shown)
-        edgeL:SetShown(shown); edgeR:SetShown(shown)
-    end
-
-    self.addBtn = addBtn
-
-    function MF:FocusAddButton()
-        -- Take focus from the current edit box so its blur-commit fires.
-        local cur = GetCurrentKeyBoardFocus and GetCurrentKeyBoardFocus()
-        if cur and cur.ClearFocus then cur:ClearFocus() end
-        addBtn:EnableKeyboard(true)
-        addBtn:SetPropagateKeyboardInput(false)
-        setRing(true)
-        self._addBtnFocused = true
-    end
-
-    function MF:BlurAddButton()
-        addBtn:SetPropagateKeyboardInput(true)
-        addBtn:EnableKeyboard(false)
-        setRing(false)
-        self._addBtnFocused = false
-    end
-
-    -- Same single-exit rule as the root OnKeyDown. If keys arrive while the
-    -- flag says blurred, the keyboard is stuck on: blur and let the key through.
-    addBtn:SetScript("OnKeyDown", function(self, key)
-        if not MF._addBtnFocused then
-            pcall(function() MF:BlurAddButton() end)
-            self:SetPropagateKeyboardInput(true)
-            return
-        end
-
-        local consumed = (key == "TAB" or key == "ENTER" or key == "SPACE" or key == "ESCAPE")
-
-        if key == "TAB" then
-            -- Defer a frame so this Tab isn't also seen by the next control.
-            local shift = IsShiftKeyDown()
-            C_Timer.After(0, function()
-                pcall(function()
-                    MF:BlurAddButton()
-                    if shift then
-                        if countBox then countBox:SetFocus() end
-                    else
-                        if addBox then addBox:SetFocus() end
-                    end
-                end)
-            end)
-        elseif key == "ENTER" or key == "SPACE" then
-            pcall(function() DoAdd() end)
-        elseif key == "ESCAPE" then
-            pcall(function() MF:BlurAddButton() end)
-        end
-
-        -- SINGLE exit point. Same discipline as the root OnKeyDown.
-        self:SetPropagateKeyboardInput(not consumed)
-    end)
-    -- Clicking the button (mouse) should also clear the keyboard-focus
-    -- state so we don't leave a stale ring behind.
-    addBtn:HookScript("OnClick", function() MF:BlurAddButton() end)
-
-    -- Clicking an edit box while Add has the ring drops the ring.
-    for _, eb in ipairs({ addBox, countBox }) do
-        eb:HookScript("OnEditFocusGained", function()
-            if MF._addBtnFocused then MF:BlurAddButton() end
         end)
     end
 
@@ -1469,25 +1373,9 @@ function MF:Build()
     self.addBox   = addBox
     self.countBox = countBox
 
-    -- Tab: Item ID -> Target -> Add -> Item ID (Shift+Tab reverses; Add's
-    -- side lives in its OnKeyDown).
-    addBox:SetScript("OnTabPressed", function(self)
-        if IsShiftKeyDown() then
-            -- Shift+Tab from the first field wraps to the Add button.
-            MF:FocusAddButton()
-        else
-            countBox:SetFocus()
-        end
-    end)
-    countBox:SetScript("OnTabPressed", function(self)
-        if IsShiftKeyDown() then
-            addBox:SetFocus()
-        else
-            -- Forward Tab from the toolbar's last editbox goes to the
-            -- Add button. From there, Tab wraps back to addBox.
-            MF:FocusAddButton()
-        end
-    end)
+    -- Tab (or Shift+Tab) switches between the two boxes.
+    addBox:SetScript("OnTabPressed", function() countBox:SetFocus() end)
+    countBox:SetScript("OnTabPressed", function() addBox:SetFocus() end)
 
     -- ---- Column headers ----------------------------------------------------
     -- Full window width so the band matches the toolbar and footer (anchored

@@ -294,10 +294,13 @@ keyboard navigation was already gone; `Dev/STYLE.md` written.
 **Before cutting beta2:**
 - Player's in-game look at the whole pass.
 - C2 check: the window still auto-opens and docks at the AH with Auctionator.
-- **Open:** keep the Add button as a Tab stop (Item ID → Target → Add, with
-  a mint ring)? Enter in either box already adds, so removing it would
-  delete ~100 lines of keyboard-capture guard code; Tab would just cycle
-  Item ID ↔ Target.
+- ~~C2 AH check~~ **Done:** docking works with Auctionator (it's a tab in the AH window).
+- **Decided 2026-09-27:** Enter adds from either box, so the + button
+  became **bulk import** (drawn "list +" icon) and left the side panel;
+  the Add Tab stop and its keyboard guards are gone (Tab switches boxes).
+  Item ID placeholder: "Item ID, Enter to add".
+- **Fixed:** row hover could stick after a fast mouse exit or a refresh
+  while hovered (leave check was deferred a frame).
 - Then replace CHANGELOG.md with the beta2 notes below and push to `dev`
   (the push cuts the release).
 
@@ -307,8 +310,8 @@ keyboard navigation was already gone; `Dev/STYLE.md` written.
 
 - New look: a slimmer, tidier window. Smaller rows fit more items, item icons get a clean quality-coloured border, and help text moved into tooltips.
 - New: **Express-Restock at Bank.** Turn it on in the side panel and opening your bank pulls anything you're short on. If your bags are full, Stock Clerk tells you.
-- The add bar is just Item ID, Target and +. Set a price cap on the row after checking the AH.
-- Bulk import moved to the side panel, next to "Add common consumables".
+- The add bar is just Item ID and Target: press Enter to add. Set a price cap on the row after checking the AH.
+- The button next to them is now bulk import: paste a list of item IDs.
 - Stock Clerk uses Expressway when your UI provides it (ElvUI, EllesmereUI and others), and a similar built-in font otherwise.
 - Recent Activity now reads like a receipt: "Bought 20 [Light's Potential] for 412g", with item names in their quality colour.
 - Something not working? Hover **Recent Activity**: `/clerk log` gives you a report to paste into a bug report, and `/clerk debug` records extra detail while you repeat the problem.
