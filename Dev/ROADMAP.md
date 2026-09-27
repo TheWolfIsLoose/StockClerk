@@ -11,34 +11,29 @@ disagree), **Open** (needs an answer before build).
 
 ## Next session: start here
 
-**Update 2026-09-27 ~17:30 ET:** beta3's in-game log looked clean (an AH
-restock, cap/target edits, no StockClerk errors since it loaded). Checkout
-mode is built for beta4 (see its section, "As built" and the in-game
-checklist); it waits on the beta3 cut decision so beta3 doesn't ship with it.
+**Handoff 2026-09-27 ~17:30 ET.** `v1.2.0-beta3` is released (in-game log
+was clean). `dev` now holds **Checkout mode for `v1.2.0-beta4`**, built and
+smoke-green but not yet seen in game (CHANGELOG.md still says beta3, so
+pushes to `dev` don't release). In order:
 
-**Handoff 2026-09-27 ~01:40 ET.** In order:
+1. **Beta4 in-game check:** the checklist in the Checkout mode section
+   (player syncs with `Dev\update.bat dev`, `/reload`). Screenshots of the
+   checkout bar at the 420px minimum width help.
+2. Fix what turns up; the tunables are at the top of the running section
+   in `RestockLoop.lua` (`BUY_LOCK`, `DEBOUNCE`, `PRICEY`).
+3. **Cut `v1.2.0-beta4`:** CHANGELOG.md ← the drafted beta4 notes,
+   Dev/HISTORY.md entry, push `dev`. Then stable `v1.2.0` (tasks under the
+   v1.2.0 section).
 
-1. **Beta3 check.** `dev` holds the full Ponytail pass for `v1.2.0-beta3`
-   (see that section). The player was testing it in game at handoff: ask
-   how it went and fix anything found. Checklist: window, side panel, bulk
-   import (drop items), `/clerk log`; an AH restock (Buy, Skip, Escape,
-   summary); edit Need and Cap; drag reorder; filter; Restock from Bank.
-2. **Cut `v1.2.0-beta3`:** replace CHANGELOG.md with the drafted beta3
-   notes (in the beta3 section), add the Dev/HISTORY.md entry, push `dev`
-   (the push releases it).
-3. **Then build "Checkout mode" as `v1.2.0-beta4`** (the next section;
-   design decided, nothing built yet). **Decided:** it ships in beta4 and
-   is part of stable v1.2.0.
-
-State: `main` is still v1.1.1 plus the `update.bat` fix. `v1.2.0-beta2`
-is the latest release.
+State: `main` is still v1.1.1 plus the `update.bat` fix.
 
 Session setup: player syncs with `Dev\update.bat dev` and `/reload`;
 Claude reads `WTF\Account\SAVAGEFEARLESS\SavedVariables\StockClerk.lua`
 via the connected `_retail_` folder (after a `/reload`) for logs. Local
 smoke: `lua5.1 Dev/smoke.lua .` (Lua 5.1 builds from github.com/lua/lua
 tag v5.1 when no package manager is reachable). Pushing needs the repo
-attached with push access (add_repo), then `git push origin dev`.
+attached with push access (add_repo), then `git push origin dev`. Wait for
+a release push's tag (`git ls-remote --tags origin`) before pushing again.
 
 ---
 
@@ -351,7 +346,7 @@ Your list, caps and settings carry over unchanged.
 
 ---
 
-## v1.2.0-beta3 — Full Ponytail pass (built on `dev`, awaiting in-game check)
+## v1.2.0-beta3 — Full Ponytail pass (released 2026-09-27)
 
 Goal: code a human reviewer reads as deliberate. Whole-repo audit
 (2026-09-27), all 22 findings applied; behaviour unchanged unless noted.
