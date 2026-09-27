@@ -11,9 +11,10 @@ disagree), **Open** (needs an answer before build).
 
 ## Next session: start here
 
-**2026-09-26 late session:** the beta2 UI pass is built on `dev` (see
-**v1.2.0-beta2 → Reconciled list**). Next: player's in-game screenshot
-round on the whole pass, then C1-C4, then cut `v1.2.0-beta2`.
+**2026-09-27:** beta2 is fully built on `dev` (UI pass, log rework,
+C1-C4, STYLE.md; see **v1.2.0-beta2 → Reconciled list**). Next: player's
+in-game look, the C2 AH check, one open question (Add button Tab stop),
+then swap in the drafted CHANGELOG to cut `v1.2.0-beta2`.
 
 State: `v1.2.0-beta1` released (prerelease, from `dev`). `dev` is ahead
 of it (no release: CHANGELOG top heading is still beta1). `main` is still
@@ -285,7 +286,35 @@ Your list, caps and settings carry over unchanged.
 - **Known limit:** errors raised outside event handlers (button clicks,
   timers) reach BugSack but not the log. Extend if reports show gaps.
 
-**Still to do for beta2:** flat checkboxes; C1-C4 below; `Dev/STYLE.md`.
+**Done 2026-09-27 (on `dev`):** flat checkboxes; C1 comment diet (code
+verified unchanged; ~6.8k → ~5.6k lines total); C2 legacy AH events
+dropped; C3 `DrawGlyph` / `HeaderIcon` / one Need-Cap cell helper; C4 row
+keyboard navigation was already gone; `Dev/STYLE.md` written.
+
+**Before cutting beta2:**
+- Player's in-game look at the whole pass.
+- C2 check: the window still auto-opens and docks at the AH with Auctionator.
+- **Open:** keep the Add button as a Tab stop (Item ID → Target → Add, with
+  a mint ring)? Enter in either box already adds, so removing it would
+  delete ~100 lines of keyboard-capture guard code; Tab would just cycle
+  Item ID ↔ Target.
+- Then replace CHANGELOG.md with the beta2 notes below and push to `dev`
+  (the push cuts the release).
+
+**v1.2.0-beta2 CHANGELOG (draft; current version only, player-facing):**
+```
+## v1.2.0-beta2
+
+- New look: a slimmer, tidier window. Smaller rows fit more items, item icons get a clean quality-coloured border, and help text moved into tooltips.
+- New: **Express-Restock at Bank.** Turn it on in the side panel and opening your bank pulls anything you're short on. If your bags are full, Stock Clerk tells you.
+- The add bar is just Item ID, Target and +. Set a price cap on the row after checking the AH.
+- Bulk import moved to the side panel, next to "Add common consumables".
+- Stock Clerk uses Expressway when your UI provides it (ElvUI, EllesmereUI and others), and a similar built-in font otherwise.
+- Recent Activity now reads like a receipt: "Bought 20 [Light's Potential] for 412g", with item names in their quality colour.
+- Something not working? Hover **Recent Activity**: `/clerk log` gives you a report to paste into a bug report, and `/clerk debug` records extra detail while you repeat the problem.
+
+Your list, caps and settings carry over unchanged.
+```
 
 ### Audit (2026-09-26)
 
