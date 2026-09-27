@@ -145,6 +145,36 @@ for i = 1, n do timers[i]() end
 assert(invCalls == 1, "debounce should collapse to 1 call, got " .. invCalls)
 fire("BAG_UPDATE_DELAYED"); for i = n + 1, #timers do timers[i]() end
 assert(invCalls == 2, "debounce should re-arm, got " .. invCalls)
+do -- AH: buy planning within the cap, and confirm only if the server total hasn't risen
+  local AH, ahf, cah = ADDON.AH, AuctionHouseFrame, C_AuctionHouse
+  local listings = { { unitPrice = 100, quantity = 5 }, { unitPrice = 200, quantity = 5 }, { unitPrice = 900, quantity = 50 } }
+  local calls = {}
+  AuctionHouseFrame = { IsShown = function() return true end }
+  C_AuctionHouse = {
+    MakeItemKey = function(id) return id end, SendSearchQuery = function() end,
+    GetNumCommoditySearchResults = function() return #listings end,
+    GetCommoditySearchResultInfo = function(_, i) return listings[i] end,
+    StartCommoditiesPurchase   = function() calls[#calls + 1] = "start" end,
+    ConfirmCommoditiesPurchase = function() calls[#calls + 1] = "confirm" end,
+    CancelCommoditiesPurchase  = function() calls[#calls + 1] = "cancel" end,
+  }
+  local newTimer = C_Timer.NewTimer
+  C_Timer.NewTimer = function() return { Cancel = function() end } end  -- timeouts never fire here
+  local function run(fn) local mark = #timers; fn(); for i = mark + 1, #timers do timers[i]() end end
+  local ok, res
+  local function cb(o, r) ok, res = o, r end
+  run(function() AH:BuyUpTo(7, 8, 250, cb); AH:OnCommoditySearchUpdated(7) end)
+  assert(ok and res.planQuantity == 8 and res.plannedSpend == 1100 and res.worstUnitPrice == 200, "buy plan")
+  run(function() AH:BuyUpTo(7, 8, 50, cb); AH:OnCommoditySearchUpdated(7) end)
+  assert(not ok and res:find("above your 0g cap", 1, true), "cap refusal: " .. tostring(res))
+  run(function() AH:ExecutePurchase(7, 8, 1100, cb); AH:OnCommodityPriceUpdated(137, 1100) end)
+  assert(calls[#calls] == "confirm", "confirm at expected total")
+  run(function() AH:OnCommodityPurchaseSucceeded() end)
+  assert(ok, "purchase success")
+  run(function() AH:ExecutePurchase(7, 8, 1100, cb); AH:OnCommodityPriceUpdated(150, 1200) end)
+  assert(calls[#calls] == "cancel" and not ok and res:find("price rose"), "cancel when price rose")
+  AuctionHouseFrame, C_AuctionHouse, C_Timer.NewTimer = ahf, cah, newTimer
+end
 local got = {}
 for _, m in ipairs({ "OnCommoditySearchUpdated", "OnCommodityPriceUpdated", "OnCommodityPriceUnavailable",
                      "OnCommodityPurchaseSucceeded", "OnCommodityPurchaseFailed" }) do
