@@ -468,7 +468,7 @@ local function BuildRow(row)
     -- stops at -220 to leave room for four right-aligned columns (Have,
     -- Need, Cap, Last Seen) plus trash. Short/ok state is signaled by
     -- coloring row.have (see below).
-    row.name = row:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+    row.name = row:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
     row.name:SetPoint("LEFT", row.icon, "RIGHT", 8, 0)
     row.name:SetJustifyH("LEFT")
     row.name:SetWordWrap(false)
@@ -514,7 +514,7 @@ local function BuildRow(row)
     row.haveCell:SetPoint("RIGHT", row, "RIGHT", -212, 0)
     row.haveCell:SetFrameLevel(row:GetFrameLevel() + 2)
 
-    row.have = row.haveCell:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+    row.have = row.haveCell:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
     row.have:SetPoint("RIGHT", row.haveCell, "RIGHT", -6, 0)
     row.have:SetJustifyH("RIGHT")
 
@@ -586,7 +586,7 @@ local function BuildRow(row)
     -- Right-align inside the cell (accounting style). SetPoint anchors
     -- the FontString's RIGHT edge at the cell's RIGHT edge -6px inset
     -- so the digit doesn't touch the cell border.
-    row.need = row.needCell:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+    row.need = row.needCell:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
     row.need:SetPoint("RIGHT", row.needCell, "RIGHT", -6, 0)
     row.need:SetJustifyH("RIGHT")
 
@@ -618,7 +618,7 @@ local function BuildRow(row)
 
     -- See row.need above: parented to the cell so it draws over the fill.
     -- Right-align inside cell (accounting style, matches Need cell).
-    row.cap = row.capCell:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+    row.cap = row.capCell:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
     row.cap:SetPoint("RIGHT", row.capCell, "RIGHT", -6, 0)
     row.cap:SetJustifyH("RIGHT")
 
@@ -634,7 +634,7 @@ local function BuildRow(row)
     row.needEditBg:Hide()
 
     row.needEdit = CreateFrame("EditBox", nil, row)
-    row.needEdit:SetFontObject("GameFontHighlight")
+    row.needEdit:SetFontObject("GameFontHighlightSmall")
     row.needEdit:SetAutoFocus(false)
     row.needEdit:SetNumeric(true)
     row.needEdit:SetMaxLetters(5)
@@ -672,7 +672,7 @@ local function BuildRow(row)
     row.priceEditBg:Hide()
 
     row.priceEdit = CreateFrame("EditBox", nil, row)
-    row.priceEdit:SetFontObject("GameFontHighlight")
+    row.priceEdit:SetFontObject("GameFontHighlightSmall")
     row.priceEdit:SetAutoFocus(false)
     -- Whole-gold integers only. SetNumeric strips any non-digit keystroke,
     -- which is exactly the constraint we want -- the storage is copper
@@ -1037,13 +1037,13 @@ local function InitializeRow(row, data)
     end
     row._itemLink = link
     if link then
-        row.name:SetText(link)
+        row.name:SetText((link:gsub("|h%[(.-)%]|h", "|h%1|h")))
     else
         -- Async resolve for cold items; fall back to stored name.
         row.name:SetText(data.name or ("item:" .. data.itemID))
         ADDON.ItemResolver:Resolve(data.itemID, function(id, nm, ln)
             if row._itemID == id and ln then
-                row.name:SetText(ln)
+                row.name:SetText((ln:gsub("|h%[(.-)%]|h", "|h%1|h")))
                 row._itemLink = ln
             end
         end)
