@@ -87,26 +87,13 @@ local function ApplyFontFace()
 end
 
 -- ---------------------------------------------------------------------------
--- Palette — ported from atrocityEssentials' ThemeDefaults (near-black,
--- flat, ElvUI-family). One rule: the WINDOW paints one fill; nested regions
--- get separated only by 1px pure-black borders, not by additional shades.
--- Accent = SharedMedia_Tones organic mint green #98FF98 (title, focus
--- borders, section labels).
+-- Palette (after atrocityEssentials: near-black, flat). The window paints
+-- one fill; regions are separated by 1px black borders, not extra shades.
+-- Accent: mint #98FF98.
 -- ---------------------------------------------------------------------------
 local Palette = {
-    -- Backgrounds. Three overlapping opacity tiers, each with a clear role:
-    --   bgDark    = the window itself. Bumped from 0.94 -> 0.97 so world
-    --              art doesn't bleed through the addon body.
-    --   bandTint  = section "banding" — a very thin translucent overlay used
-    --              on the toolbar, header row, and footer. Reads instantly
-    --              as "this is a distinct band" without needing per-section
-    --              borders. Same trick atrocityEssentials uses on its own
-    --              Display Settings / Position / Font Settings headers.
-    --   fieldFill = editable well fill. Toolbar edit boxes, price/need cells
-    --              at rest — gives interactive spots a persistent "sunken"
-    --              tone so a scanning eye can find them without hovering.
-    --   btnRest   = button-at-rest fill so Add / Restock / Close read as
-    --              buttons even before hover. Hover still brightens on top.
+    -- bgDark = window; bandTint = faint strip on header/toolbar/footer;
+    -- fieldFill = sunken well for editable spots; btnRest = button at rest.
     bgDark        = { 0.031, 0.031, 0.031, 0.97 }, -- window fill (was 0.94)
     bgMedium      = { 0.055, 0.055, 0.055, 0.95 }, -- control fill (buttons, hover wells)
     panelBg       = { 0.060, 0.060, 0.060, 0.98 }, -- Sidecar / LogPopup body
@@ -130,20 +117,15 @@ local Palette = {
     -- outshine the brand mint)
     ok            = { 0.30, 0.80, 0.40, 1.00 },
     short         = { 0.90, 0.30, 0.30, 1.00 },
-    -- Row separator: 1px muted dark gray line drawn along each row's
-    -- bottom edge. Distinct from Palette.border (pure black, used for
-    -- window/cell chrome) so it reads as a between-rows divider rather
-    -- than a hard boundary.
+    -- Between-rows divider: softer than the black chrome border.
     rowSeparator  = { 0.15, 0.15, 0.15, 1.00 },
 }
 
 local BORDER_SIZE = 1
 local ANIM_DUR    = 0.15
 
--- No WHITE_TEX path in this file: all solid fills and borders use
--- SetColorTexture. The White8x8+SetVertexColor atlas idiom renders
--- transparent on retail Midnight (v0.3 changelog) and mixed-path
--- remnants were stripped in the code-review cleanup.
+-- All fills use SetColorTexture: the White8x8 + SetVertexColor idiom renders
+-- transparent on retail Midnight.
 local TRASH_TEX = "Interface\\Buttons\\UI-GroupLoot-Pass-Up"   -- red X, native asset
 local QUESTION_ICON = 134400
 
@@ -151,12 +133,8 @@ local QUESTION_ICON = 134400
 -- Helpers (atrocity-style theming primitives)
 -- ---------------------------------------------------------------------------
 
--- PixelSnap: turn off texel snapping / bias so 1px borders don't smear across
--- two physical pixel rows when the UI scale is off-grid. Verbatim from atrocity's
--- AE:PixelSnapRegions (Core/AddonTheme.lua). Every border texture goes through
--- this or you get the classic "1px line looks 2px thick and blurry" bug.
--- Local alias to the ADDON-wide money helper (defined in Core.lua at
--- load time, so it's available before this file's functions execute).
+-- Turn off texel snapping so 1px borders don't smear across two pixel rows
+-- at off-grid UI scales (atrocity's PixelSnapRegions).
 local MoneyText = ADDON.MoneyText
 
 local function PixelSnap(tex)
@@ -174,18 +152,12 @@ local function ApplyFill(frame, color)
         frame._bg:SetAllPoints(true)
         PixelSnap(frame._bg)
     end
-    -- SetColorTexture, not SetTexture(WHITE_TEX)+SetVertexColor: the
-    -- White8x8 atlas path is the documented transparency trap on retail
-    -- Midnight (see v0.3 changelog), and the mixed path contradicts the
-    -- convention this codebase adopted.
     frame._bg:SetColorTexture(color[1], color[2], color[3], color[4] or 1)
     frame._bg:Show()
 end
 
--- Band overlay: a translucent tint layered ON TOP of the window fill so a
--- section reads as a distinct band without needing its own opaque color or
--- an extra border. Draws on BACKGROUND sublevel -6 (above ApplyFill's -8 but
--- still behind content). Used for toolbar / header row / footer.
+-- Band: translucent tint above the window fill (BACKGROUND -6, over
+-- ApplyFill's -8) so a strip reads as its own section.
 local function ApplyBand(frame, color)
     if not frame._band then
         frame._band = frame:CreateTexture(nil, "BACKGROUND", nil, -6)
@@ -196,11 +168,8 @@ local function ApplyBand(frame, color)
     frame._band:Show()
 end
 
--- BlackBorder: 1px pure-black frame around any region, on the OVERLAY layer
--- of a dedicated child frame so nothing else can paint over it. Atrocity uses
--- a whole tooltip-strata border frame for the window; for interior widgets a
--- 4-texture ring on the widget itself is enough.
--- Returns { top, bottom, left, right } for later recolor (focus animation).
+-- 1px black ring on OVERLAY. Returns { top, bottom, left, right } so the
+-- border animator can recolour it.
 local function AddBlackBorder(frame, color)
     color = color or Palette.border
     local textures = {}
@@ -240,9 +209,7 @@ local function SetBorderColor(frame, r, g, b, a)
     end
 end
 
--- Animated border color: smoothly transition a widget's border between
--- the resting color (black) and a target (brand mint on hover/focus).
--- Atrocity's EditBox uses the same pattern (AnimateEditBoxBorder).
+-- Fade a widget's border between rest (black) and mint on hover/focus.
 local function AttachBorderAnimator(frame)
     if frame._borderAnim then return end
     local group = frame:CreateAnimationGroup()
@@ -273,10 +240,8 @@ local function AttachBorderAnimator(frame)
     }
 end
 
--- HoverWash: the atrocity signature interaction — a grey #D9D9D9 @ 0.15
--- rectangle on ARTWORK sublevel 7 (NOT the HIGHLIGHT layer; HIGHLIGHT would
--- draw over OVERLAY font strings and wash the label out). Hooked (not Set)
--- so existing OnEnter/OnLeave handlers survive.
+-- Hover wash: #D9D9D9 @ 0.15 on ARTWORK 7, not the HIGHLIGHT layer (which
+-- would draw over the label). Hooked so existing handlers survive.
 local function AddHoverWash(btn, insetX, insetY)
     if btn._hoverWash then return btn._hoverWash end
     insetX = insetX or 1
@@ -292,12 +257,7 @@ local function AddHoverWash(btn, insetX, insetY)
     return wash
 end
 
--- StyleButton: turn a plain Button into an atrocity-flat button.
--- Two-layer fill so buttons read as filled even against the near-black window:
---   ApplyFill  -> opaque bgMedium base (BACKGROUND -8)
---   ApplyBand  -> Palette.btnRest light tint (BACKGROUND -6)
--- Press feedback swaps the band layer to a brighter/wash tint; hover wash
--- adds a further overlay on ARTWORK. Border is a 1px black ring on top.
+-- Flat button: opaque base + light band, hover wash, press flash, black ring.
 local function StyleButton(btn, opts)
     opts = opts or {}
     ApplyFill(btn, opts.fill or Palette.bgMedium)
@@ -321,9 +281,8 @@ local function StyleButton(btn, opts)
     end
 end
 
--- StyleEditBox: for a plain WoW EditBox that already lives inside a
--- container Frame (the container gets the border + fill; the EditBox stays
--- transparent). Wires up brand-mint border animation on hover/focus.
+-- Edit box inside a container frame: the container carries fill and
+-- border; mint border on hover/focus.
 MF.StyleButton = StyleButton
 
 -- Drawn icons (x, hamburger, plus, funnel, grip): flat bars instead of font
@@ -362,9 +321,6 @@ end
 MF.HeaderIcon = HeaderIcon
 
 local function StyleEditBoxContainer(container, editBox)
-    -- Deeper well fill (Palette.fieldFill = near-black @ 55%) so the box
-    -- reads as an interactive sunken input even when it sits on top of a
-    -- toolbar band that itself is slightly brighter than the window body.
     ApplyFill(container, Palette.fieldFill)
     AddBlackBorder(container)
     AttachBorderAnimator(container)
@@ -383,18 +339,9 @@ local function StyleEditBoxContainer(container, editBox)
                 container._borderAnim.AnimateTo(Palette.border)
             end
         end)
-        -- The EditBox sits on top of the
-        -- container and eats mouse enter/leave for the interior. Without
-        -- this mirror, moving the cursor across the editbox proper leaves
-        -- the border un-lit, and only the ~3px exposed strip between the
-        -- editbox edge and the container edge triggers container.OnEnter.
-        -- Cursor drifting off the editbox onto that strip and back would
-        -- flash the mint border in-and-out repeatedly -- exactly what
-        -- users reported as "border highlight behavior is still weird".
-        -- Hooking OnEnter/OnLeave on the editBox too collapses the two
-        -- surfaces into one logical hover region: mint on entering either,
-        -- fade only on leaving both (guarded by container:IsMouseOver()
-        -- and editBox:IsMouseOver() so crossing the boundary stays lit).
+        -- The EditBox covers the container's interior and eats its
+        -- enter/leave, so mirror the hover onto it: one hover region,
+        -- mint on entering either, fade only after leaving both.
         editBox:HookScript("OnEnter", toBrand)
         editBox:HookScript("OnLeave", function()
             if editBox:HasFocus() then return end
@@ -404,9 +351,7 @@ local function StyleEditBoxContainer(container, editBox)
     end
 end
 
--- Row hover wash: on-demand rectangle we manage without wash-registration
--- (we're driving it from RowEnter/RowLeave directly so it works even though
--- the row uses non-HookScript SetScript handlers).
+-- Row hover wash, driven directly from RowEnter/RowLeave.
 local function ApplyRowHover(frame, on)
     if not frame._rowHover then
         local wash = frame:CreateTexture(nil, "ARTWORK", nil, 7)
@@ -420,55 +365,34 @@ local function ApplyRowHover(frame, on)
 end
 
 -- ---------------------------------------------------------------------------
--- StockClerk does not touch item
--- tooltips. They're native WoW territory, further shaped by whichever
--- tooltip addon the user runs -- not ours to arbitrate.
---
--- StockClerk paints exactly four tooltips, all of which describe our
--- own affordances: grip ("Drag to reorder"), cap cell ("Max Xg"),
--- need cell ("Target: N"), last-seen dot ("Last seen at AH"). All four
--- anchor at ANCHOR_TOP for consistent placement, and each cell paints
--- inline on OnEnter / hides on OnLeave -- no dispatcher, no state.
+-- StockClerk never paints item tooltips (that's WoW's and the user's tooltip
+-- addon's job). Its own tooltips describe its own controls.
 -- ---------------------------------------------------------------------------
 
 -- ---------------------------------------------------------------------------
--- Row template setup
---
--- Each row is a Button (so we get OnClick / OnEnter / OnLeave for free).
--- We build the child widgets once inside :Init() and reuse them as the
--- ScrollView recycles the frame across scrolls / refreshes.
+-- Rows: built once per pooled Button, reused as the ScrollView recycles them.
 -- ---------------------------------------------------------------------------
 local function BuildRow(row)
     row:SetHeight(ROW_HEIGHT)
 
     -- Row hover wash is created lazily by ApplyRowHover on first RowEnter.
 
-    -- 2px vertical accent bar on the row's left edge encoding short/ok/
-    -- unknown state, alongside the red/mint Have text (dual-channel for
-    -- colorblind resilience). A texture, not a mouse-enabled frame, so
-    -- the grip stays clickable.
+    -- 2px left accent: short / ok, a second channel beside the Have colour
+    -- (colourblind-friendly). A texture, so the grip stays clickable.
     row.accent = row:CreateTexture(nil, "OVERLAY")
     row.accent:SetWidth(2)
     row.accent:SetPoint("TOPLEFT",    row, "TOPLEFT",     0, -1)
     row.accent:SetPoint("BOTTOMLEFT", row, "BOTTOMLEFT",  0,  1)
     row.accent:Hide()  -- shown only when we have a definite short/ok call
 
-    -- Row separator: 1px muted gray line along the row's bottom edge,
-    -- full width. Gives the shopping list visual rhythm between rows
-    -- without needing per-row backgrounds or heavy dividers. Drawn on
-    -- BACKGROUND sublevel 0 so hover washes and cell fills paint over
-    -- it cleanly.
+    -- 1px divider along the bottom; BACKGROUND 0 so washes and cells paint over it.
     row.separator = row:CreateTexture(nil, "BACKGROUND", nil, 0)
     row.separator:SetColorTexture(unpack(Palette.rowSeparator))
     row.separator:SetHeight(1)
     row.separator:SetPoint("BOTTOMLEFT",  row, "BOTTOMLEFT",  0, 0)
     row.separator:SetPoint("BOTTOMRIGHT", row, "BOTTOMRIGHT", 0, 0)
 
-    -- Grip handle. Three dim horizontal lines, EnableMouse'd for
-    -- the drag-to-reorder path. Sits at the far left; icon & name shift
-    -- right by GRIP_W to make room. Rendered with three FontString
-    -- em-dashes rather than a texture asset so it needs no atlas file
-    -- and stays crisp at any UI scale.
+    -- Drag grip at the far left (drawn bars); icon and name sit right of it.
     local GRIP_W = 14
     row.grip = CreateFrame("Button", nil, row)
     row.grip:SetSize(GRIP_W, ROW_HEIGHT - 6)
@@ -492,9 +416,6 @@ local function BuildRow(row)
     end)
     row.grip:SetScript("OnLeave", function(self)
         tintGrip(GRIP_REST, 0.85)
-        -- Hide unconditionally. If the
-        -- pointer is still on the row body, row's OnEnter will re-fire
-        -- and paint the native item tooltip.
         GameTooltip:Hide()
     end)
     row.grip:SetScript("OnDragStart", function(self)
@@ -505,7 +426,6 @@ local function BuildRow(row)
     row.grip:SetScript("OnDragStop", function()
         if MF.EndRowDrag then MF:EndRowDrag() end
     end)
-
 
     -- Icon (shifted right by GRIP_W to clear the grip handle).
     row.icon = row:CreateTexture(nil, "OVERLAY")
@@ -520,50 +440,18 @@ local function BuildRow(row)
     row.iconBorder:SetPoint("TOPLEFT", row.icon, "TOPLEFT", -1, 1)
     row.iconBorder:SetPoint("BOTTOMRIGHT", row.icon, "BOTTOMRIGHT", 1, -1)
 
-    -- Name (fills leftmost region up to the Have column). The right edge
-    -- stops at -220 to leave room for four right-aligned columns (Have,
-    -- Need, Cap, Last Seen) plus trash. Short/ok state is signaled by
-    -- coloring row.have (see below).
     row.name = row:CreateFontString(nil, "OVERLAY", "StockClerkFontNormalSmall")
     row.name:SetPoint("LEFT", row.icon, "RIGHT", 8, 0)
     row.name:SetJustifyH("LEFT")
     row.name:SetWordWrap(false)
-    -- Right edge is anchored below to row.have's LEFT edge (see haveCell
-    -- setup) so the item name automatically ellipsizes when Have grows
-    -- wide with a `(+N)` stash suffix. Static right inset was insufficient
-    -- because row.have right-aligns inside haveCell and its rendered text
-    -- extends LEFTWARD past haveCell's left border as the string grows,
-    -- colliding with the item name lane.
+    -- Right edge is anchored to row.have (below) so the name ellipsizes as
+    -- Have grows with a (+N) suffix.
 
-    -- Have column: pure display of the bags-only count, with a dim
-    -- (+N bank/warband) suffix if the stash is non-empty. No
-    -- cell chrome and no click affordance — this value only comes from
-    -- inventory, the user never edits it here.
-    --
-    -- status-via-color: row.have text is colored red when have<need
-    -- ("you're short") and mint when have>=need ("stocked"). This
-    -- is also the row's status signal; see InitializeRow for the logic.
-    --
-    -- Column layout (accounting-style: each numeric column right-
-    -- aligns on its own right edge; headers right-align above matching
-    -- that edge. 14px gutters between columns so the labels can't
-    -- visually collide even at narrow widths):
-    --   Have   right edge -212 (Have text right-aligned)
-    --   Need   cell right -160, width 42, text right-inset -6
-    --   Cap    cell right -100, width 50, text right-inset -6
-    --   Seen   right edge  -30, width 60 (Seen text right-aligned)
-    --   trash  right edge   -6, width 18
-    -- Have column: read-only display of bags count with an optional dim
-    -- (+N) suffix when the item has stashed copies in bank/warband. The
-    -- suffix is intentionally quantity-only; the storage-source breakdown
-    -- (which container has how many) moves to the cell's hover tooltip so
-    -- the row itself stays compact and can't overflow into the Item name
-    -- column at narrow widths.
-    --
-    -- Have cell is an INVISIBLE hit region: no fill, no border, no animator.
-    -- It has no chrome (a box clipped the "0 (+24)" overflow); the button
-    -- exists only so OnEnter/OnLeave fire the Have tooltip. Have is derived
-    -- inventory, not user input, so no OnClick handler either.
+    -- Have: bags count (red short, mint stocked) plus a dim (+N) for bank and
+    -- warband copies. Read-only; an invisible hit frame carries the tooltip
+    -- with the per-source breakdown.
+    -- Columns right-align on their own edges (headers match):
+    --   Have -212 | Need cell -160 (w42) | Cap cell -100 (w50) | Seen -30 (w60) | trash -6
     row.haveCell = CreateFrame("Button", nil, row)
     row.haveCell:SetSize(50, 20)  -- slightly wider than needCell (42) to
                                   -- comfortably fit "999 (+9999)" worst case
@@ -574,21 +462,12 @@ local function BuildRow(row)
     row.have:SetPoint("RIGHT", row.haveCell, "RIGHT", -6, 0)
     row.have:SetJustifyH("RIGHT")
 
-    -- Lane discipline for the item name: anchor its RIGHT edge to the
-    -- LEFT edge of the actual rendered Have fontstring, with an 8px
-    -- gutter. WoW FontStrings support anchoring to another FontString's
-    -- edges; the item name will re-layout whenever row.have's text
-    -- changes width. WITHOUT SetWordWrap(false) (set above) an
-    -- item name too long for the available width would wrap and break
-    -- row height; with SetWordWrap(false) it truncates with an ellipsis.
+    -- Name stops 8px short of the rendered Have text; no word wrap, so a long
+    -- name ellipsizes instead of breaking the row height.
     row.name:SetPoint("RIGHT", row.have, "LEFT", -8, 0)
 
-    -- Have cell hover: tooltip only, no cell chrome change. Same ANCHOR_TOP
-    -- tooltip idiom as Need/Cap, but the content is inventory-derived
-    -- instead of a CTA. Title line is the bags count; storage-source lines
-    -- follow only when that source has >0. Reagent bank is folded into bank
-    -- on retail 11.2+ (see Inventory.lua header) so we present them as one
-    -- "bank" line.
+    -- Have tooltip: bags count, then only the sources holding copies (the
+    -- reagent bank folds into "bank" since 11.2).
     row.haveCell:SetScript("OnEnter", function(self)
         local r = self:GetParent()
         r:GetScript("OnEnter")(r)
@@ -659,10 +538,7 @@ local function BuildRow(row)
     row.needCell, row.need, row.needEdit, row.needEditBg   = MakeCell(42, -160, 5)
     row.capCell,  row.cap,  row.priceEdit, row.priceEditBg = MakeCell(50, -100, 7)  -- up to 9,999,999g
 
-    -- Last Seen column: dim display of the most recently observed
-    -- unit price, or an em-dash if we've never seen it. Not clickable --
-    -- the value updates automatically on every AH search (row-click or
-    -- restock run). Tooltip on hover: "1250g / 2h ago - restock".
+    -- Last Seen: dim last AH unit price (updates on every search), or a dash.
     row.lastSeen = row:CreateFontString(nil, "OVERLAY", "StockClerkFontHighlightSmall")
     row.lastSeen:SetPoint("RIGHT", row, "RIGHT", -30, 0)
     row.lastSeen:SetWidth(60)  -- widened for #g#s (was 38)
@@ -673,11 +549,7 @@ local function BuildRow(row)
     row.lastSeenHit:SetPoint("RIGHT", row, "RIGHT", -30, 0)
     row.lastSeenHit:EnableMouse(true)
     row.lastSeenHit:SetScript("OnEnter", function(self)
-        -- Paint at ANCHOR_TOP for
-        -- consistency across the addon. If this row has no last-seen
-        -- price, we intentionally show nothing here -- row's OnEnter
-        -- already put the native item tooltip up when the mouse entered
-        -- the row cluster, and we don't want to steal it.
+        -- No price, no tooltip.
         local r = self:GetParent()
         if not r or not r._lastPrice then return end
         local lp = r._lastPrice
@@ -699,28 +571,14 @@ local function BuildRow(row)
         GameTooltip:Show()
     end)
     row.lastSeenHit:SetScript("OnLeave", function(self)
-        -- If we painted a tooltip, hide
-        -- it. If the pointer is still on the row body, row's OnEnter
-        -- re-fires and paints the native item tooltip. If the row has
-        -- no lastPrice, we never painted anything -- Hide is a safe
-        -- no-op in that case.
         local r = self:GetParent()
         if not r or not r._lastPrice then return end
         GameTooltip:Hide()
     end)
 
-    -- Trash button (visible on hover only).
-    --
-    -- Tooltip / trash-visibility model:
-    --   * Both `row:OnEnter/OnLeave` and `trash:OnEnter/OnLeave` route
-    --     to shared helpers (RowEnter / RowLeave). Whichever the mouse is
-    --     over, the row is "hovered" and the trash + tooltip are up.
-    --   * On leave, we defer one frame and check both frames' IsMouseOver.
-    --     If neither is hovered, we tear the tooltip down. This survives
-    --     slow exits through the GameTooltip frame (which is NOT part of
-    --     the row's mouse-over region), which previously caused a stuck
-    --     tooltip because trash:OnEnter had re-shown it with no matching
-    --     hide path.
+    -- Trash, shown on row hover. Row and trash share RowEnter/RowLeave; the
+    -- leave check waits a frame and tests both, so exiting through the
+    -- tooltip doesn't leave it stuck.
     row.trash = CreateFrame("Button", nil, row)
     row.trash:SetSize(18, 18)
     row.trash:SetPoint("RIGHT", row, "RIGHT", -6, 0)
@@ -734,20 +592,11 @@ local function BuildRow(row)
 
     local function RowEnter(r)
         ApplyRowHover(r, true)
-        -- StockClerk does NOT paint an
-        -- item tooltip on row hover. Item tooltips are the user's
-        -- domain -- native WoW handles them, and users typically have
-        -- their own tooltip addon further shaping that behavior. Row
-        -- hover here is just visual (wash + trash button); the four
-        -- StockClerk-generated tooltips (grip, cap, need, last-seen)
-        -- live on their respective cells.
         r.trash:Show()
     end
 
     local function RowLeave(r)
-        -- Defer one frame so IsMouseOver reflects the settled state after
-        -- WoW has processed all pending Enter/Leave dispatches. Then hide
-        -- iff the pointer is truly off both the row and the trash button.
+        -- Wait a frame so IsMouseOver reflects the settled state.
         C_Timer.After(0, function()
             if r:IsMouseOver() or r.trash:IsMouseOver() then
                 return -- still hovering some part of the row cluster
@@ -938,25 +787,15 @@ local function BuildRow(row)
     })
 end
 
--- ---------------------------------------------------------------------------
--- Row initializer (called by ScrollView for each visible row)
--- ---------------------------------------------------------------------------
 local function InitializeRow(row, data)
     if not row._built then
         BuildRow(row)
         row._built = true
     end
 
-    -- KBD-FIX (H4): CRITICAL keyboard-capture defense. ScrollView
-    -- recycles the pooled row Button when the underlying DataProvider
-    -- changes (BAG_UPDATE refresh, scroll, filter chip toggle, etc.).
-    -- If a row had its inline needEdit/priceEdit open with focus when the
-    -- pool rebound this frame to a different item, the EditBox stayed
-    -- Shown() and Focused() -- often scrolled offscreen -- and silently
-    -- captured every keystroke game-wide until /reload. This is the
-    -- "addon ate my keyboard" class of bug. Force-reset editor state
-    -- BEFORE binding the new data so we never inherit stale focus into a
-    -- frame the user can no longer see.
+    -- Pooled rows get rebound to other items (refresh, scroll, filter). An
+    -- editor left open and focused would keep capturing every key game-wide
+    -- while scrolled out of view, so reset editors before binding.
     if row.needEdit and row.needEdit:IsShown() then
         if row.needEdit:HasFocus() then row.needEdit:ClearFocus() end
         row.needEdit:Hide()
@@ -1005,11 +844,6 @@ local function InitializeRow(row, data)
         end)
     end
 
-    -- The row's main count is BAGS ONLY — what the character can actually
-    -- use right now. Non-bag storage (bank/warband) is folded into
-    -- a dim `(+N elsewhere)` annotation appended to the count line so the
-    -- user always sees where the rest of their stockpile lives without
-    -- the primary metric being invariant to bag<->bank moves.
     local bd     = ADDON.Inventory:GetBreakdown(data.itemID)
     local have   = bd.bags
     local stashed = bd.bank + bd.warband
@@ -1017,15 +851,8 @@ local function InitializeRow(row, data)
     row._have      = have
     row._breakdown = bd
 
-    -- Have column: bags-only count with optional dim suffix that names
-    -- where any stashed copies live. Bags stays the primary metric; the
-    -- suffix is context, not a total.
-    --
-    -- status-via-color: the primary bags-count gets a semantic
-    -- color prefix based on have-vs-need (red when short, mint when
-    -- stocked, default when no target). The (+N) stash
-    -- suffix stays gray -- it's ancillary info that shouldn't compete
-    -- with the short/stocked signal.
+    -- Have: bags count coloured by status (red short, mint stocked); the
+    -- (+N) stash suffix stays grey. Per-source detail is in the tooltip.
     local haveColor = ""
     local haveColorEnd = ""
     if data.need and data.need > 0 then
@@ -1038,10 +865,6 @@ local function InitializeRow(row, data)
             haveColorEnd = "|r"
         end
     end
-    -- Suffix is quantity-only: "N (+M)". Storage-source detail (which
-    -- container has how many) lives in the haveCell hover tooltip so the
-    -- row itself stays compact and can't overflow into the Item column
-    -- at narrow widths.
     local haveText = haveColor .. tostring(have) .. haveColorEnd
     if stashed > 0 then
         haveText = haveText .. ("  |cff888888(+%d)|r"):format(stashed)
@@ -1052,22 +875,9 @@ local function InitializeRow(row, data)
     -- doesn't compete with the mint cap value or the semantic status pill).
     row.need:SetText(("|cffCCCCCC%d|r"):format(data.need))
 
-    -- Cap column value. Dim '--' when no cap; brand-mint when set. The
-    -- number is the emphasized element in the row (per atrocity's rule:
-    -- accent color goes on the value, not on the chrome).
-    --
-    -- When auto-purchase is ON but this item has no cap set, we swap the
-    -- em-dash for a dim "skip" so the user can at-a-glance see which
-    -- rows an auto run will pass over.
-    -- Plain text, not a glyph: WoW's stock fonts lack most symbol glyphs.
-    --
-    -- Cap tint is binary: red when last-seen > cap (a buy would be
-    -- rejected; cap is inclusive), normal otherwise. Staleness is shown
-    -- by the Last Seen column's own dimming, not here.
-    -- Cap cell has exactly two states: capped (mint "Ng", red "Ng"
-    -- if last-seen exceeds cap) or unset (em-dash). No cap set means
-    -- the row will buy at market price; the armed-flyout's amber
-    -- 'No cap set' badge is the soft warning at buy time.
+    -- Cap: mint "Ng", red when last seen is above the cap (a buy would be
+    -- refused; the cap is inclusive), or a dash when unset (buys at market;
+    -- the confirm flyout warns "No cap set").
     if data.maxPrice then
         local capColor = "98FF98" -- brand mint by default (cap is fine or no data)
         if data.lastPrice and data.lastPrice.copper
@@ -1080,43 +890,29 @@ local function InitializeRow(row, data)
         row.cap:SetText("|cff555555\226\128\148|r") -- em-dash for a real "unset" glyph
     end
 
-    -- Last Seen column: read char.items[id].lastPrice off the
-    -- flattened row entry (DB:GetSortedItems includes it; the provider
-    -- Insert in Refresh must carry it through or this column can never
-    -- paint -- code-review v0.2.0..HEAD finding 1).
-    -- TTL dimming: entries older than settings.lastPriceTTL (default 24h)
-    -- paint in a mid-gray between fresh (CCCCCC) and unset (555555) so
-    -- a stale number doesn't read as current market at a glance.
+    -- Last Seen: grey fades further once older than settings.lastPriceTTL
+    -- (24h) so a stale price doesn't read as current.
     row._lastPrice = data.lastPrice
     if data.lastPrice and data.lastPrice.copper then
         local age = time() - (data.lastPrice.seenAt or 0)
         local staleCutoff = (ADDON.DB:Settings() and ADDON.DB:Settings().lastPriceTTL) or 86400
         local color = (age > staleCutoff) and "777777" or "CCCCCC"
-        -- #g#s precision (silver-drop for column space). Copper is
-        -- available in the hover tooltip for exact values. Row's tight
-        -- column budget can't fit "1219g 80s 66c" so we truncate to
-        -- silver here; the toast (which has room) shows copper too.
+        -- Gold and silver only here; the tooltip has exact copper.
         row.lastSeen:SetText(("|cff%s%s|r"):format(color, MoneyText(data.lastPrice.copper, "silver")))
     else
         row.lastSeen:SetText("|cff555555\226\128\148|r")
     end
 
-    -- Debug log only on state change per item (bags/stashed/need). Reduces
-    -- the log flood -- a single user action was previously printing every
-    -- row's snapshot 3+ times. Now each row logs once when its numbers move.
+    -- Trace only when this row's numbers change, not on every repaint.
     if ADDON.debug then
         MF._initRowLast = MF._initRowLast or {}
         local sig = ("%d/%d/%d"):format(have, stashed, data.need)
         if MF._initRowLast[data.itemID] ~= sig then
             MF._initRowLast[data.itemID] = sig
-            print(("|cff98FF98[SC:debug]|r InitializeRow: id=%d bags=%d stashed=%d need=%d"):format(
-                data.itemID, have, stashed, data.need))
+            ADDON.Debug("Row", ("id=%d bags=%d stashed=%d need=%d"):format(data.itemID, have, stashed, data.need))
         end
     end
 
-    -- Short/ok state encoded on the left-edge accent bar. Colors
-    -- match the semantic palette: muted-red for short, mint-green
-    -- for stocked.
     local short = data.need - have
     if short > 0 then
         -- Palette.short (muted red used throughout the v0.7 palette)
@@ -1126,12 +922,6 @@ local function InitializeRow(row, data)
         row.accent:SetColorTexture(0x4a/255, 0xde/255, 0x80/255, 1)
     end
     row.accent:Show()
-
-    -- Row background: NONE. Atrocity's aesthetic is one window fill; rows
-    -- are separated by the 1px black bottom border from the header/list and
-    -- by content spacing, not by per-row backgrounds. Selection = hover wash.
-    -- (Status is signaled by the Have text color + the cap-column number, not
-    -- by a full-row wash.)
 
     -- Trash click wire. Read from row._itemID rather than closing over
     -- `data`, so a recycled row can't accidentally delete a stale item.
@@ -1161,17 +951,9 @@ end
 -- ---------------------------------------------------------------------------
 -- Frame construction
 -- ---------------------------------------------------------------------------
--- Small factory: a labeled, atrocity-styled editbox in a container.
--- Returns the container frame; the actual EditBox is at container.editBox.
--- Factory for a labeled EditBox with atrocity chrome. The `placeholder`
--- arg (string, optional) draws dim ghost text inside the box while it's
--- empty and unfocused — exactly the browser-style hint pattern. It clears
--- the moment the user focuses OR types, and returns when both conditions
--- reverse. Placeholder is a FontString overlay, NOT the EditBox's real
--- text, so :GetText() still returns "" when the user hasn't typed — no
--- special case needed at read time.
--- No label above the box: the placeholder names the field and the hover
--- tooltip (tipTitle / tipBody) explains it.
+-- Toolbar edit box in a styled container. The placeholder is an overlay
+-- font string (GetText stays ""), shown while empty and unfocused; it names
+-- the field, and the hover tooltip (tipTitle / tipBody) explains it.
 local function MakeEditBox(parent, placeholder, width, isNumeric, maxLetters, tipTitle, tipBody)
     local row = CreateFrame("Frame", nil, parent)
     row:SetSize(width, 22)
@@ -1188,9 +970,6 @@ local function MakeEditBox(parent, placeholder, width, isNumeric, maxLetters, ti
     if isNumeric then eb:SetNumeric(true) end
     if maxLetters then eb:SetMaxLetters(maxLetters) end
 
-    -- Optional placeholder / hint text (dim grey, italicized by way of the
-    -- softer font object). Sits on the same layer as the EditBox text; the
-    -- three script handlers below keep it in sync with focus + content.
     if placeholder then
         local ph = container:CreateFontString(nil, "OVERLAY", "StockClerkFontDisableSmall")
         ph:SetPoint("LEFT", eb, "LEFT", 0, 0)
@@ -1214,9 +993,7 @@ local function MakeEditBox(parent, placeholder, width, isNumeric, maxLetters, ti
     end
 
     StyleEditBoxContainer(container, eb)
-    -- KBD-FIX (H4): every EditBox in the addon ClearsFocus on Hide
-    -- so a hidden focused field never captures game-wide keys. Applies to
-    -- the toolbar's addBox/countBox equally.
+    -- A hidden focused EditBox keeps capturing game-wide keys: clear on hide.
     eb:HookScript("OnHide", function(self)
         if self:HasFocus() then self:ClearFocus() end
     end)
@@ -1248,11 +1025,7 @@ function MF:Build()
     ApplyFontFace()
     if self.frame then return self.frame end
 
-    -- ---- Root frame (no template; atrocity-flat window) ----------------
-    -- Plain Frame: single WHITE8X8 fill + 1px black overlay border. Header,
-    -- toolbar, list, and footer are drawn as sub-regions separated by 1px
-    -- black bottom borders, not stacked backdrops. All of this is the
-    -- ElvUI/atrocityEssentials aesthetic verbatim.
+    -- ---- Root frame: one fill, 1px black border, regions split by borders.
     local f = CreateFrame("Frame", "StockClerkFrame", UIParent, "BackdropTemplate")
     f:SetSize(420, 400)
     f:SetFrameStrata("HIGH")
@@ -1260,27 +1033,14 @@ function MF:Build()
     f:SetClampedToScreen(true)
     f:SetMovable(true)
     f:SetResizable(true)
-    -- Resize bounds: hard floor at 420x400 (the default), no ceiling.
-    -- Rationale: the compressed layout was designed at exactly 420x400 so
-    -- shrinking below that would clip columns; growing above it just
-    -- gives the item list more headroom, which is always fine. Removing
-    -- the ceiling (previously 1200x1200) lets 4K users pull the window
-    -- as tall as they want without hitting an arbitrary cap.
+    -- 420x400 is the designed minimum; no ceiling.
     f:SetResizeBounds(420, 400)  -- min-only; no max = unbounded
     f:EnableMouse(true)
-    -- Re-enable keyboard on the root frame. VERIFIED NEEDED, do not remove:
-    -- (a) previous experiment broke typing into toolbar EditBoxes
-    --     entirely when this was removed;
-    -- (b) the OnKeyDown handler below (soft-select nav) needs the root
-    --     frame to receive raw keystrokes when no editbox has focus.
-    -- The known-bad interaction was the OnKeyDown handler leaving
-    -- SetPropagateKeyboardInput(false) sticky on error paths, which
-    -- fixes at the OnKeyDown level (single exit point + pcall).
+    -- Needed: toolbar typing broke without it, and OnKeyDown (Escape stops a
+    -- restock) needs raw keys when no edit box has focus.
     f:EnableKeyboard(true)
 
-    -- Window fill + border. Border sits on a dedicated child frame at
-    -- TOOLTIP strata so nothing draws over it (atrocity's own recipe: they
-    -- go so far as to raise the border frame 100 levels above the parent).
+    -- Border on a child frame at TOOLTIP strata so nothing draws over it.
     ApplyFill(f, Palette.bgDark)
     local borderFrame = CreateFrame("Frame", nil, f)
     borderFrame:SetAllPoints(f)
@@ -1288,23 +1048,12 @@ function MF:Build()
     borderFrame:SetFrameLevel(f:GetFrameLevel() + 100)
     AddBlackBorder(borderFrame)
 
-    -- ESC closes the window. UISpecialFrames handles this natively so
-    -- long as no editbox has focus -- when ESC is pressed the topmost
-    -- UISpecialFrames entry gets Hide()d automatically. We STILL need
-    -- the OnKeyDown below (a) to keep SetPropagateKeyboardInput(true)
-    -- so other frame-level keys pass through to game bindings while
-    -- our window is shown, and (b) to leave propagate=true as the
-    -- steady-state after any Escape-close so the next keystroke
-    -- doesn't feel 'stuck'.
+    -- Escape closes the window via UISpecialFrames (when no edit box has focus).
     tinsert(UISpecialFrames, "StockClerkFrame")
 
-    -- KBD-FIX (H1): SetPropagateKeyboardInput is sticky per-frame,
-    -- so every OnKeyDown MUST end with an explicit propagate call in
-    -- BOTH branches, or a Lua error in a handled action leaves
-    -- propagate=false stuck and swallows every key game-wide. So: decide
-    -- (consumed / not consumed), do the action inside a
-    -- pcall, then set propagate exactly ONCE at the end via a single exit
-    -- path. No `return` allowed inside this handler before the final line.
+    -- SetPropagateKeyboardInput is sticky: an error before it runs would
+    -- swallow every key game-wide. So actions run in pcall and propagate is
+    -- set exactly once, as the last line. No early returns in here.
     f:SetScript("OnKeyDown", function(self, key)
         local consumed = false
 
@@ -1313,79 +1062,40 @@ function MF:Build()
             consumed = true
             pcall(function() ADDON.RestockLoop:Stop("user_esc") end)
 
-        -- Soft-select navigation (UP/DOWN/
-        -- ENTER/ESCAPE while a row was ring-selected) is gone. Row
-        -- reorder is mouse-only via the grip handle. Tab walks editors
-        -- only. No arrow-key hierarchy.
         end
 
-        -- SINGLE exit point. propagate=false if we handled the key (so the
-        -- game's default binding for that key doesn't ALSO fire), else
-        -- propagate=true so B opens bags, Enter opens chat, macros fire,
-        -- etc. Never leaves the frame in a stuck-false state.
+        -- Handled keys stop here; everything else reaches game bindings.
         self:SetPropagateKeyboardInput(not consumed)
     end)
 
-    -- Keyboard hygiene on close. Two capture leaks exist if the window
-    -- hides while something holds keyboard focus:
-    --   1) A focused-but-hidden EditBox keeps capturing game-wide
-    --      keystrokes -- typed text routes into an invisible field, so
-    --      chat/hotbars/movement all go dead.
-    --   2) A focused Add button leaves EnableKeyboard(true) +
-    --      SetPropagateKeyboardInput(false) sticky on a hidden frame -
-    --      same silent swallow class.
-    -- This handler is the single choke point: Escape via UISpecialFrames,
-    -- the X button, and /clerk toggle all end in frame:Hide(), so
-    -- OnHide fires for every close path. Catches anything the normal
-    -- blur paths missed (e.g. user clicks the X mid-edit).
-    -- NOTE: MF:BlurAddButton is defined later in Build(); the closure
-    -- resolves at call time, after Build has completed.
+    -- Every close path (Escape, x, /clerk) ends in Hide, so this is the one
+    -- place to release keyboard capture: a focused hidden edit box, or a
+    -- Tab-focused Add button left holding the keyboard, would otherwise
+    -- swallow keys game-wide.
     f:SetScript("OnHide", function()
-        -- Cascade close to Sidecar FIRST, before any propagate/focus/edit
-        -- cleanup, so the UIParent-parented panel never orphans when Escape
-        -- hides the main frame. pcall keeps a Sidecar error from skipping
-        -- the keyboard-propagate reset below.
+        -- Close the side panel first (it's UIParent-parented); pcall so an
+        -- error there can't skip the keyboard reset below.
         if ADDON.Sidecar and ADDON.Sidecar.Hide then
             pcall(function() ADDON.Sidecar:Hide() end)
         end
 
-        -- KBD-FIX (H1): force propagate back to true on close. The
-        -- root frame keeps EnableKeyboard(true) even while hidden; if any
-        -- OnKeyDown left propagate=false and the window was closed before
-        -- the next keystroke could restore it, the frame becomes a silent
-        -- keyboard sink for the whole game session. Explicit reset here
-        -- guarantees the steady-state is propagate=true across every
-        -- close path (X button, /clerk toggle, Escape via UISpecialFrames,
-        -- addon reload). Idempotent -- safe on every OnHide.
+        -- Reset propagate: the root frame keeps the keyboard while hidden.
         f:SetPropagateKeyboardInput(true)
 
         local focused = GetCurrentKeyBoardFocus and GetCurrentKeyBoardFocus()
         if focused and focused.ClearFocus then focused:ClearFocus() end
-        -- KBD-FIX (H2): call BlurAddButton UNCONDITIONALLY, not just
-        -- when the focused flag is set. If the flag ever desynced from the
-        -- actual EnableKeyboard/PropagateKeyboardInput state (Lua error in
-        -- FocusAddButton, taint interruption, etc.), a guarded call would
-        -- leak the sticky-false propagate state past close. BlurAddButton
-        -- is idempotent -- safe to call when already blurred.
+        -- Unconditional: safe when already blurred, and covers a desynced flag.
         if MF.BlurAddButton then MF:BlurAddButton() end
 
-        -- V0.4: soft-select and drag must not survive across window
-        -- close. Selection would repaint the wrong pooled row when
-        -- reshown; a live drag ticker would keep polling the cursor
-        -- forever with no visible marker.
+        -- A drag must not survive a close (its ticker would poll forever).
         if MF._dragTicker then
             MF._dragTicker:Cancel(); MF._dragTicker = nil
         end
         MF._dragItemID = nil
         MF._dropIndex  = nil
         if MF._dragMarker then MF._dragMarker:Hide() end
-        -- Reset any in-progress row inline editor. ScrollView rows are
-        -- pooled and InitializeRow does NOT reset editor visibility, so
-        -- without this a row closed mid-edit would reappear on next open
-        -- with a stale empty editor floating over whichever item the
-        -- pooled row now serves. The edit itself is discarded (focus was
-        -- already cleared, so no blur-commit fires) -- consistent with
-        -- closing a dialog mid-edit.
+        -- Close any open row editor (discarding the edit, like closing a
+        -- dialog), or a pooled row would reopen with a stale editor on it.
         if MF.scrollBox and MF.scrollBox.EnumerateFrames then
             for _, row in MF.scrollBox:EnumerateFrames() do
                 if row.needEdit then
@@ -1417,19 +1127,12 @@ function MF:Build()
         f:SetSize(pos.width, pos.height)
     end
 
-    -- ---- Header (title bar) --------------------------------------------
-    -- Height 26, no fill of its own (window paints one bg), 1px black
-    -- bottom border to separate it from the toolbar. Title has an accented
-    -- word ("Stock") in brand mint and a neutral second word ("Clerk") —
-    -- verbatim structure from atrocity's AccentedTitle recipe.
+    -- ---- Header: title, version, icons; drag to move ---------------------
     local header = CreateFrame("Frame", nil, f)
     header:SetHeight(26)
     header:SetPoint("TOPLEFT", 0, 0)
     header:SetPoint("TOPRIGHT", 0, 0)
     header:EnableMouse(true)
-    -- Same whisper-band as toolbar/headers/footer so all four framing
-    -- regions share one hierarchy language ("any lighter strip = structural
-    -- band, list body stays untinted").
     ApplyBand(header, Palette.bandTint)
     header:RegisterForDrag("LeftButton")
     header:SetScript("OnDragStart", function() f:StartMoving() end)
@@ -1453,22 +1156,8 @@ function MF:Build()
     title:SetText("|cff98FF98Stock|r|cffFFFFFFClerk|r")
     title:SetShadowOffset(0, 0)
 
-    -- Version string. Sits immediately to the right of the title,
-    -- baseline-aligned, in a smaller/muted font so it reads as metadata
-    -- rather than part of the wordmark. Pre-release builds (-alpha, -beta)
-    -- get an amber tint so the tester can see at a glance they're not on
-    -- a stable build.
-    --
-    -- Version comes from the .toc "Version:" line via GetAddOnMetadata so
-    -- it auto-updates on every version bump. Falls back to empty string
-    -- if metadata is missing (never should happen -- addon can't load).
-    -- guard against unsubstituted packager
-    -- keywords. If the addon is installed from raw source (git clone,
-    -- GitHub "Download ZIP") instead of a packaged CurseForge release,
-    -- the .toc still contains the literal string "@project-version@"
-    -- because only the BigWigsMods packager substitutes it at build
-    -- time. Detect the raw keyword and show "dev" in muted grey rather
-    -- than leaking packager syntax to the header.
+    -- Version from the .toc; amber for alpha/beta. A git checkout still has
+    -- the packager keyword "@project-version@", shown as "dev".
     local rawVersion = C_AddOns and C_AddOns.GetAddOnMetadata
                        and C_AddOns.GetAddOnMetadata("StockClerk", "Version") or ""
     local isUnsubstituted = rawVersion == "" or rawVersion:sub(1, 1) == "@"
@@ -1477,11 +1166,7 @@ function MF:Build()
         versionText = "dev"
         versionColor = "|cff888888"
     else
-        -- The packager substitutes @project-version@
-        -- with the git tag verbatim, and our tags already start with "v"
-        -- (e.g. "v0.7.0"). Prepending another "v" would produce
-        -- "vv0.7.0". Only prepend if the raw version doesn't already
-        -- lead with "v".
+        -- Tags already start with "v"; don't prefix another.
         if rawVersion:sub(1, 1) == "v" or rawVersion:sub(1, 1) == "V" then
             versionText = rawVersion
         else
@@ -1503,17 +1188,11 @@ function MF:Build()
     hamburgerBtn:SetPoint("RIGHT", closeX, "LEFT", -2, 0)
     MF._hamburgerBtn = hamburgerBtn
 
-    -- ---- Toolbar (add item + controls) ---------------------------------
-    -- Sits directly under the header. No fill; the labels + editboxes
-    -- provide enough visual weight. Ends with a 1px black bottom border
-    -- separating it from the list.
+    -- ---- Toolbar: add an item --------------------------------------------
     local toolbar = CreateFrame("Frame", nil, f)
     toolbar:SetHeight(30)
     toolbar:SetPoint("TOPLEFT", header, "BOTTOMLEFT", 0, 0)
     toolbar:SetPoint("TOPRIGHT", header, "BOTTOMRIGHT", 0, 0)
-    -- Layer 1: subtle brighter band so the toolbar reads as its own strip
-    -- above the list, atrocity-style. Alpha is intentionally tiny (~3.5%)
-    -- so it's a whisper, not a stripe.
     ApplyBand(toolbar, Palette.bandTint)
 
     local toolbarSep = toolbar:CreateTexture(nil, "OVERLAY", nil, 6)
@@ -1556,10 +1235,7 @@ function MF:Build()
     local function DoAdd()
         local raw = addBox:GetText()
         if not raw or raw == "" then return end
-        -- ItemID-only path. Strict validation: reject anything that isn't
-        -- a positive integer, including item links (users can still
-        -- Shift-click into chat, extract the numeric id, and paste it).
-        -- Full 'paste an item link and extract the id' UX is v0.3 work.
+        -- Positive integers only (no links or names).
         local itemID = tonumber(raw)
         if not itemID or itemID <= 0 or math.floor(itemID) ~= itemID then
             MF:SetStatus("|cffff8888Item ID must be a number (e.g. 212283)|r")
@@ -1568,10 +1244,7 @@ function MF:Build()
         -- Silent default drops from 20 to 1 for zero-friction quick-add.
         local need = tonumber(countBox:GetText()) or 1
 
-        -- ItemResolver still runs (async cache-warm path) so we get the
-        -- item's canonical name + link for the status message and for
-        -- the row display. Failure just means the id doesn't exist on
-        -- the client -- we log it and bail without adding.
+        -- Resolve warms the item cache; an unknown id is reported and skipped.
         ADDON.ItemResolver:Resolve(itemID, function(resolvedID, name, _)
             if not resolvedID then
                 MF:SetStatus(("|cffff8888Unknown item ID: %d|r"):format(itemID))
@@ -1596,15 +1269,10 @@ function MF:Build()
     end
     addBtn:SetScript("OnClick", DoAdd)
 
-    -- ---- Add-button keyboard focus (Tab stop) --------------------------
-    -- WoW Buttons don't get keyboard focus the way EditBoxes do, so we
-    -- roll our own: a visible mint focus ring around the button when it
-    -- is the current Tab stop, EnableKeyboard(true) with an OnKeyDown
-    -- handler for Tab / Shift+Tab / Enter / Space / Escape, and helpers
-    -- MF:FocusAddButton / MF:BlurAddButton to move focus into and out of
-    -- it programmatically. Without this, countBox forward-Tab would have
-    -- to jump past the Add button straight into the list, and mouse-
-    -- averse users could never trigger Add without Enter-inside-a-box.
+    -- ---- Add button as a Tab stop -----------------------------------------
+    -- Buttons don't take keyboard focus, so Tab into Add shows a mint ring
+    -- and turns on the keyboard for Tab / Shift+Tab / Enter / Space / Escape
+    -- (MF:FocusAddButton / MF:BlurAddButton).
     local ring = addBtn:CreateTexture(nil, "OVERLAY")
     ring:SetPoint("TOPLEFT", addBtn, "TOPLEFT", -2, 2)
     ring:SetPoint("BOTTOMRIGHT", addBtn, "BOTTOMRIGHT", 2, -2)
@@ -1636,9 +1304,7 @@ function MF:Build()
     self.addBtn = addBtn
 
     function MF:FocusAddButton()
-        -- Steal focus from any currently-focused EditBox so its blur
-        -- commit fires (mirrors what happens when Tab moves between two
-        -- editboxes).
+        -- Take focus from the current edit box so its blur-commit fires.
         local cur = GetCurrentKeyBoardFocus and GetCurrentKeyBoardFocus()
         if cur and cur.ClearFocus then cur:ClearFocus() end
         addBtn:EnableKeyboard(true)
@@ -1654,19 +1320,10 @@ function MF:Build()
         self._addBtnFocused = false
     end
 
-    -- KBD-FIX (H2): same single-exit shape as the root frame's
-    -- OnKeyDown. Previous shape had early `return`s that could leave
-    -- SetPropagateKeyboardInput(false) sticky if DoAdd() or the deferred
-    -- Tab callback threw. Wrap all actions in pcall and set propagate
-    -- exactly once at the end. If the focused-flag ever desyncs from
-    -- the real EnableKeyboard state, force-blur so we recover cleanly
-    -- instead of silently eating keystrokes.
+    -- Same single-exit rule as the root OnKeyDown. If keys arrive while the
+    -- flag says blurred, the keyboard is stuck on: blur and let the key through.
     addBtn:SetScript("OnKeyDown", function(self, key)
         if not MF._addBtnFocused then
-            -- Desync recovery: the flag is off but we're still receiving
-            -- key events, which means EnableKeyboard(true) is stuck on.
-            -- Force-blur to restore steady state, then let this key
-            -- propagate to game bindings normally.
             pcall(function() MF:BlurAddButton() end)
             self:SetPropagateKeyboardInput(true)
             return
@@ -1675,11 +1332,7 @@ function MF:Build()
         local consumed = (key == "TAB" or key == "ENTER" or key == "SPACE" or key == "ESCAPE")
 
         if key == "TAB" then
-            -- Defer BOTH the blur and the focus transfer by one frame
-            -- so the current Tab keystroke is fully consumed by this
-            -- OnKeyDown and doesn't double-hop into the newly-focused
-            -- control.
-            -- Forward Tab wraps back to addBox; Shift+Tab returns to countBox.
+            -- Defer a frame so this Tab isn't also seen by the next control.
             local shift = IsShiftKeyDown()
             C_Timer.After(0, function()
                 pcall(function()
@@ -1693,9 +1346,6 @@ function MF:Build()
             end)
         elseif key == "ENTER" or key == "SPACE" then
             pcall(function() DoAdd() end)
-            -- DoAdd clears the editbox focuses on success. Keyboard
-            -- focus stays on the Add button (so Shift+Tab back to Target
-            -- works) -- safe now that unhandled keys propagate.
         elseif key == "ESCAPE" then
             pcall(function() MF:BlurAddButton() end)
         end
@@ -1707,10 +1357,7 @@ function MF:Build()
     -- state so we don't leave a stale ring behind.
     addBtn:HookScript("OnClick", function() MF:BlurAddButton() end)
 
-    -- If any toolbar editbox gains focus while the Add button had the
-    -- ring, drop the ring. Prevents 'two focused controls' visual bug
-    -- when the user clicks an editbox with a mouse after tabbing into
-    -- the Add button.
+    -- Clicking an edit box while Add has the ring drops the ring.
     for _, eb in ipairs({ addBox, countBox }) do
         eb:HookScript("OnEditFocusGained", function()
             if MF._addBtnFocused then MF:BlurAddButton() end
@@ -1722,41 +1369,15 @@ function MF:Build()
     countBox:SetScript("OnEnterPressed", function() DoAdd() addBox:ClearFocus() end)
     countBox:SetScript("OnEscapePressed", function(self) self:ClearFocus() end)
 
-    -- =====================================================================
-    -- quick-add via shift-click / drag-and-drop / focused link
-    -- =====================================================================
-    -- Three entry points, all landing on the same "fill the box with the
-    -- item ID and let the user press Enter" path. Zero conflict with
-    -- chat link insertion because each hook is scoped to the addBox
-    -- itself, never global:
-    --
-    --   1. Shift-click ON addBox      : OnMouseUp checks cursor for a held
-    --                                    item, drops its ID in the box.
-    --   2. Drag-and-drop onto addBox  : OnReceiveDrag reads the same cursor,
-    --                                    identical behavior.
-    --   3. Shift-click any item link  : addBox opts into WoW's focused-
-    --      while addBox is focused      editbox link-insertion routing via
-    --                                    :SetHyperlinksEnabled + the hook
-    --                                    below. Chat's own link routing is
-    --                                    unaffected because when addBox is
-    --                                    focused it OWNS the insertion.
-    --
-    -- All three deliberately do NOT commit -- they only fill the field.
-    -- Commit remains the user pressing Enter, matching the addon's
-    -- commit-on-Enter/Tab pattern (see Dev/NOTES 3.4a for the revisit
-    -- checkpoint on this UX choice).
-    -- =====================================================================
+    -- ---- Quick add: shift-click or drop an item on the Item ID box, or
+    -- shift-click a link while the box is focused. All three only fill the
+    -- box; Enter still commits. Scoped to the box, so chat links are unaffected.
 
-    -- Extract an itemID from whatever WoW says the cursor currently holds.
-    -- Returns nil if the cursor holds nothing item-shaped. Item link path
-    -- reuses the resolver's parsing so cursor-provided links and typed
-    -- links go through the same regex.
+    -- itemID from whatever the cursor holds, or nil.
     local function CursorItemID()
         local kind, arg1, arg2 = GetCursorInfo()
         if kind == "item" then
-            -- Blizzard's cursor API returns ("item", itemID, itemLink).
-            -- On some 11.x betas arg1 was a link string instead of an ID;
-            -- handle both to be robust across builds.
+            -- ("item", itemID, link); some builds sent a link as arg1.
             local id = tonumber(arg1)
             if id then return id end
             if type(arg1) == "string" then
@@ -1771,18 +1392,12 @@ function MF:Build()
         return nil
     end
 
-    -- Drop an itemID into addBox and steer focus so the user's next Enter
-    -- commits. Also clears the cursor so a held item doesn't linger
-    -- (mirrors what happens when you drop an item into any Blizzard box).
+    -- Fill the box, clear the cursor, focus so Enter commits.
     local function StampAddBox(itemID)
         if not itemID then return end
         addBox:SetText(tostring(itemID))
         addBox:SetFocus()
-        -- Defer HighlightText by one frame: SetFocus queues a focus
-        -- transfer, and on some clients calling HighlightText in the
-        -- same tick as SetFocus hits before focus actually lands and
-        -- becomes a no-op. C_Timer.After(0, ...) is the standard
-        -- "next frame" idiom in the WoW client.
+        -- HighlightText in the same tick as SetFocus can no-op; wait a frame.
         C_Timer.After(0, function()
             if addBox:HasFocus() then addBox:HighlightText() end
         end)
@@ -1790,12 +1405,8 @@ function MF:Build()
         MF:SetStatus(("Quick-add: item %d (press Enter to add)"):format(itemID))
     end
 
-    -- Drop-target enablement: EnableMouse + RegisterForDrag so the
-    -- container and the editbox itself accept dropped items.
-    -- IMPORTANT: use HookScript, not SetScript, on the container.
-    -- StyleEditBoxContainer (above) already installs HookScripts on
-    -- OnEnter/OnLeave for the border hover animation; a SetScript would
-    -- blow them away. HookScript is additive.
+    -- Accept drops on the container too. HookScript: the container's hover
+    -- animation already uses its handlers.
     local dropTarget = addEB.container or addBox
     dropTarget:EnableMouse(true)
     dropTarget:RegisterForDrag("LeftButton")
@@ -1809,32 +1420,16 @@ function MF:Build()
         if id then StampAddBox(id) end
     end)
 
-    -- The container's OnReceiveDrag never fires
-    -- because the EditBox itself sits on top of the container in the
-    -- mouse-hit stack; when the user drops an item on the visual box,
-    -- WoW routes OnReceiveDrag to the topmost mouse-enabled frame
-    -- (addBox, the EditBox), NOT the container underneath. StyleEditBox-
-    -- Container calls container:EnableMouse(true), but the EditBox is
-    -- always mouse-enabled by default and paints in front. Register the
-    -- drop handler directly on the EditBox so drops actually stamp.
-    --
-    -- Keep the container handler too so drops on the 1-2px border ring
-    -- outside the EditBox's hitbox still work.
+    -- The EditBox sits on top and receives the drop, so handle it there too;
+    -- the container handler covers the thin border ring.
     addBox:RegisterForDrag("LeftButton")
     addBox:HookScript("OnReceiveDrag", function()
         local id = CursorItemID()
         if id then StampAddBox(id) end
     end)
 
-
-    -- Drop-zone visual affordance (Option A from grill): 1px mint outline
-    -- that thickens (2px) when the cursor holds an item, signalling
-    -- "you can drop here". CURSOR_CHANGED fires on every cursor state
-    -- transition (pickup, drop, hover-target change) so it covers what
-    -- we need without polling OnUpdate every frame.
-    -- NOTE: CURSOR_UPDATE is NOT a real WoW event on retail Midnight.
-    -- Early alpha builds registered it defensively and threw at Show()
-    -- time; only CURSOR_CHANGED exists.
+    -- Mint outline while the cursor holds an item (CURSOR_CHANGED; there is
+    -- no CURSOR_UPDATE on retail).
     local mint = { 0x98/255, 0xFF/255, 0x98/255 }
     local function edgeTex(parent)
         local t = parent:CreateTexture(nil, "OVERLAY")
@@ -1866,20 +1461,13 @@ function MF:Build()
         for _, edge in ipairs(dropEdges) do edge:SetShown(show) end
     end)
 
-
     -- Save toolbar boxes on self so BuildRow's inline editors can reach
     -- them for unified Tab navigation across toolbar + row-body cells.
     self.addBox   = addBox
     self.countBox = countBox
 
-    -- Tab navigation across the Add cluster only (the list is click-to-edit).
-    -- Forward chain:
-    --   addBox -> countBox -> addBtn -> addBox (wrap)
-    -- Shift+Tab is the mirror. addBtn is a Button (not an EditBox), so
-    -- its Tab handling lives in its OnKeyDown above (set up by
-    -- MF:FocusAddButton).
-    -- WoW EditBoxes fire OnTabPressed for the Tab key (no modifier check
-    -- in the event itself — IsShiftKeyDown() reads live state).
+    -- Tab: Item ID -> Target -> Add -> Item ID (Shift+Tab reverses; Add's
+    -- side lives in its OnKeyDown).
     addBox:SetScript("OnTabPressed", function(self)
         if IsShiftKeyDown() then
             -- Shift+Tab from the first field wraps to the Add button.
@@ -1898,23 +1486,11 @@ function MF:Build()
         end
     end)
 
-    -- ---- Column headers -----------------------------------------------
-    -- Sits under the toolbar; no fill (matches atrocity's headerless section
-    -- headers — the labels themselves + the 1px bottom border are enough).
-    -- Labels in brand mint (accent = section-header rule).
-    -- Header frame stretches FULL window width (TOPRIGHT anchored to `f`'s
-    -- TOPRIGHT with 0 inset) so its band matches the toolbar/footer bands
-    -- for aesthetic uniformity — no visible cutoff before the scroll bar.
-    -- Anchoring to a descendant of listHolder would produce a circular
-    -- dependency (listHolder anchors TOPLEFT to headers, BOTTOMLEFT), so
-    -- `f` is the only safe reference here.
-    --
-    -- The header labels themselves (built by MakeHeader below) use RIGHT-
-    -- anchored offsets that must reference the row-right-edge, NOT the
-    -- header-frame-right-edge. Rows live inside scrollBox which is inset
-    -- 22px from f (listHolder 4px + scroll bar 18px), so we compensate by
-    -- passing xOffset - 22 to every RIGHT- or CENTER-anchored MakeHeader
-    -- call (see ROW_RIGHT_INSET below).
+    -- ---- Column headers ----------------------------------------------------
+    -- Full window width so the band matches the toolbar and footer (anchored
+    -- to f: listHolder anchors to headers, so anchoring back would loop).
+    -- Rows sit 22px inside f (list inset 4 + scroll bar 18), so right-anchored
+    -- labels subtract ROW_RIGHT_INSET to line up with the row offsets.
     local ROW_RIGHT_INSET = 22
     local headers = CreateFrame("Frame", nil, f)
     headers:SetHeight(20)
@@ -1931,16 +1507,9 @@ function MF:Build()
     headersSep:SetPoint("BOTTOMRIGHT", 0, 0)
     PixelSnap(headersSep)
 
-    -- Header helper. `mode` picks the anchoring rule so labels sit exactly
-    -- over their cell regardless of column width:
-    --   "left"   — LEFT edge at xOffset from headers' LEFT  (Item column)
-    --   "right"  — RIGHT edge at xOffset from headers' RIGHT (right-aligned
-    --              value like Have, where the cell has no chrome)
-    --   "center" — label CENTER at xOffset from headers' RIGHT (matches the
-    --              cell's center anchor — use for every cell-based column)
-    -- Right/center modes automatically shift xOffset LEFT by ROW_RIGHT_INSET
-    -- so the caller can pass the same offset used in BuildRow (which is
-    -- relative to row.RIGHT) even though headers is anchored to f.RIGHT.
+    -- mode "left": LEFT at xOffset; "right" / "center": RIGHT or CENTER at
+    -- xOffset from the right, shifted by ROW_RIGHT_INSET so callers can pass
+    -- the same offsets BuildRow uses.
     local function MakeHeader(text, mode, xOffset)
         local fs = headers:CreateFontString(nil, "OVERLAY", "StockClerkFontNormalSmall")
         fs:SetTextColor(Palette.brand[1], Palette.brand[2], Palette.brand[3], 1)
@@ -1954,10 +1523,7 @@ function MF:Build()
         end
         return fs
     end
-    -- -- Every numeric column right-aligns on its own right edge; headers
-    -- match. See row layout above for the -212/-160/-100/-30 edges.
-    -- Need cell has a -6 internal inset for the value, so its header sits
-    -- at (cell_right - 6) to line up perfectly above the digits.
+    -- Right edges match the row columns; Need/Cap sit 6px in, over the digits.
     MakeHeader("Item", "left",    36)     -- left edge + 24 (icon + 12 pad)
     MakeHeader("Have", "right",   -212)   -- right-edge with Have text
     MakeHeader("Need", "right",   -166)   -- cell right -160 - 6 inset
@@ -1996,15 +1562,9 @@ function MF:Build()
     self.filterChip     = filterChip
     self._paintFilterChip = paintChip
 
-    -- Paint immediately so the chip matches persisted state on first show,
-    -- not just after the first refresh. Safe: DB is initialized in
-    -- Core.lua's OnInitialize which fires strictly before MainFrame:Build.
     paintChip()
 
-    -- ---- Footer / bottom bar ------------------------------------------
-    -- Fixed 30px bar: action feedback on the left, the Restock button on
-    -- the right (the header x and Escape close the window).
-    -- 1px black top border to separate from the list.
+    -- ---- Footer: action feedback on the left, Restock on the right --------
     local footer = CreateFrame("Frame", nil, f)
     footer:SetHeight(30)
     footer:SetPoint("BOTTOMLEFT", 0, 0)
@@ -2030,22 +1590,12 @@ function MF:Build()
     self.statusBar = statusBar
     self._statusBarNeedsAnchor = true  -- deferred: restockBtn not built yet
 
-
-    -- Two-state button:
-    --   idle    -> "Restock at AH"  (left-click Start; disabled if no AH open,
-    --                                nothing short, or loop running elsewhere)
-    --   active  -> "Stop restock"    (left-click Stop)
-    -- The purchase-confirm UI is a separate flyout (self.confirmToast) that
-    -- appears above this button when a plan is armed. Keeping BUY out of
-    -- this button prevents accidental confirms from rapid double-clicks on
-    -- "Restock at AH" during arm.
+    -- Restock: idle "Restock at AH / from Bank (N)", running "Stop restock".
+    -- Buying happens in the confirm flyout, so a double-click here can't buy.
     local restockBtn = CreateFrame("Button", nil, footer)
     restockBtn:SetSize(160, 22)  -- fits "Restock from Bank (12)"
     restockBtn:SetPoint("RIGHT", -12, 0)
 
-    -- Now that restockBtn exists, anchor statusBar's right edge to its
-    -- left edge minus a small gap. This is the deferred setup flagged
-    -- above; status text now cleanly stops before the button row.
     if self._statusBarNeedsAnchor then
         statusBar:SetPoint("RIGHT", restockBtn, "LEFT", -8, 0)
         self._statusBarNeedsAnchor = nil
@@ -2102,31 +1652,16 @@ function MF:Build()
     end)
     restockBtn:HookScript("OnLeave", function() GameTooltip:Hide() end)
 
-    -- Motion scripts must be enabled explicitly for OnEnter/OnLeave to fire
-    -- while the button is Disabled(). Without this, hovering the greyed
-    -- Restock button silently does nothing -- no tooltip, no reason line.
+    -- Without this a disabled Restock shows no tooltip (and no reason).
     restockBtn:SetMotionScriptsWhileDisabled(true)
 
     self.restockBtn = restockBtn
 
-    -- ---- Confirm/Summary flyout (above the restock button) ---------------
-    -- Compact
-    -- horizontal flyout that appears above the restock button in two
-    -- distinct modes:
-    --
-    --   armed   -> plan info on the left, [Skip] + [Buy (Ns)] on the right
-    --   summary -> loop-end recap in the middle, [Close] on the right
-    --
-    -- Buy has a 3s countdown before it accepts clicks so the pattern
-    -- matches other WoW confirmations (release spirit, in-combat res).
-    -- The button label reads "Buy (3s)" -> "Buy (2s)" -> "Buy (1s)" ->
-    -- "Buy" (mint accent). Skip is always live -- it's the safe action.
-    -- Right-click on the flyout body stops the whole loop.
-    -- Anchor: BELOW the main frame's bottom edge (not above the restock
-    -- button). Above-the-button placement overlapped the last list rows
-    -- and the status bar. Below the frame keeps the flyout out of the
-    -- shopping list entirely and puts the Buy button far from any row
-    -- click surface, which is safer against misclicks too.
+    -- ---- Confirm / summary flyout, below the main frame ------------------
+    -- armed: plan on the left, [Skip] [Buy (Ns)]; Buy unlocks after a short
+    -- countdown like other WoW confirmations. summary: end-of-run recap.
+    -- Right-click the body to stop. Below the window, away from the rows,
+    -- so a misclick can't hit Buy.
     local toast = CreateFrame("Frame", nil, f, "BackdropTemplate")
     toast:SetSize(360, 44)
     toast:SetPoint("TOPRIGHT", f, "BOTTOMRIGHT", 0, -1)  -- 1px seam, matches style guide
@@ -2140,9 +1675,7 @@ function MF:Build()
     local toastBG = toast:CreateTexture(nil, "BACKGROUND")
     toastBG:SetAllPoints()
     toastBG:SetColorTexture(0.055, 0.075, 0.055, 0.98)
-    -- Full 1px mint border, four edges. Textures are captured on MF as
-    -- _toastBorderTex so the bank/warband guardrail pulse animation can
-    -- retint them from mint to amber and back while the flyout is armed.
+    -- 1px mint border; kept on MF so the stash warning can pulse it amber.
     local topL = toast:CreateTexture(nil, "OVERLAY")
     topL:SetColorTexture(Palette.brand[1], Palette.brand[2], Palette.brand[3], 0.85)
     topL:SetPoint("TOPLEFT"); topL:SetPoint("TOPRIGHT"); topL:SetHeight(1)
@@ -2164,10 +1697,7 @@ function MF:Build()
     titleFS:SetTextColor(1, 1, 1, 1)
     titleFS:SetWordWrap(false)   -- truncate long titles, don't wrap into sub
 
-    -- Bank/warband stash lines. Sit between title and
-    -- sub when the item has copies in bank or warband. Amber-tinted so
-    -- they read as a soft warning; hidden by default and re-anchored in
-    -- ShowArmedToast based on which sources have >0 copies.
+    -- Amber "already have some in bank / warband" lines, shown when relevant.
     local stashBankFS = toast:CreateFontString(nil, "OVERLAY", "StockClerkFontHighlightSmall")
     stashBankFS:SetJustifyH("LEFT")
     stashBankFS:SetTextColor(1.0, 0.66, 0.4, 1)  -- amber (matches "No cap set")
@@ -2231,9 +1761,7 @@ function MF:Build()
         end
     end)
 
-    -- Right-click anywhere on the toast body = stop the loop. Backup for
-    -- the button's own stop -- if the user's mouse is already up here they
-    -- don't need to travel back down.
+    -- Right-click the flyout body = stop the run.
     toast:SetScript("OnMouseUp", function(_, button)
         if button == "RightButton" then
             if MF._toastHandlers and MF._toastHandlers.onStop then
@@ -2268,12 +1796,7 @@ function MF:Build()
     self._toastHandlers   = nil
     self._toastArmReady   = false
 
-    -- ---- Resize grip (bottom-right corner) -----------------------------
-    -- Uses Blizzard's built-in ChatIM SizeGrabber textures — the same
-    -- diagonal-hash art the chat frame uses — so the affordance reads as
-    -- native and stays inside its 16x16 bounding box (no rotation math,
-    -- no bleed past the window border). SetResizeBounds above enforces
-    -- the min/max; this Button just triggers StartSizing.
+    -- ---- Resize grip: Blizzard's chat-frame size grabber art ---------------
     local GRIP_UP        = "Interface\\ChatFrame\\UI-ChatIM-SizeGrabber-Up"
     local GRIP_DOWN      = "Interface\\ChatFrame\\UI-ChatIM-SizeGrabber-Down"
     local GRIP_HIGHLIGHT = "Interface\\ChatFrame\\UI-ChatIM-SizeGrabber-Highlight"
@@ -2306,15 +1829,8 @@ function MF:Build()
 
     f:HookScript("OnShow", function() MF:RefreshRestockBtn() end)
 
-    -- Tooltip orphan sweep. When the main frame hides for any reason
-    -- (Express-Restock triggered by AH close, /clerk toggle, Esc, etc.),
-    -- any GameTooltip currently owned by a child of the main frame will
-    -- otherwise linger on screen -- no OnLeave fires because the owning
-    -- widget just disappears without the cursor moving. Cheap safety net:
-    -- if GameTooltip's owner is anywhere inside the main frame at Hide
-    -- time, hide it. Walks up GetParent because GameTooltip:GetOwner()
-    -- returns the frame the tooltip was anchored to, not necessarily a
-    -- direct child of f.
+    -- When the window hides, drop any tooltip owned by something inside it
+    -- (no OnLeave fires when the owner just vanishes).
     f:HookScript("OnHide", function()
         local owner = GameTooltip:GetOwner()
         while owner do
@@ -2335,18 +1851,12 @@ function MF:Build()
     scrollBox:SetPoint("TOPLEFT")
     scrollBox:SetPoint("BOTTOMRIGHT", -18, 0)
 
-    -- (headers' right edge is anchored above, right after headers is
-    -- created — anchoring here would create a circular dependency because
-    -- listHolder itself anchors to headers.)
-
     local scrollBar = CreateFrame("EventFrame", nil, listHolder, "MinimalScrollBar")
     scrollBar:SetPoint("TOPLEFT",     scrollBox, "TOPRIGHT",    2, 0)
     scrollBar:SetPoint("BOTTOMLEFT",  scrollBox, "BOTTOMRIGHT", 2, 0)
 
-    -- Order matters: current builds validate that the element factory is
-    -- set before a DataProvider is attached, otherwise SetDataProvider
-    -- errors out with "elementFactory was nil". Configure the view first,
-    -- initialize with the scroll bar, then hand off the DataProvider.
+    -- Set the element factory before attaching a DataProvider, or
+    -- SetDataProvider errors ("elementFactory was nil").
     local scrollView = CreateScrollBoxListLinearView()
     scrollView:SetElementInitializer("Button", InitializeRow)
     scrollView:SetElementExtent(ROW_HEIGHT)
@@ -2361,11 +1871,7 @@ function MF:Build()
     self.scrollView   = scrollView
     self.dataProvider = dataProvider
 
-    -- Empty-state text (hidden by default). v1.1: onboarding copy is a
-    -- multi-line list ("Add items by: ...") so we constrain to listHolder's
-    -- width minus inset, enable word wrap, and left-justify inside a
-    -- top-anchored region. Overflow-at-min-width fix (v1.0 empty text
-    -- didn't wrap and ran past the frame edge at 420px).
+    -- Empty-state onboarding text, wrapped to the list width.
     self.emptyText = listHolder:CreateFontString(nil, "OVERLAY", "StockClerkFontDisable")
     self.emptyText:SetPoint("TOPLEFT", listHolder, "TOPLEFT", 16, -18)
     self.emptyText:SetPoint("TOPRIGHT", listHolder, "TOPRIGHT", -16, -18)
@@ -2380,23 +1886,10 @@ function MF:Build()
 end
 
 -- ---------------------------------------------------------------------------
--- Refresh: rebuild the DataProvider from ADDON.DB.
--- Follows the Auctionator pattern of replacing the DataProvider each
--- refresh (see Source/Components/ResultsListing/Mixins/ResultsListing.lua).
--- Flushing + re-inserting can leave the ScrollView reusing frames without
--- re-invoking the row initializer, which causes stale counts.
+-- Refresh: rebuild the DataProvider (Auctionator's pattern; flushing and
+-- re-inserting can reuse frames without re-running the initializer).
+-- Refresh coalesces: any number of calls in one frame = one rebuild.
 -- ---------------------------------------------------------------------------
--- Public entrypoint: coalesces refreshes so multiple triggers in the
--- same frame collapse into a single row-list rebuild. Every module
--- calls MainFrame:Refresh() freely; this schedules ONE _RefreshNow on
--- the next frame tick if one isn't already pending.
---
--- Why: pre-v0.7.0 debug traces showed Refresh() firing 3+ times per
--- user action (bag update + inventory recompute + AH callback + a
--- Sidecar checkbox toggle would all pile on). Each Refresh rebuilds
--- the DataProvider and re-InitializeRows every visible row. Cheap in
--- isolation, wasteful in aggregate. Coalescing preserves the
--- "any change refreshes" contract while collapsing the cost.
 function MF:Refresh()
     if self._refreshPending then return end
     if not self.frame or not self.scrollBox then return end
@@ -2407,22 +1900,14 @@ function MF:Refresh()
     end)
 end
 
--- Internal, non-coalesced refresh. Called by the coalescer above, and
--- available for the rare synchronous case where the caller has already
--- committed a state change and MUST see the row list reflect it
--- immediately (e.g. inline-editor commit before focusing the next cell).
+-- Immediate rebuild, for callers that must see the change right away.
 function MF:_RefreshNow()
     if not self.frame or not self.scrollBox then return end
 
-    if ADDON.debug then
-        print("|cff98FF98[SC:debug]|r MainFrame:_RefreshNow() (frame shown: " .. tostring(self.frame:IsShown()) .. ")")
-    end
-
     local items = ADDON.DB:GetSortedItems()
 
-    -- Filter chip ON: show only items you're short on (bags below target,
-    -- the same test as the footer's "N short"). The DB flag keeps its old
-    -- name (char.ui.stuckOnly) so saved on/off state carries over.
+    -- Filter on: only items you're short on (bags below target). The DB flag
+    -- keeps its old name (char.ui.stuckOnly) so the saved state carries over.
     local stuckOnly = ADDON.DB:GetStuckOnly()
     if stuckOnly then
         local filtered = {}
@@ -2443,13 +1928,8 @@ function MF:_RefreshNow()
         self.scrollBox:SetDataProvider(emptyProvider, ScrollBoxConstants.RetainScrollPosition)
         self.dataProvider = emptyProvider
         self.emptyText:Show()
-        -- SkipLog = true: Refresh-generated state summaries (this and
-        -- the two below) are not events. Without the guard, every list
-        -- repaint would flood the activity log's status history with
-        -- "N items tracked" lines and bury the buy/expense entries the
-        -- log exists to preserve (code-review v0.2.0..HEAD finding 3).
-        -- Friendlier empty-state copy when the list is non-empty
-        -- but the filter has hidden everything.
+        -- skipLog: these are state, not events; logging them would bury the
+        -- log in repaint noise.
         self.emptyText:SetText(stuckOnly
             and "|cff888888Nothing is short. Click the filter icon to see the full list.|r"
             or  L.EMPTY_LIST)
@@ -2471,32 +1951,19 @@ function MF:_RefreshNow()
         })
     end
 
-    -- Swap the provider. Passing RetainScrollPosition keeps the user's
-    -- scroll offset stable across refreshes so restocking updates don't
-    -- yank the list back to the top.
+    -- Keep the scroll position across refreshes.
     self.scrollBox:SetDataProvider(newProvider, ScrollBoxConstants.RetainScrollPosition)
     self.dataProvider = newProvider
 
-    -- The footer is feedback only (last action); the short count lives on
-    -- the Restock button, computed by Loop:PreviewShortfallCount so the
-    -- number matches what a click will actually buy.
+    -- Short count comes from Loop:PreviewShortfallCount: same math as a click.
     self:RefreshRestockBtn()
 end
 
--- Post-feedback rework: two states on the button itself
--- (buy/skip live in the confirm flyout, see ShowArmedToast).
---   idle   -> "Restock at AH", enabled if AH open + something short + not looping
---   active -> "Stop restock",  always enabled
--- Hover on the disabled idle state gets a reason line -- see the OnEnter
--- handler which calls _RestockDisabledReason.
+-- Restock button: idle / running label and enabled state. A disabled idle
+-- button explains why on hover (_RestockDisabledReason).
 function MF:RefreshRestockBtn(shortCount)
     if not self.restockBtn then return end
-    -- Route through Loop:PreviewShortfallCount so the button's enabled
-    -- state uses the SAME math as Loop:BuildQueue. Historical bug:
-    -- button was greyed (raw bags said 'stocked'), user clicked Restock
-    -- Loop's BuildQueue used _EffectiveHave (ledger + bags) and saw
-    -- '1 short' from a stale ledger entry, so the loop fired anyway.
-    -- Now the button state and the loop's decision agree by construction.
+    -- Same shortfall math as the loop, so the button and a click agree.
     if shortCount == nil then
         if ADDON.RestockLoop and ADDON.RestockLoop.PreviewShortfallCount then
             shortCount = ADDON.RestockLoop:PreviewShortfallCount()
@@ -2586,12 +2053,8 @@ function MF:_RestockDisabledReason()
     return nil
 end
 
--- Dock the main frame to the right edge of the AH frame IF the AH is
--- currently shown. No-op if the AH isn't up or the frame isn't shown.
--- Callable from OnAuctionHouseShow (auto-open path) or from a manual
--- /clerk-open-while-AH-is-already-up path, so the behavior is symmetric.
--- Put the window back where it was before docking to the AH (or at the saved
--- position if the snapshot was lost). No-op when not docked.
+-- Undo the AH dock: back to the pre-dock spot (or the saved position).
+-- No-op when not docked.
 function MF:Undock()
     local f = self.frame
     if not (self._docked and f) then return end
@@ -2623,17 +2086,12 @@ function MF:DockToAHIfOpen()
 end
 
 -- ---------------------------------------------------------------------------
--- ConfirmToast API. Called from RestockLoop.
---   ShowArmedToast(plan, handlers)      arm confirm with countdown
---   ShowSummaryToast(summaryText)       loop-end recap with [Close]
---   HideToast()                          dismiss
---
--- handlers table: onBuy, onSkip, onStop -- all optional.
+-- Confirm flyout API (called from RestockLoop):
+--   ShowArmedToast(plan, handlers)  arm with countdown; handlers onBuy/onSkip/onStop
+--   ShowSummaryToast(text)          end-of-run recap
+--   HideToast()
+-- Buy unlocks after 1.5s (label counts whole seconds); Skip is live at once.
 -- ---------------------------------------------------------------------------
--- Arm delay reduced from 3s to 1.5s. The label still renders in
--- whole seconds ("Buy (2s)" -> "Buy (1s)" -> "Buy") via ceil(); the
--- ticker cadence is 0.5s to match the halved total. Skip is live
--- immediately, as before.
 local COUNTDOWN_SECONDS = 1.5
 local COUNTDOWN_TICK    = 0.5
 
@@ -2644,17 +2102,8 @@ function MF:_StopToastCountdown()
     end
 end
 
--- ---------------------------------------------------------------------------
--- Bank/warband guardrail pulse: retints the toast's 4 border textures
--- between mint (rest) and amber (warn) on a 0.5s cadence to draw the user's
--- eye toward the stash lines before they commit gold. Runs until Buy or
--- Skip is pressed (or the toast is hidden).
---
--- Uses a simple C_Timer.NewTicker toggle rather than a real AnimationGroup
--- because we only need two colors, we don't need easing, and the ticker
--- pattern is already used elsewhere in this file (matches border-color
--- tween idiom in AttachBorderAnimator).
--- ---------------------------------------------------------------------------
+-- Stash warning: pulse the flyout border mint/amber every 0.5s until Buy,
+-- Skip or hide, to draw the eye to the "already have some" lines.
 local PULSE_MINT  = { Palette.brand[1], Palette.brand[2], Palette.brand[3], 0.85 }
 local PULSE_AMBER = { 1.0, 0.66, 0.4, 0.95 }
 
@@ -2676,9 +2125,7 @@ function MF:_StopToastPulse()
         self._toastPulseTicker:Cancel()
         self._toastPulseTicker = nil
     end
-    -- Always restore to resting mint so the next arm (which may not have
-    -- stash and thus won't restart the pulse) doesn't inherit an amber
-    -- border from the previous arm.
+    -- Always back to mint, so the next arm doesn't inherit amber.
     if self._toastBorderTex then
         for _, tex in ipairs(self._toastBorderTex) do
             tex:SetColorTexture(PULSE_MINT[1], PULSE_MINT[2], PULSE_MINT[3], PULSE_MINT[4])
@@ -2694,18 +2141,12 @@ function MF:ShowArmedToast(plan, handlers)
     self._toastHandlers = handlers or {}
     self._toastArmReady = false
 
-    -- Reset text bounds for armed mode (summary mode expands them; must
-    -- return to 2-button layout width here so title/sub don't sit under
-    -- the Skip button).
+    -- Armed layout width (summary mode widens it).
     self._toastTitle:ClearAllPoints()
     self._toastTitle:SetPoint("TOPLEFT", 10, -6)
     self._toastTitle:SetPoint("RIGHT", -160, 0)
 
-    -- Bank/warband guardrail: if the item has copies stashed in
-    -- bank or warband, insert stash lines between title and sub with
-    -- amber-tinted "you already have some" copy, and start the pulse.
-    -- Each source (bank/warband) gets its own line so the retrievability
-    -- label (this character / account-wide) is unambiguous.
+    -- One amber line per source holding copies, then start the pulse.
     local shownStashLines = 0
     if plan.hasStash then
         if (plan.stashBank or 0) > 0 then
@@ -2734,9 +2175,7 @@ function MF:ShowArmedToast(plan, handlers)
         self._toastStashWarband:Hide()
     end
 
-    -- Anchor the sub line below whatever the last visible line is: the
-    -- warband stash line if shown, else the bank stash line if shown,
-    -- else the title (the original default).
+    -- Sub line under the last visible line.
     self._toastSub:ClearAllPoints()
     local subAnchor = self._toastTitle
     if self._toastStashWarband:IsShown() then
@@ -2747,21 +2186,13 @@ function MF:ShowArmedToast(plan, handlers)
     self._toastSub:SetPoint("TOPLEFT", subAnchor, "BOTTOMLEFT", 0, -1)
     self._toastSub:SetPoint("RIGHT", -160, 0)
 
-    -- Grow toast height to fit stash lines. Base is 44px (title + sub);
-    -- each stash line adds ~13px. Buttons are vertically centered so they
-    -- track the growth automatically.
     self.confirmToast:SetHeight(44 + shownStashLines * 13)
 
-    -- Title line: qty x item name (truncated to 22 chars for horizontal fit).
-    -- Total spend on the sub line alongside the cap so both money values
-    -- share a row -- keeps the first line dedicated to WHAT you're buying.
+    -- Title: qty x name (22 chars max). Sub: total and cap; amber "No cap set".
     local nm = plan.name or "?"
     if #nm > 22 then nm = nm:sub(1, 21) .. "\226\128\166" end  -- ellipsis
     self._toastTitle:SetText(("%d x |cffffffff%s|r"):format(plan.planQuantity or 0, nm))
 
-    -- Sub line: total spend + cap. 'worst unit' was dropped -- cap is
-    -- the actionable gate. No cap set gets amber tint so the user knows
-    -- they're firing blind. Middle dot separator matches the Sidecar log.
     local totalTxt = MoneyText(plan.plannedSpend or 0)
     if plan.maxPrice then
         self._toastSub:SetText(("%s  \194\183  Cap %s / unit"):format(totalTxt, MoneyText(plan.maxPrice, "silver")))
@@ -2774,9 +2205,7 @@ function MF:ShowArmedToast(plan, handlers)
     -- Skip is live.
     self._toastSkip:Enable(); self._toastSkip:EnableMouse(true)
 
-    -- Buy button starts in countdown mode: disabled, mint fill off, label
-    -- shows the remaining seconds. Ticker updates every 1s and unlocks
-    -- when the countdown reaches 0.
+    -- Buy starts locked, showing the countdown.
     self._toastPrimary:Disable()
     self._toastPrimaryFill:Hide()
     self._toastPrimaryTxt:SetTextColor(0.78, 0.78, 0.78, 1)
@@ -2786,16 +2215,11 @@ function MF:ShowArmedToast(plan, handlers)
 
     self.confirmToast:Show()
 
-    -- Start the guardrail pulse once the flyout is on-screen. The pulse
-    -- runs the whole time the flyout is armed with a stash present and is
-    -- stopped by HideToast() or by the Buy/Skip OnClick handlers.
     if plan.hasStash then
         self:_StartToastPulse()
     end
 
-    -- Ticker fires every COUNTDOWN_TICK seconds (0.5s in v1.1); when
-    -- remaining is > 0 we display ceil(remaining) so the label ticks
-    -- through whole seconds even though the internal timer is fractional.
+    -- Label shows whole seconds (ceil) while the ticker runs at 0.5s.
     local totalTicks = math.ceil(COUNTDOWN_SECONDS / COUNTDOWN_TICK)
     self._toastTicker = C_Timer.NewTicker(COUNTDOWN_TICK, function()
         if self._toastMode ~= "armed" then return end
@@ -2834,11 +2258,7 @@ function MF:ShowSummaryToast(summary)
     self._toastSub:SetText(sub)
     self._toastSub:SetTextColor(0.78, 0.78, 0.78, 1)
 
-    -- Summary mode has only ONE button (Close, ~90w) instead of two.
-    -- Grow the text region to fill the reclaimed space so long summary
-    -- messages (like 'Restock complete - bought 30 for 1219g 50s') don't
-    -- wrap under the button. The armed layout resets these on next
-    -- ShowArmedToast via its title/sub setup.
+    -- One button in summary mode: widen the text so long recaps don't wrap under it.
     self._toastTitle:ClearAllPoints()
     self._toastTitle:SetPoint("TOPLEFT", 10, -6)
     self._toastTitle:SetPoint("RIGHT", -100, 0)
@@ -2853,10 +2273,7 @@ function MF:ShowSummaryToast(summary)
     self._toastPrimaryFill:Hide()
     self._toastPrimaryTxt:SetTextColor(1, 1, 1, 1)
 
-    -- Close countdown ticks each second. Matches the Buy countdown
-    -- pattern so the summary toast feels part of the same UI vocabulary.
-    -- reduced from 6s to 3s. Informational auto-dismiss; the close
-    -- button remains clickable throughout.
+    -- Auto-closes after 3s, counting down like Buy; Close works throughout.
     local SUMMARY_CLOSE_SECONDS = 3
     local remaining = SUMMARY_CLOSE_SECONDS
     self._toastPrimaryTxt:SetText(("Close (%ds)"):format(remaining))
@@ -2894,15 +2311,8 @@ function MF:HideToast()
     if self.confirmToast then self.confirmToast:Hide() end
 end
 
--- Set the footer status text. Also mirrors the message into the activity
--- log so the sidecar reads as a persistent history of the same status
--- stream the footer shows -- "Searching AH for...", "Cheapest: 100g",
--- "Cap for X set to 50g", loop tick messages, etc. This is intentional:
--- the log is meant to be the durable record of the same human-readable
--- feedback, which otherwise lasts only until the next status overwrites the
--- footer. Empty strings are still
--- passed to the footer (to clear it) but skipped in the log.
--- Footer = feedback: the last action message stays until the next one.
+-- Footer text (feedback: stays until the next action). Also logged as a
+-- detail entry unless skipLog; empty text clears the footer only.
 function MF:SetStatus(text, skipLog)
     if self.statusBar then self.statusBar:SetText(text or "") end
     if not skipLog and text and text ~= "" and ADDON.Log and ADDON.Log.Emit then
@@ -2911,25 +2321,12 @@ function MF:SetStatus(text, skipLog)
 end
 
 -- ---------------------------------------------------------------------------
--- Reorder
---
--- Shopping list order = restock walk order (see DB.lua GetSortedItems).
--- Reorder is mouse-only: drag the grip handle on the row's far left. On
--- drop, compute the target index from the cursor Y against visible rows
--- and call DB:ReorderItems.
+-- Reorder (mouse only): drag a row's grip. List order = restock order.
 -- ---------------------------------------------------------------------------
 
--- ---------------------------------------------------------------------------
--- Drag-to-reorder (mouse)
---
--- OnDragStart on the grip captures the itemID and shows a thin mint
--- insertion-line texture. OnUpdate polls cursor Y each frame, compares
--- against each visible row's midpoint, and repositions the line at the
--- nearest gap. OnDragStop resolves the gap to a target index, calls
--- DB:ReorderItems with the full permutation, Refreshes, and hides the
--- line. Dragging over empty space above/below the visible rows resolves
--- to top / bottom respectively.
--- ---------------------------------------------------------------------------
+-- Drag: a mint insertion line follows the cursor to the nearest gap between
+-- visible rows; drop reorders via DB:ReorderItems. Above/below the rows
+-- means top/bottom.
 
 local function EnsureInsertionMarker(self)
     if self._dragMarker then return self._dragMarker end
@@ -2941,10 +2338,8 @@ local function EnsureInsertionMarker(self)
     return m
 end
 
--- Walk the visible rows and find the gap closest to cursorY. Returns
--- targetDataIndex in [1, size+1]: 1 = before first row, size+1 = after
--- last row. Uses row midpoints so drops slightly above a row's midline
--- insert before it, slightly below insert after.
+-- Gap nearest cursorY by row midpoints: 1 = before the first row,
+-- size+1 = after the last.
 function MF:_ResolveDropIndex(cursorY)
     if not self.scrollBox or not self.dataProvider then return 1 end
     local size = self.dataProvider:GetSize()
@@ -2982,9 +2377,6 @@ function MF:_ResolveDropIndex(cursorY)
     return visible[#visible].idx + 1
 end
 
--- Move the insertion marker to the gap at targetIndex. Marker sits at
--- the top edge of the row currently at targetIndex, or the bottom edge
--- of the last row if targetIndex == size+1.
 function MF:_PlaceInsertionMarker(targetIndex)
     if not self._dragMarker or not self.scrollBox or not self.dataProvider then return end
     local size = self.dataProvider:GetSize()
@@ -3023,9 +2415,7 @@ function MF:BeginRowDrag(row)
     if not row or not row._itemID or self._dragItemID then return end
     self._dragItemID = row._itemID
     EnsureInsertionMarker(self)
-    -- Poll cursor each frame while dragging. UIParent's effective scale
-    -- converts raw cursor coords (which come back in native pixels) to
-    -- the UI's coordinate space.
+    -- Cursor comes in native pixels; divide by UIParent's scale.
     self._dragTicker = C_Timer.NewTicker(0, function()
         if not self._dragItemID then return end
         local scale = UIParent:GetEffectiveScale()
@@ -3050,10 +2440,8 @@ function MF:EndRowDrag()
         return
     end
 
-    -- Build the new order: current provider order with movedID removed,
-    -- reinserted at target. target was resolved against the pre-move
-    -- provider, so if the row moves DOWN we adjust the insert point by
-    -- one (the removal shifted everything after it up).
+    -- Remove, then reinsert at target (one lower if the item moved down,
+    -- since removing it shifted the rest up).
     local size = self.dataProvider:GetSize()
     local order = {}
     local fromIdx
@@ -3074,14 +2462,11 @@ function MF:EndRowDrag()
     self:Refresh()
 end
 
-
 -- ---------------------------------------------------------------------------
 -- Show / Hide
 -- ---------------------------------------------------------------------------
--- Show accepts an optional `fromAH` argument. Only overwrite openedByAH
--- when the caller explicitly tells us where the show came from -- calling
--- Show() with no arg (e.g. from a slash command or a Refresh after add)
--- must not clobber a flag Core.lua just set on our behalf.
+-- fromAH only when the caller knows; a plain Show() must not clear the flag
+-- Core just set.
 function MF:Show(fromAH)
     self:Build()
     if fromAH ~= nil then
@@ -3092,18 +2477,12 @@ function MF:Show(fromAH)
     end
     self.frame:Show()
     self:Refresh()
-    -- If the AH is already up (user turned Auto-Open off, then hit /clerk
-    -- while at the AH), dock now. OnAuctionHouseShow already fired before
-    -- this call so it can't dock us -- we have to do it from the Show path.
+    -- Already at the AH (auto-open off, then /clerk): dock from here.
     self:DockToAHIfOpen()
 end
 
 function MF:Hide()
-    -- Cleanup for Sidecar (UIParent-parented, so it doesn't inherit our
-    -- Hide) lives on the frame's OnHide hook. That way EVERY
-    -- close path -- imperative (this method), Escape (UISpecialFrames),
-    -- X button, Close button, /clerk toggle -- runs the same cleanup.
-    -- This method just triggers the frame's Hide; the hook does the rest.
+    -- Side panel cleanup lives in the frame's OnHide, shared by every close path.
     if self.frame then self.frame:Hide() end
 end
 

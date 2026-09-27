@@ -82,11 +82,6 @@ function INV:GetBreakdown(itemID)
     end
     self.cache[itemID] = breakdown
 
-    if ADDON.debug then
-        print(("|cff98FF98[SC:debug]|r GetBreakdown(%d): bags=%d bank=%d warband=%d ⇒ total=%d"):format(
-            itemID, breakdown.bags, breakdown.bank, breakdown.warband, breakdown.total))
-    end
-
     return breakdown
 end
 
@@ -98,9 +93,6 @@ end
 
 -- Called by Core.lua on inventory-change events.
 function INV:OnInventoryChanged()
-    if ADDON.debug then
-        print("|cff98FF98[SC:debug]|r OnInventoryChanged fired, invalidating cache")
-    end
     self:Invalidate()
     -- Only trigger a UI rebuild when the window is actually visible.
     -- Cache invalidation always runs so the next open reads fresh data,
