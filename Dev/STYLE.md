@@ -17,7 +17,11 @@ place. New UI follows these rules; the helpers named here already exist in
   borders and the faint `bandTint` strip, never by extra shades.
 - Accent is mint `#98FF98` (`Palette.brand`): hover, focus, "on", the title.
 - Buttons: `StyleButton` only (flat fill, band, hover wash, press flash, black
-  ring). No Blizzard button or checkbox templates.
+  ring; label via `SetText`, grey when disabled). No Blizzard button or
+  checkbox templates.
+- Lines: `AddRule` (one edge) and `AddBlackBorder` (ring); never hand-built.
+- Side panels: `MF.DockedPanel(name)` + `MF:ShowPanel(panel)` (right edge,
+  window height, one at a time).
 - Icons: drawn bars via `DrawGlyph`, never font glyphs. Header icons via
   `HeaderIcon` (grey at rest, mint on hover, one-line tooltip).
 - Checkboxes: 16px flat well + black border, mint square when on, label is
@@ -28,10 +32,12 @@ place. New UI follows these rules; the helpers named here already exist in
   transparent on retail).
 
 ## Type
-- Only StockClerk's own font objects (`StockClerkFont*`), never `GameFont*`.
-  Face: Expressway via LibSharedMedia when available, else bundled Barlow
-  Semi Condensed. Sizes follow the Blizzard sizes they replace.
-- Row text uses the Small sizes. Exception: the multi-line boxes (`/clerk
+- Three font objects, all white: `StockClerkFontSmall` (10), `StockClerkFont`
+  (12), `StockClerkFontLarge` (16), plus grey `StockClerkFontDisabled` for
+  disabled buttons. Never `GameFont*`. Face: Expressway via LibSharedMedia
+  when available, else bundled Barlow Semi Condensed. Any window's Build
+  calls `MF.ApplyFontFace()` first.
+- Row text uses the Small size. Exception: the multi-line boxes (`/clerk
   log`, bulk import) use WoW's chat font for long pasted text.
 
 ## Words

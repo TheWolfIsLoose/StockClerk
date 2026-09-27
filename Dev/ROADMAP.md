@@ -11,10 +11,11 @@ disagree), **Open** (needs an answer before build).
 
 ## Next session: start here
 
-**2026-09-27:** `v1.2.0-beta2` released (prerelease, from `dev`). Full
-notes in `Dev/HISTORY.md`. Next: play on beta2; then stable `v1.2.0`
-(stable CHANGELOG covers everything since v1.1.1, see the draft below;
-merge `dev` into `main`).
+**2026-09-27:** `v1.2.0-beta2` released. `dev` now holds the full Ponytail
+pass for `v1.2.0-beta3` (see that section): needs the player's in-game
+check, then swap in the beta3 CHANGELOG and push to cut it. After that:
+play on it, then stable `v1.2.0` (stable notes cover everything since
+v1.1.1; merge `dev` into `main`).
 
 State: `main` is still v1.1.1 plus the `update.bat` fix.
 
@@ -230,6 +231,43 @@ Your list, caps and settings carry over unchanged.
 
 - **Re-clicking "Add common consumables" (Decided):** re-adds any listed
   item you've since removed. The addon doesn't remember removals.
+
+---
+
+## v1.2.0-beta3 — Full Ponytail pass (built on `dev`, awaiting in-game check)
+
+Goal: code a human reviewer reads as deliberate. Whole-repo audit
+(2026-09-27), all 22 findings applied; behaviour unchanged unless noted.
+Lua: ~5,650 → ~3,330 lines (-41%), one file fewer.
+
+- Every file rewritten or tightened: AH 328→150, Core 441→240,
+  RestockLoop 526→248, MainFrame 2,390→1,370, DB, Log, Inventory,
+  ItemResolver, panels. Guards for modules that always exist removed;
+  dead fields, params and functions removed; stale headers rewritten.
+- **Fixed:** the 7 font objects copied themselves (a bulk rename hit the
+  table meant to point at Blizzard's fonts). Now 3 white fonts + a grey
+  disabled font; same look.
+- **Fixed during the rewrite:** a restock stopped mid-search could still
+  arm the flyout when the search came back (caught by the new smoke check).
+- Locale.lua inlined and removed (no localization planned; easy to bring
+  back). `/clerk dump` and `/clerk pending` removed: the `/clerk log`
+  report now lists the items (bags/target, cap) and purchases waiting in
+  the mail.
+- Log window: the redundant Close button went (× and Escape close it).
+- Smoke now covers AH buy planning and confirm-or-cancel, a full restock
+  run (arm, double-click, mail ledger, stop), the report, and the flyout,
+  drag and dock paths. The AH and restock checks pass on old and new code.
+
+**Player-facing CHANGELOG (draft):**
+```
+## v1.2.0-beta3
+
+- Under the hood: Stock Clerk's code was tightened throughout (about 40% smaller) with no change to how it works.
+- `/clerk log` now also lists your items and anything still waiting in the mail, so a bug report has everything in one paste. `/clerk dump` and `/clerk pending` are gone.
+- Fixed: stopping a restock right as a search finished could still show the buy prompt.
+
+Your list, caps and settings carry over unchanged.
+```
 
 ---
 
