@@ -1,6 +1,6 @@
 --[[
     Stock Clerk - BankRestock.lua
-    "Restock from Bank" (v1.2): at a banker, move exactly enough of each
+    "Restock from Bank": at a banker, move exactly enough of each
     short item from the character bank, then the warband bank, into bags.
 
     PlanPulls is pure (no WoW calls) so Dev/smoke.lua can test the stack
@@ -121,12 +121,7 @@ end
 -- ---------------------------------------------------------------------------
 -- Executor
 -- ---------------------------------------------------------------------------
-function BR:IsActive() return self.active == true end
-
-local function refreshUI()
-    local mf = ADDON.MainFrame
-    if mf and mf.RefreshRestockBtn then mf:RefreshRestockBtn() end
-end
+function BR:IsActive() return self.active end
 
 function BR:Start(express)
     if self.active then return end
@@ -136,7 +131,7 @@ function BR:Start(express)
     if GetCursorInfo() then mf:SetStatus("|cffff8888Put down the item on your cursor first.|r"); return end
     self.active, self.pulled, self.run = true, {}, (self.run or 0) + 1
     self.mode = express and "express" or "manual"
-    refreshUI()
+    ADDON.MainFrame:RefreshRestockBtn()
     self:_Step(self.run)
 end
 
@@ -164,7 +159,7 @@ function BR:Stop(reason)
         msg = msg .. (" %d still short, restock at the AH."):format(stillShort)
     end
     ADDON.MainFrame:SetStatus(msg)
-    refreshUI()
+    ADDON.MainFrame:RefreshRestockBtn()
 end
 
 function BR:_Step(run)
