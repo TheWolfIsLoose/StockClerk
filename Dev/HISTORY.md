@@ -10,6 +10,74 @@ or, where it had no entry, from that version's GitHub release notes.
 > There is no v1.1.2 stable: the v1.1.2 alphas are the start of v1.2.0
 > (efficiency pass). v1.2.0 plan: `Dev/ROADMAP.md`.
 
+## v1.2.0-beta2 (2026-09-27)
+
+Ponytail sweep + UI/UX consistency pass + log rework (pulled in from v1.3).
+Rules written down in `Dev/STYLE.md`. ~6.8k → ~5.6k Lua lines.
+
+### Look and layout
+- Rows 30 → 24px, icons 18px with a 1px quality-coloured border (every
+  quality; black while loading); row text one size smaller; no `[ ]`
+  around list names.
+- Header 32 → 26, toolbar 48 → 30, footer 38 → 30. Toolbar labels became
+  placeholders + tooltips; the grey hint line moved into the row grip's
+  tooltip; footer Close removed (× and Escape close).
+- Toolbar: Cap box removed (caps are set per row). Enter in Item ID or
+  Target adds; the square button is bulk import ("list +" icon). Add
+  Tab stop and its keyboard guards removed; Tab switches the two boxes.
+- Own font objects (`StockClerkFont*`, sizes/colours of the Blizzard
+  ones they replace). Face: Expressway via LibSharedMedia, else bundled
+  Barlow Semi Condensed (SIL OFL, `Media/`). Expressway's free license
+  forbids embedding, so it doesn't ship.
+- Drawn icons everywhere (`DrawGlyph`, `HeaderIcon`); flat checkboxes;
+  StockClerk buttons replace every Blizzard button template.
+- Side panel: hints → tooltips, clickable labels, tooltip on "Add common
+  consumables", new **Express-Restock at Bank** (`autoRestockBank`,
+  default off).
+- Bulk import docks beside the main window (one panel at a time), styled
+  to STYLE.md, Escape via UISpecialFrames (no frame-level OnKeyDown).
+  Drop items on it to add their IDs line by line (duplicates skipped,
+  mint border while holding an item).
+
+### Bank
+- Express-Restock at Bank starts the pull on bank open when something is
+  short and pullable. Nothing fits → footer "Not enough bag space."; a
+  bag-space stop doesn't suggest the AH. Nearly-full-bags / bank-closed
+  mid-pull still untested in-game (accepted as a known unknown).
+
+### Log (was the v1.3 plan)
+- `Log:Format`: one plain-language formatter for the side panel feed
+  and `/clerk log`. Levels: activity (feed), detail, trace.
+- New kinds: `bank_run` (with stop reason), `setting`, `version` (once
+  per version change), `error` (event-handler errors, logged then passed
+  to the normal error handler), `trace`. Buffer 500 → 1,000.
+- `/clerk log` = support report: version, WoW build, locale, character,
+  list size, settings, relevant addons, recording state; then entries by
+  day, `[hh:mm:ss]`, details `.`, trace `>`, item IDs `(#id)`. Snapshot,
+  pre-selected; no live refresh.
+- `/clerk debug` records trace into the log (off after /reload) instead
+  of printing to chat; noisy per-repaint traces dropped.
+- Feed: `[hh:mm]`, `[Item]` names in quality colour, failures red,
+  hover a cut-off line for the full text. Help tooltip on "Recent
+  Activity"; the "/clerk log" label opens the log.
+- Known gap: errors outside event handlers (clicks, timers) reach
+  BugSack but not the log.
+
+### Fixes
+- Font objects: a CopyFontObject copy reports height 0; size now read
+  from the Blizzard base (Lua error on first open in the dev build).
+- Row hover could stick: leaving through the grip or the Seen column
+  never cleared it. A hovered row now clears itself (OnUpdate while
+  hovered) and hover is reset when a pooled row is rebound.
+
+### Code (behaviour unchanged, smoke green)
+- C1 comment diet (MainFrame 3.1k → 2.4k lines, RestockLoop, DB; code
+  verified identical). C2 legacy `AUCTION_HOUSE_SHOW/CLOSED` dropped
+  (handlers ran twice per visit; docking checked with Auctionator). C3
+  shared icon, header-icon and Need/Cap cell helpers. C4 row keyboard
+  navigation was already gone.
+- Plain wording in player-facing text (no "loop", "ledger", "via").
+
 ## v1.2.0-beta1 (2026-09-26)
 
 Feature-complete v1.2. Goes straight from alpha1 to beta: every feature

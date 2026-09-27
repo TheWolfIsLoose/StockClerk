@@ -11,14 +11,12 @@ disagree), **Open** (needs an answer before build).
 
 ## Next session: start here
 
-**2026-09-27:** beta2 is fully built on `dev` (UI pass, log rework,
-C1-C4, STYLE.md; see **v1.2.0-beta2 → Reconciled list**). Next: player's
-in-game look, the C2 AH check, one open question (Add button Tab stop),
-then swap in the drafted CHANGELOG to cut `v1.2.0-beta2`.
+**2026-09-27:** `v1.2.0-beta2` released (prerelease, from `dev`). Full
+notes in `Dev/HISTORY.md`. Next: play on beta2; then stable `v1.2.0`
+(stable CHANGELOG covers everything since v1.1.1, see the draft below;
+merge `dev` into `main`).
 
-State: `v1.2.0-beta1` released (prerelease, from `dev`). `dev` is ahead
-of it (no release: CHANGELOG top heading is still beta1). `main` is still
-v1.1.1 plus the `update.bat` fix.
+State: `main` is still v1.1.1 plus the `update.bat` fix.
 
 Session setup: player syncs with `Dev\update.bat dev` and `/reload`;
 Claude reads `WTF\Account\SAVAGEFEARLESS\SavedVariables\StockClerk.lua`
@@ -315,7 +313,7 @@ keyboard navigation was already gone; `Dev/STYLE.md` written.
 - New look: a slimmer, tidier window. Smaller rows fit more items, item icons get a clean quality-coloured border, and help text moved into tooltips.
 - New: **Express-Restock at Bank.** Turn it on in the side panel and opening your bank pulls anything you're short on. If your bags are full, Stock Clerk tells you.
 - The add bar is just Item ID and Target: press Enter to add. Set a price cap on the row after checking the AH.
-- The button next to them is now bulk import: drag items from your bags onto it one after another (or paste a list of item IDs), then add them all at once.
+- The button next to them opens bulk import: drag items from your bags into it one after another (or paste a list of item IDs), then add them all at once.
 - Stock Clerk uses Expressway when your UI provides it (ElvUI, EllesmereUI and others), and a similar built-in font otherwise.
 - Recent Activity now reads like a receipt: "Bought 20 [Light's Potential] for 412g", with item names in their quality colour.
 - Something not working? Hover **Recent Activity**: `/clerk log` gives you a report to paste into a bug report, and `/clerk debug` records extra detail while you repeat the problem.

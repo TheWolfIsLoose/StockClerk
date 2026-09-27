@@ -1,12 +1,11 @@
-## v1.2.0-beta1
+## v1.2.0-beta2
 
-- New: **Restock from Bank.** At a banker, one click moves exactly what you're short from your bank, then your warband bank, into your bags. No gold spent, never more than you need.
-- New: **Add common consumables.** One click in the side panel fills your list with this expansion's staples; remove what you don't need.
-- New: the window can open automatically at the bank (on by default; turn it off in the side panel).
-- The filter icon now shows only the items you're short on.
-- The Restock button shows how many items are short, and the message at the bottom of the window stays until your next action.
-- Smoother at the Auction House, especially alongside scanning addons like Auctionator or TSM.
-- Smaller download: Stock Clerk no longer bundles any libraries.
-- `/clerk help` now lists every command.
+- New look: a slimmer, tidier window. Smaller rows fit more items, item icons get a clean quality-coloured border, and help text moved into tooltips.
+- New: **Express-Restock at Bank.** Turn it on in the side panel and opening your bank pulls anything you're short on. If your bags are full, Stock Clerk tells you.
+- The add bar is just Item ID and Target: press Enter to add. Set a price cap on the row after checking the AH.
+- The button next to them opens bulk import: drag items from your bags into it one after another (or paste a list of item IDs), then add them all at once.
+- Stock Clerk uses Expressway when your UI provides it (ElvUI, EllesmereUI and others), and a similar built-in font otherwise.
+- Recent Activity now reads like a receipt: "Bought 20 [Light's Potential] for 412g", with item names in their quality colour.
+- Something not working? Hover **Recent Activity**: `/clerk log` gives you a report to paste into a bug report, and `/clerk debug` records extra detail while you repeat the problem.
 
 Your list, caps and settings carry over unchanged.
