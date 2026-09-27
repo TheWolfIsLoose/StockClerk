@@ -87,6 +87,7 @@ like ticking off a paper shopping list.
   own search (one search at a time).
 - **Keybind for Buy:** shelved (player's call).
 
+---
 
 ## v1.2.0 — Efficiency pass + Restock from Bank + Common Consumables
 
