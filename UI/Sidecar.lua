@@ -253,18 +253,26 @@ function Sidecar:Refresh()
         local e = entries[i]
         local row = f._feedRows[i]
         if not row then
-            row = content:CreateFontString(nil, "ARTWORK", "StockClerkFontHighlightSmall")
+            -- Row i always sits at the same height; a cut-off line shows in
+            -- full in a tooltip (no horizontal scrolling in WoW's scroll frames).
+            row = CreateFrame("Frame", nil, content)
             row:SetPoint("TOPLEFT", 4, -y)
             row:SetPoint("RIGHT", -4, 0)
-            row:SetJustifyH("LEFT")
-            row:SetWordWrap(false)
+            row:SetHeight(14)
+            row.text = row:CreateFontString(nil, "ARTWORK", "StockClerkFontHighlightSmall")
+            row.text:SetAllPoints()
+            row.text:SetJustifyH("LEFT")
+            row.text:SetWordWrap(false)
+            row:SetScript("OnEnter", function(self)
+                if not self.text:IsTruncated() then return end
+                GameTooltip:SetOwner(self, "ANCHOR_LEFT")
+                GameTooltip:SetText(self.text:GetText(), 1, 1, 1, 1, true)
+                GameTooltip:Show()
+            end)
+            row:SetScript("OnLeave", GameTooltip_Hide)
             f._feedRows[i] = row
-        else
-            row:ClearAllPoints()
-            row:SetPoint("TOPLEFT", 4, -y)
-            row:SetPoint("RIGHT", -4, 0)
         end
-        row:SetText(FormatEntry(e))
+        row.text:SetText(FormatEntry(e))
         row:Show()
         y = y + 14
     end
