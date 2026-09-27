@@ -297,7 +297,7 @@ keyboard navigation was already gone; `Dev/STYLE.md` written.
 - **Decided 2026-09-27:** Enter adds from either box, so the + button
   became **bulk import** (drawn "list +" icon) and left the side panel;
   the Add Tab stop and its keyboard guards are gone (Tab switches boxes).
-  Item ID placeholder: "Item ID, Enter to add".
+  Item ID placeholder: "Item ID or drag an item, Enter to add".
 - **Fixed:** row hover could stick (leaving through the grip or Seen
   column never cleared it). A hovered row now clears itself once the
   cursor is outside it.

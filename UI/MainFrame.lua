@@ -1218,7 +1218,7 @@ function MF:Build()
     -- Item ID + Target. Item ID only (names are ambiguous across ranks);
     -- blank Target = 1. Caps are set per row after seeing AH prices.
     -- Item ID stretches to fill whatever the window width leaves.
-    local addEB   = MakeEditBox(toolbar, "Item ID, Enter to add", 130, true, 8, "Item ID",
+    local addEB   = MakeEditBox(toolbar, "Item ID or drag an item, Enter to add", 130, true, 8, "Item ID",
         L.ADDBOX_TOOLTIP or "Type an item ID, or drag an item from your bags onto this window.")
     local countEB = MakeEditBox(toolbar, "Target",   60, true, 5, "Target",
         "How many to keep in your bags. Blank = 1.")
