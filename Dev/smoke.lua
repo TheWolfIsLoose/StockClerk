@@ -180,6 +180,7 @@ do -- Plain-language wording, report header, error capture
   local report = Log:Report()
   assert(report:find("StockClerk report", 1, true) and report:find("Settings: ", 1, true)
          and report:find("> [AH] x 1", 1, true), "report")
+  assert(report:find("\n%-%- %a%a%a %d%d%d%d%-%d%d%-%d%d %-%-\n") and report:find("\n%[%d%d:%d%d:%d%d%] "), "report layout")
   -- Event handler errors land in the log, then reach the normal error handler
   local seen
   local geh = geterrorhandler

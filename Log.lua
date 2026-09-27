@@ -174,15 +174,20 @@ local FORMAT = {
     trace         = function(p) return ("[%s] %s"):format(p.tag or "?", Plain(p.text)) end,
 }
 
--- Log:Format(entry, full) -> one line of plain text, no timestamp.
--- full adds item IDs (support needs them; item names can be ambiguous).
-function Log:Format(e, full)
+-- Log:Format(entry, full, color) -> one line, no timestamp.
+-- full adds item IDs (support needs them; names can be ambiguous);
+-- color tints the item name by quality (display only: codes copy as junk).
+function Log:Format(e, full, color)
     local item
     if e.itemID then
-        local name = C_Item.GetItemInfo(e.itemID)
-        if type(name) ~= "string" then name = e.payload and e.payload.name end
+        local name, _, quality = C_Item.GetItemInfo(e.itemID)
+        if type(name) ~= "string" then name, quality = e.payload and e.payload.name, nil end
         item = name or ("item " .. e.itemID)
         if full then item = ("%s [%d]"):format(item, e.itemID) end
+        if color and type(quality) == "number" then
+            local r, g, b = C_Item.GetItemQualityColor(quality)
+            if r then item = ("|cff%02x%02x%02x%s|r"):format(r * 255, g * 255, b * 255, item) end
+        end
     end
     local fmt = FORMAT[e.kind]
     return fmt and fmt(e.payload or {}, item or "?") or tostring(e.kind)
@@ -233,15 +238,21 @@ function Log:Report()
         ("Addons loaded: %d. Relevant: %s"):format(count, #loaded > 0 and table.concat(loaded, ", ") or "none"),
         "Detailed recording (/clerk debug): " .. (ADDON.debug and "ON" or "off"),
         "Lines marked . are details, > are recorded steps. Newest first.",
-        "----",
     }
 
+    -- A date line per day; bracketed times keep the column even.
     local PREFIX = { activity = "  ", detail = ". ", trace = "> " }
-    local me = UnitName("player")
+    local me, day = UnitName("player"), nil
     for _, e in ipairs(self:Query()) do
+        local d = date("%a %Y-%m-%d", e.ts or 0)
+        if d ~= day then
+            day = d
+            lines[#lines + 1] = ""
+            lines[#lines + 1] = "-- " .. d .. " --"
+        end
         local who = (e.char and e.char ~= me) and (" (" .. e.char .. ")") or ""
-        local extra = (e.kind == "error" and e.payload.stack) and ("\n      " .. e.payload.stack) or ""
-        lines[#lines + 1] = ("%s %s%s%s%s"):format(date("%m-%d %H:%M:%S", e.ts or 0),
+        local extra = (e.kind == "error" and e.payload.stack) and ("\n             " .. e.payload.stack) or ""
+        lines[#lines + 1] = ("[%s] %s%s%s%s"):format(date("%H:%M:%S", e.ts or 0),
             PREFIX[self.LEVEL[e.kind]] or "  ", self:Format(e, true), who, extra)
     end
     return table.concat(lines, "\n")

@@ -196,10 +196,11 @@ local function Build(anchor)
     return f
 end
 
--- One feed line: grey time, then the log's plain wording. Failures red.
+-- One feed line: grey [time], then the log's wording with the item name in
+-- its quality colour. Returns the text and whether it's a failure (red).
 local function FormatEntry(entry)
-    local color = (entry.kind == "error" or entry.kind == "buy_fail") and "|cffff8888" or "|cffffffff"
-    return ("|cff888888%s|r  %s%s|r"):format(date("%H:%M", entry.ts or time()), color, ADDON.Log:Format(entry))
+    local failed = entry.kind == "error" or entry.kind == "buy_fail"
+    return ("|cff888888[%s]|r %s"):format(date("%H:%M", entry.ts or time()), ADDON.Log:Format(entry, false, true)), failed
 end
 
 -- -------------------------------------------------------------------------
@@ -272,7 +273,11 @@ function Sidecar:Refresh()
             row:SetScript("OnLeave", GameTooltip_Hide)
             f._feedRows[i] = row
         end
-        row.text:SetText(FormatEntry(e))
+        -- The line's base colour lives on the font string, so the item name's
+        -- |r falls back to it (red for failures) instead of to white.
+        local text, failed = FormatEntry(e)
+        row.text:SetText(text)
+        if failed then row.text:SetTextColor(1, 0.53, 0.53) else row.text:SetTextColor(1, 1, 1) end
         row:Show()
         y = y + 14
     end
