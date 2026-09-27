@@ -1,17 +1,8 @@
 --[[
     Stock Clerk - UI/Sidecar.lua
-
-    Side panel: settings, "Add common consumables" and Recent Activity.
-    Toggled by the header hamburger; hangs off the main window's right edge.
-
-    Layout:
-      * ~260w fixed, height matches MainFrame
-      * Top section: Settings (auto-open and Express-Restock toggles) and
-        "Add common consumables".
-      * Hairline 1px divider
-      * Bottom section: Recent Activity feed (newest first): buys, cap
-        changes and restock start/stop. `/clerk log` shows everything.
-]]
+    Side panel (the header's hamburger): settings, "Add common consumables",
+    and Recent Activity (activity-level log entries, newest first).
+--]]
 
 local addonName = ...
 local ADDON     = _G[addonName]
@@ -19,51 +10,36 @@ local ADDON     = _G[addonName]
 local Sidecar = {}
 ADDON.Sidecar = Sidecar
 
-local Palette = ADDON.MainFrame.Palette
-local ApplyFill, AddBlackBorder = ADDON.MainFrame.ApplyFill, ADDON.MainFrame.AddBlackBorder
+local MF      = ADDON.MainFrame
+local Palette = MF.Palette
+local FEED_MAX, CAP_DEBOUNCE = 30, 10  -- feed lines; seconds
 
-local WIDTH = 260
+local function Tooltip(owner, title, body)
+    GameTooltip:SetOwner(owner, "ANCHOR_RIGHT")
+    GameTooltip:SetText(title, 1, 1, 1)
+    GameTooltip:AddLine(body, 0.8, 0.8, 0.8, true)
+    GameTooltip:Show()
+end
 
--- -------------------------------------------------------------------------
--- Build the Sidecar panel lazily.
--- -------------------------------------------------------------------------
-local function Build(anchor)
-    local f = CreateFrame("Frame", "StockClerkSidecar", UIParent, "BackdropTemplate")
-    f:SetSize(WIDTH, 400)  -- height overridden in Toggle to match MainFrame
-    f:SetFrameStrata("HIGH")
-    f:SetFrameLevel(20)
-    f:SetToplevel(true)
-    f:EnableMouse(true)
-    f:Hide()
+local function Build()
+    MF.ApplyFontFace()
+    local f = MF.DockedPanel("StockClerkSidecar")
 
-    ApplyFill(f, Palette.panelBg)
-    AddBlackBorder(f)
-
-    -- Anchor default (may be re-anchored by Toggle if MainFrame moves).
-    if anchor then
-        f:SetPoint("TOPLEFT", anchor, "TOPRIGHT", 1, 0)
-    else
-        f:SetPoint("CENTER")
-    end
-
-    -- ---- Settings section --------------------------------------------
     local settingsTitle = f:CreateFontString(nil, "OVERLAY", "StockClerkFont")
     settingsTitle:SetPoint("TOPLEFT", 12, -10)
     settingsTitle:SetText("|cff98FF98Settings|r")
 
-    -- Checkbox rows: label says what it does; a tooltip only where it
-    -- needs more than the label. The label is part of the click area.
-    local function Check(y, label, key, tipTitle, tipBody)
-        -- Flat box: dark well + black border like the edit boxes, a mint
-        -- square when on, a faint wash on hover.
+    -- Flat checkbox (sunken well, mint square when on) whose label is part of
+    -- the click area. Tooltip only where the label needs more.
+    local function Check(y, label, key, tip)
         local c = CreateFrame("CheckButton", nil, f)
         c:SetPoint("TOPLEFT", 14, y - 3)
         c:SetSize(16, 16)
-        c:SetHitRectInsets(0, -(WIDTH - 40), 0, 0)
-        ApplyFill(c, Palette.fieldFill)
-        AddBlackBorder(c)
+        c:SetHitRectInsets(0, -220, 0, 0)
+        MF.ApplyFill(c, Palette.fieldFill)
+        MF.AddBlackBorder(c)
         local tick = c:CreateTexture(nil, "OVERLAY")
-        tick:SetColorTexture(Palette.brand[1], Palette.brand[2], Palette.brand[3], 1)
+        tick:SetColorTexture(unpack(Palette.brand))
         tick:SetSize(8, 8)
         tick:SetPoint("CENTER")
         c:SetCheckedTexture(tick)
@@ -74,83 +50,57 @@ local function Build(anchor)
         text:SetPoint("LEFT", c, "RIGHT", 8, 0)
         text:SetText(label)
         c:SetScript("OnClick", function(self)
-            local on = self:GetChecked() and true or false
+            local on = self:GetChecked()
             ADDON.DB:Settings()[key] = on
             ADDON.Log:Emit("setting", nil, { key = key, on = on })
         end)
-        if tipTitle then
-            c:SetScript("OnEnter", function(self)
-                GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
-                GameTooltip:SetText(tipTitle, 1, 1, 1)
-                GameTooltip:AddLine(tipBody, 0.8, 0.8, 0.8, true)
-                GameTooltip:Show()
-            end)
+        if tip then
+            c:SetScript("OnEnter", function(self) Tooltip(self, label, tip) end)
             c:SetScript("OnLeave", GameTooltip_Hide)
         end
-        c._key = key
+        c.key = key
         return c
     end
-    -- The autoRestock key predates the "Express-Restock" label and stays
-    -- for saved-settings compatibility.
-    f._checks = {
+    -- "autoRestock" predates the Express-Restock name; kept for saved settings.
+    f.checks = {
         Check(-30, "Auto-open at Auction House", "autoOpenAtAH"),
-        Check(-52, "Auto-open at Bank",          "autoOpenAtBank"),
+        Check(-52, "Auto-open at Bank", "autoOpenAtBank"),
         Check(-74, "Express-Restock at Auction House", "autoRestock",
-            "Express-Restock at Auction House",
             "When you open the AH and something is short, start buying right away. You still confirm each purchase."),
         Check(-96, "Express-Restock at Bank", "autoRestockBank",
-            "Express-Restock at Bank",
             "When you open your bank and something is short, pull it from your bank and warband bank right away."),
     }
 
-    -- Side panel buttons use the main window's button recipe.
-    local function Button(y, label, tipTitle, tipBody, onClick)
-        local b = CreateFrame("Button", nil, f)
-        b:SetPoint("TOPLEFT", 12, y)
-        b:SetPoint("RIGHT", -12, 0)
-        b:SetHeight(22)
-        ADDON.MainFrame.StyleButton(b)
-        b:SetText(label)
-        b:SetNormalFontObject("StockClerkFont")
-        b:HookScript("OnEnter", function(self)  -- Hook, not Set: keeps the hover wash
-            GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
-            GameTooltip:SetText(tipTitle, 1, 1, 1)
-            GameTooltip:AddLine(tipBody, 0.8, 0.8, 0.8, true)
-            GameTooltip:Show()
-        end)
-        b:HookScript("OnLeave", GameTooltip_Hide)
-        b:SetScript("OnClick", onClick)
-        return b
-    end
-    Button(-126, "Add common consumables", "Add common consumables",
-        "Adds this expansion's go-to potions, flasks and weapon oils with a target of 1. Items already on your list are left as they are.",
-        function()
-            local n  = ADDON.DB:AddCommonConsumables()
-            local mf = ADDON.MainFrame
-            if mf.frame and mf.frame:IsShown() then mf:Refresh() end
-            mf:SetStatus(n > 0
-                and ("Added %d items. Remove any you don't need with the red X on each row."):format(n)
-                or  "All the common consumables are already on your list.")
-        end)
+    local add = CreateFrame("Button", nil, f)
+    add:SetPoint("TOPLEFT", 12, -126)
+    add:SetPoint("RIGHT", -12, 0)
+    add:SetHeight(22)
+    MF.StyleButton(add)
+    add:SetText("Add common consumables")
+    add:HookScript("OnEnter", function(self)
+        Tooltip(self, "Add common consumables",
+            "Adds this expansion's go-to potions, flasks and weapon oils with a target of 1. Items already on your list are left as they are.")
+    end)
+    add:HookScript("OnLeave", GameTooltip_Hide)
+    add:SetScript("OnClick", function()
+        local n = ADDON.DB:AddCommonConsumables()
+        MF:Refresh()
+        MF:SetStatus(n > 0 and ("Added %d items. Remove any you don't need with the red X on each row."):format(n)
+            or "All the common consumables are already on your list.")
+    end)
 
-    -- ---- Divider -----------------------------------------------------
-    local divider = f:CreateTexture(nil, "OVERLAY", nil, 6)
+    local divider = f:CreateTexture(nil, "OVERLAY")
     divider:SetColorTexture(0, 0, 0, 1)
     divider:SetHeight(1)
     divider:SetPoint("TOPLEFT", 8, -158)
     divider:SetPoint("TOPRIGHT", -8, -158)
 
-    -- ---- Activity feed section --------------------------------------
+    -- Recent Activity. Hovering the title (or the "/clerk log" link, which
+    -- opens the log) explains how to send a bug report.
     local feedTitle = f:CreateFontString(nil, "OVERLAY", "StockClerkFont")
     feedTitle:SetPoint("TOPLEFT", 12, -166)
     feedTitle:SetText("|cff98FF98Recent Activity|r")
-
-    -- Hovering the title explains the feed and how to send a bug report;
-    -- the "/clerk log" link opens the full log.
-    local feedHelp = CreateFrame("Frame", nil, f)
-    feedHelp:SetAllPoints(feedTitle)
-    feedHelp:EnableMouse(true)
-    local function ShowFeedHelp(owner)
+    local function FeedHelp(owner)
         GameTooltip:SetOwner(owner, "ANCHOR_RIGHT")
         GameTooltip:SetText("Recent Activity", 1, 1, 1)
         GameTooltip:AddLine("What StockClerk did, newest first.", 0.8, 0.8, 0.8, true)
@@ -162,164 +112,102 @@ local function Build(anchor)
         GameTooltip:AddLine("If the problem happens again and again: type /clerk debug first, repeat the problem, then /clerk log.", 0.8, 0.8, 0.8, true)
         GameTooltip:Show()
     end
-    feedHelp:SetScript("OnEnter", ShowFeedHelp)
-    feedHelp:SetScript("OnLeave", GameTooltip_Hide)
+    local help = CreateFrame("Frame", nil, f)
+    help:SetAllPoints(feedTitle)
+    help:EnableMouse(true)
+    help:SetScript("OnEnter", FeedHelp)
+    help:SetScript("OnLeave", GameTooltip_Hide)
 
-    local feedLink = CreateFrame("Button", nil, f)
-    feedLink:SetPoint("TOPRIGHT", -12, -168)
-    feedLink:SetSize(60, 14)
-    local feedHint = feedLink:CreateFontString(nil, "OVERLAY", "StockClerkFontSmall")
-    feedHint:SetPoint("RIGHT")
-    feedHint:SetText("/clerk log")
-    feedHint:SetTextColor(0.42, 0.42, 0.42, 1)
-    feedLink:SetScript("OnEnter", function(self)
-        feedHint:SetTextColor(Palette.brand[1], Palette.brand[2], Palette.brand[3], 1)
-        ShowFeedHelp(self)
-    end)
-    feedLink:SetScript("OnLeave", function()
-        feedHint:SetTextColor(0.42, 0.42, 0.42, 1)
-        GameTooltip:Hide()
-    end)
-    feedLink:SetScript("OnClick", function() ADDON.LogPopup:Toggle() end)
+    local link = CreateFrame("Button", nil, f)
+    link:SetPoint("TOPRIGHT", -12, -168)
+    link:SetSize(60, 14)
+    local linkText = link:CreateFontString(nil, "OVERLAY", "StockClerkFontSmall")
+    linkText:SetPoint("RIGHT")
+    linkText:SetText("/clerk log")
+    linkText:SetTextColor(0.42, 0.42, 0.42)
+    link:SetScript("OnEnter", function(self) linkText:SetTextColor(unpack(Palette.brand)); FeedHelp(self) end)
+    link:SetScript("OnLeave", function() linkText:SetTextColor(0.42, 0.42, 0.42); GameTooltip:Hide() end)
+    link:SetScript("OnClick", function() ADDON.LogPopup:Toggle() end)
 
-    -- Scrollframe hosts the feed rows. Simple, no fancy pooling -- the
-    -- panel is bounded and refreshes on Emit, so ~30 rows is the ceiling.
-    local scrollBg = f:CreateTexture(nil, "BACKGROUND")
-    scrollBg:SetColorTexture(Palette.bgDark[1], Palette.bgDark[2], Palette.bgDark[3], 0.6)
-    scrollBg:SetPoint("TOPLEFT", 8, -188)
-    scrollBg:SetPoint("BOTTOMRIGHT", -8, 8)
-
-    local scrollFrame = CreateFrame("ScrollFrame", "StockClerkSidecarScroll", f, "UIPanelScrollFrameTemplate")
-    scrollFrame:SetPoint("TOPLEFT", 10, -190)
-    scrollFrame:SetPoint("BOTTOMRIGHT", -28, 10)  -- -28 leaves room for the scrollbar
-
-    local feedContent = CreateFrame("Frame", nil, scrollFrame)
-    feedContent:SetSize(WIDTH - 40, 1)  -- height grows in Refresh
-    scrollFrame:SetScrollChild(feedContent)
-    f._feedContent = feedContent
-    f._feedRows = {}
+    local feedBg = f:CreateTexture(nil, "BACKGROUND")
+    feedBg:SetColorTexture(Palette.bgDark[1], Palette.bgDark[2], Palette.bgDark[3], 0.6)
+    feedBg:SetPoint("TOPLEFT", 8, -188)
+    feedBg:SetPoint("BOTTOMRIGHT", -8, 8)
+    local scroll = CreateFrame("ScrollFrame", "StockClerkSidecarScroll", f, "UIPanelScrollFrameTemplate")
+    scroll:SetPoint("TOPLEFT", 10, -190)
+    scroll:SetPoint("BOTTOMRIGHT", -28, 10)  -- room for the scroll bar
+    f.feed = CreateFrame("Frame", nil, scroll)
+    f.feed:SetSize(220, 1)
+    scroll:SetScrollChild(f.feed)
+    f.feedRows = {}
 
     Sidecar.frame = f
     return f
 end
 
--- One feed line: grey [time], then the log's wording with the item name in
--- its quality colour. Returns the text and whether it's a failure (red).
-local function FormatEntry(entry)
-    local failed = entry.kind == "error" or entry.kind == "buy_fail"
-    return ("|cff888888[%s]|r %s"):format(date("%H:%M", entry.ts or time()), ADDON.Log:Format(entry, false, true)), failed
+-- Feed line i, created on first use at a fixed height. A cut-off line shows
+-- in full in a tooltip (WoW's scroll frames don't scroll sideways).
+local function FeedRow(f, i)
+    local row = f.feedRows[i]
+    if row then return row end
+    row = CreateFrame("Frame", nil, f.feed)
+    row:SetPoint("TOPLEFT", 4, -(i - 1) * 14)
+    row:SetPoint("RIGHT", -4, 0)
+    row:SetHeight(14)
+    row.text = row:CreateFontString(nil, "ARTWORK", "StockClerkFontSmall")
+    row.text:SetAllPoints()
+    row.text:SetJustifyH("LEFT")
+    row.text:SetWordWrap(false)
+    row:SetScript("OnEnter", function(self)
+        if not self.text:IsTruncated() then return end
+        GameTooltip:SetOwner(self, "ANCHOR_LEFT")
+        GameTooltip:SetText(self.text:GetText(), 1, 1, 1, 1, true)
+        GameTooltip:Show()
+    end)
+    row:SetScript("OnLeave", GameTooltip_Hide)
+    f.feedRows[i] = row
+    return row
 end
 
--- -------------------------------------------------------------------------
--- Public: Refresh both sections.
--- -------------------------------------------------------------------------
 function Sidecar:Refresh()
     local f = self.frame
-    if not f then return end
-    local s = ADDON.DB:Settings()
+    local settings = ADDON.DB:Settings()
+    for _, c in ipairs(f.checks) do c:SetChecked(settings[c.key]) end
 
-    -- Settings widgets
-    for _, c in ipairs(f._checks) do c:SetChecked(s[c._key] and true or false) end
-
-    -- Activity feed: activity-level entries only (the log window has the
-    -- rest). Cap changes on one item within 10s collapse to the newest so
-    -- retyping a cap doesn't flood the feed.
-    for _, r in ipairs(f._feedRows) do r:Hide() end
-
-    local raw = {}
-    if ADDON.Log and ADDON.Log.Query then
-        raw = ADDON.Log:Query()  -- newest-first
-    end
-
-    local CAP_DEBOUNCE_SEC = 10
-
-    local entries = {}
-    local lastCapByItem = {}  -- itemID -> ts of last kept cap_change
-    for i = 1, #raw do
-        local e = raw[i]
-        if ADDON.Log.LEVEL[e.kind] == "activity" then
-            if e.kind == "cap_change" and e.itemID then
-                local prev = lastCapByItem[e.itemID]
-                -- Raw is newest-first, so "prev" is a NEWER kept entry;
-                -- we drop this one if it's within 10s of that newer one.
-                if prev and (prev - (e.ts or 0)) < CAP_DEBOUNCE_SEC then
-                    -- Swallow
-                else
-                    lastCapByItem[e.itemID] = e.ts or 0
-                    entries[#entries + 1] = e
-                end
-            else
-                entries[#entries + 1] = e
-            end
+    -- Activity entries, newest first. Cap changes on one item within 10s
+    -- collapse to the newest, so retyping a cap doesn't flood the feed.
+    local shown, lastCap = 0, {}
+    for _, e in ipairs(ADDON.Log:Query()) do
+        if shown == FEED_MAX then break end
+        local keep = ADDON.Log.LEVEL[e.kind] == "activity"
+        if keep and e.kind == "cap_change" then
+            keep = not (lastCap[e.itemID] and lastCap[e.itemID] - e.ts < CAP_DEBOUNCE)
+            if keep then lastCap[e.itemID] = e.ts end
+        end
+        if keep then
+            shown = shown + 1
+            local row = FeedRow(f, shown)
+            -- Base colour on the font string (red for failures), so the item
+            -- name's |r falls back to it; the name itself is quality-coloured.
+            row.text:SetText(("|cff888888[%s]|r %s"):format(date("%H:%M", e.ts), ADDON.Log:Format(e, false, true)))
+            row.text:SetTextColor(unpack((e.kind == "error" or e.kind == "buy_fail") and { 1, 0.53, 0.53 } or { 1, 1, 1 }))
+            row:Show()
         end
     end
-
-    local MAX = 30
-    local content = f._feedContent
-    local y = 0
-    for i = 1, math.min(#entries, MAX) do
-        local e = entries[i]
-        local row = f._feedRows[i]
-        if not row then
-            -- Row i always sits at the same height; a cut-off line shows in
-            -- full in a tooltip (no horizontal scrolling in WoW's scroll frames).
-            row = CreateFrame("Frame", nil, content)
-            row:SetPoint("TOPLEFT", 4, -y)
-            row:SetPoint("RIGHT", -4, 0)
-            row:SetHeight(14)
-            row.text = row:CreateFontString(nil, "ARTWORK", "StockClerkFontSmall")
-            row.text:SetAllPoints()
-            row.text:SetJustifyH("LEFT")
-            row.text:SetWordWrap(false)
-            row:SetScript("OnEnter", function(self)
-                if not self.text:IsTruncated() then return end
-                GameTooltip:SetOwner(self, "ANCHOR_LEFT")
-                GameTooltip:SetText(self.text:GetText(), 1, 1, 1, 1, true)
-                GameTooltip:Show()
-            end)
-            row:SetScript("OnLeave", GameTooltip_Hide)
-            f._feedRows[i] = row
-        end
-        -- The line's base colour lives on the font string, so the item name's
-        -- |r falls back to it (red for failures) instead of to white.
-        local text, failed = FormatEntry(e)
-        row.text:SetText(text)
-        if failed then row.text:SetTextColor(1, 0.53, 0.53) else row.text:SetTextColor(1, 1, 1) end
-        row:Show()
-        y = y + 14
-    end
-    content:SetHeight(math.max(1, y))
+    for i = shown + 1, #f.feedRows do f.feedRows[i]:Hide() end
+    f.feed:SetHeight(math.max(1, shown * 14))
 end
 
--- -------------------------------------------------------------------------
--- Public: toggle the panel anchored to the header hamburger button. We
--- prefer to anchor to the MainFrame's TOPRIGHT (not the button) so the
--- sidecar hangs off the window itself; the button is only passed so we
--- can traverse up to the frame if MainFrame's reference isn't available.
--- -------------------------------------------------------------------------
-function Sidecar:Toggle(anchorButton)
-    local mainFrame = (ADDON.MainFrame and ADDON.MainFrame.frame) or nil
-    local anchor    = mainFrame or (anchorButton and anchorButton:GetParent()) or UIParent
-    local f = self.frame or Build(anchor)
+-- Log calls this for each new activity entry.
+function Sidecar:OnActivity()
+    if self:IsShown() then self:Refresh() end
+end
 
-    if f:IsShown() then
-        f:Hide()
-        return
-    end
-
-    -- Re-anchor to current main frame each open so a moved main window
-    -- carries the sidecar with it. Match height to the main frame.
-    f:ClearAllPoints()
-    if mainFrame then
-        f:SetPoint("TOPLEFT", mainFrame, "TOPRIGHT", 1, 0)
-        f:SetHeight(mainFrame:GetHeight())
-    else
-        f:SetPoint("CENTER")
-    end
-
-    if ADDON.BulkImport then ADDON.BulkImport:Close() end  -- one panel at a time
+function Sidecar:Toggle()
+    local f = self.frame or Build()
+    if f:IsShown() then return f:Hide() end
     self:Refresh()
-    f:Show()
+    MF:ShowPanel(f)
 end
 
 function Sidecar:Hide()
@@ -328,9 +216,4 @@ end
 
 function Sidecar:IsShown()
     return self.frame and self.frame:IsShown()
-end
-
--- Log calls this for each new activity entry.
-function Sidecar:OnActivity()
-    if self:IsShown() then self:Refresh() end
 end

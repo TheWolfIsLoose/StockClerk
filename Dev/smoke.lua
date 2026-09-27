@@ -398,6 +398,21 @@ do -- Footer keeps the last action through redraws; the short count is on the bu
   assert(mf.restockBtn:GetText() == "Restock at AH (1)", "button count: " .. tostring(mf.restockBtn:GetText()))
   mf.statusBar, mf.scrollBox, CreateDataProvider, C_Item.GetItemInfo = saved, sb, cdp, gii
 end
+do -- Flyout, drag and dock paths run without errors (layout itself needs the game)
+  local mf = ADDON.MainFrame
+  local plan = { itemID = 42, planQuantity = 5, plannedSpend = 50000, name = "Test Potion", maxPrice = nil, stashBank = 2, stashWarband = 0 }
+  local bought
+  mf:ShowArmedToast(plan, { onBuy = function() bought = true end, onSkip = function() end, onStop = function() end })
+  mf:ShowSummaryToast({ title = "Restock complete", sub = "" })
+  mf:HideToast()
+  local ahf = AuctionHouseFrame
+  AuctionHouseFrame = { IsShown = function() return true end }
+  mf:DockToAHIfOpen(); mf:Undock()
+  AuctionHouseFrame = ahf
+  local row = Frame(nil); row._itemID = 42
+  mf:BeginRowDrag(row); mf:EndRowDrag(true)
+  assert(mf:RestockState().label, "restock state")
+end
 do -- Bank: auto-open when set, close only what we opened, track bankOpen
   local mf = ADDON.MainFrame
   assert(ADDON.DB:Settings().autoOpenAtBank == true, "autoOpenAtBank default")

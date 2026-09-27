@@ -105,8 +105,7 @@ local function CommitBatch(entries)
     local added, skipped, errored = 0, 0, 0
     for _, e in ipairs(entries) do
         if e.ok then
-            local existed = ADDON.DB.char and ADDON.DB.char.items
-                and ADDON.DB.char.items[e.itemID] ~= nil
+            local existed = ADDON.DB:GetItems()[e.itemID] ~= nil
             ADDON.DB:SetItem(e.itemID, e.need, e.maxPriceCopper)
             if existed then
                 skipped = skipped + 1
@@ -126,26 +125,17 @@ end
 local MF = ADDON.MainFrame
 local PALETTE = MF.Palette
 local WIDTH, PAD = 260, 12
-local frame  -- built on first open
 
 local function BuildFrame()
-    local f = CreateFrame("Frame", "StockClerkBulkImport", UIParent)
-    f:SetSize(WIDTH, 400)  -- height matches the main window on open
-    f:SetFrameStrata("HIGH")
-    f:SetFrameLevel(20)
-    f:SetToplevel(true)
-    f:EnableMouse(true)
-    f:Hide()
-    MF.ApplyFill(f, PALETTE.panelBg)
-    MF.AddBlackBorder(f)
+    MF.ApplyFontFace()
+    local f = MF.DockedPanel("StockClerkBulkImport")
     tinsert(UISpecialFrames, "StockClerkBulkImport")  -- Escape closes it
 
     local title = f:CreateFontString(nil, "OVERLAY", "StockClerkFont")
     title:SetPoint("TOPLEFT", PAD, -10)
     title:SetText("|cff98FF98Bulk import|r")
 
-    local closeX = MF.HeaderIcon(f, { { 12, 2, 0, math.pi / 4 }, { 12, 2, 0, -math.pi / 4 } },
-        "Close", function() f:Hide() end)
+    local closeX = MF.HeaderIcon(f, MF.CLOSE_GLYPH, "Close", function() f:Hide() end)
     closeX:SetPoint("TOPRIGHT", -4, -4)
 
     local instr = f:CreateFontString(nil, "OVERLAY", "StockClerkFontSmall")
@@ -209,7 +199,7 @@ local function BuildFrame()
     -- Mint border while the cursor holds an item: "you can drop here".
     local function PaintDropZone()
         local c = MF.CursorItemID() and PALETTE.brand or PALETTE.border
-        for _, t in pairs(wellEdges or {}) do t:SetColorTexture(c[1], c[2], c[3], 1) end
+        for _, t in ipairs(wellEdges) do t:SetColorTexture(c[1], c[2], c[3], 1) end
     end
     well:RegisterEvent("CURSOR_CHANGED")
     well:SetScript("OnEvent", PaintDropZone)
@@ -240,7 +230,6 @@ local function BuildFrame()
     addBtn:SetHeight(22)
     MF.StyleButton(addBtn)
     addBtn:SetText("Add all")
-    addBtn:SetNormalFontObject("StockClerkFont")
     addBtn:SetScript("OnClick", function()
         local entries = ParseBulkText(edit:GetText())
         if #entries == 0 then
@@ -266,7 +255,7 @@ local function BuildFrame()
     end)
 
     f:SetScript("OnShow", RefreshGhost)
-    frame = f
+    BI.frame = f
     return f
 end
 
@@ -274,27 +263,13 @@ end
 -- Public
 -- ---------------------------------------------------------------------------
 function BI:Open()
-    local f = frame or BuildFrame()
-    local main = MF.frame
-    if ADDON.Sidecar then ADDON.Sidecar:Hide() end  -- one panel at a time
-    f:ClearAllPoints()
-    if main then
-        f:SetPoint("TOPLEFT", main, "TOPRIGHT", 1, 0)
-        f:SetHeight(main:GetHeight())
-    else
-        f:SetPoint("CENTER")
-    end
-    f:Show()
+    MF:ShowPanel(self.frame or BuildFrame())
 end
 
 function BI:Close()
-    if frame then frame:Hide() end
-end
-
-function BI:IsShown()
-    return frame and frame:IsShown()
+    if self.frame then self.frame:Hide() end
 end
 
 function BI:Toggle()
-    if self:IsShown() then self:Close() else self:Open() end
+    if self.frame and self.frame:IsShown() then self:Close() else self:Open() end
 end
