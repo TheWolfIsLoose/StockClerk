@@ -364,6 +364,17 @@ local function ApplyRowHover(frame, on)
     if on then frame._rowHover:Show() else frame._rowHover:Hide() end
 end
 
+-- While a row is hovered it checks each frame whether the cursor is still
+-- inside it, and clears itself once it isn't. The row has several mouse
+-- areas of its own (grip, cells, Seen, trash); this catches an exit through
+-- any of them without each one having to report back.
+local function WatchRowHover(row)
+    if row:IsMouseOver() then return end
+    ApplyRowHover(row, false)
+    row.trash:Hide()
+    row:SetScript("OnUpdate", nil)
+end
+
 -- ---------------------------------------------------------------------------
 -- StockClerk never paints item tooltips (that's WoW's and the user's tooltip
 -- addon's job). Its own tooltips describe its own controls.
@@ -403,6 +414,8 @@ local function BuildRow(row)
     local tintGrip = DrawGlyph(row.grip, { { 8, 1, 3 }, { 8, 1, 0 }, { 8, 1, -3 } })
     tintGrip(GRIP_REST, 0.85)
     row.grip:SetScript("OnEnter", function(self)
+        local r = self:GetParent()
+        r:GetScript("OnEnter")(r)  -- entering straight onto the grip still lights the row
         tintGrip(Palette.brand)
         -- ANCHOR_TOP for consistency.
         GameTooltip:SetOwner(self, "ANCHOR_TOP")
@@ -549,9 +562,9 @@ local function BuildRow(row)
     row.lastSeenHit:SetPoint("RIGHT", row, "RIGHT", -30, 0)
     row.lastSeenHit:EnableMouse(true)
     row.lastSeenHit:SetScript("OnEnter", function(self)
-        -- No price, no tooltip.
         local r = self:GetParent()
-        if not r or not r._lastPrice then return end
+        r:GetScript("OnEnter")(r)  -- entering straight onto Seen still lights the row
+        if not r._lastPrice then return end  -- no price, no tooltip
         local lp = r._lastPrice
         local ago = time() - (lp.seenAt or 0)
         local agoText
@@ -591,17 +604,15 @@ local function BuildRow(row)
     local function RowEnter(r)
         ApplyRowHover(r, true)
         r.trash:Show()
+        r:SetScript("OnUpdate", WatchRowHover)
     end
 
-    -- Checked right away, not a frame later: moving onto one of the row's own
-    -- cells or its trash button keeps the cursor inside the row, so the
-    -- hover stays; anywhere else clears it. (The old one-frame delay could
-    -- misread a fast exit and leave the highlight stuck.)
+    -- Moving onto one of the row's own mouse areas keeps the cursor inside
+    -- the row, so the hover stays; WatchRowHover clears it on the real exit.
     local function RowLeave(r)
         if r:IsMouseOver() then return end
-        ApplyRowHover(r, false)
         GameTooltip:Hide()
-        r.trash:Hide()
+        WatchRowHover(r)
     end
 
     row:SetScript("OnEnter",  function(self) RowEnter(self) end)
@@ -795,6 +806,7 @@ local function InitializeRow(row, data)
     local over = row:IsMouseOver()
     ApplyRowHover(row, over)
     row.trash:SetShown(over)
+    row:SetScript("OnUpdate", over and WatchRowHover or nil)
 
     -- Pooled rows get rebound to other items (refresh, scroll, filter). An
     -- editor left open and focused would keep capturing every key game-wide
