@@ -52,7 +52,7 @@ ADDON.MainFrame = MF
 -- ---------------------------------------------------------------------------
 -- Theme
 -- ---------------------------------------------------------------------------
-local ROW_HEIGHT = 30
+local ROW_HEIGHT = 24
 
 -- ---------------------------------------------------------------------------
 -- Palette — ported from atrocityEssentials' ThemeDefaults (near-black,
@@ -447,7 +447,7 @@ local function BuildRow(row)
 
     -- Icon (shifted right by GRIP_W to clear the grip handle).
     row.icon = row:CreateTexture(nil, "OVERLAY")
-    row.icon:SetSize(22, 22)
+    row.icon:SetSize(18, 18)
     row.icon:SetPoint("LEFT", GRIP_W + 8, 0)
     row.icon:SetTexCoord(0.08, 0.92, 0.08, 0.92)   -- trim default 5% border
 
@@ -460,7 +460,7 @@ local function BuildRow(row)
     -- outline atlas) tinted with C_Item.GetItemQualityColor.
     row.iconBorder = row:CreateTexture(nil, "OVERLAY", nil, 1)
     row.iconBorder:SetTexture("Interface\\Common\\WhiteIconFrame")
-    row.iconBorder:SetSize(26, 26)  -- slightly larger than the 22x22 icon so the frame reads clearly
+    row.iconBorder:SetSize(22, 22)  -- slightly larger than the 18x18 icon so the frame reads clearly
     row.iconBorder:SetPoint("CENTER", row.icon, "CENTER", 0, 0)
     row.iconBorder:Hide()  -- shown by SetText path when quality is known and >= common
 
