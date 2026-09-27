@@ -56,12 +56,24 @@ local function Build(anchor)
     -- Checkbox rows: label says what it does; a tooltip only where it
     -- needs more than the label. The label is part of the click area.
     local function Check(y, label, key, tipTitle, tipBody)
-        local c = CreateFrame("CheckButton", nil, f, "UICheckButtonTemplate")
-        c:SetPoint("TOPLEFT", 8, y)
-        c:SetSize(22, 22)
+        -- Flat box: dark well + black border like the edit boxes, a mint
+        -- square when on, a faint wash on hover.
+        local c = CreateFrame("CheckButton", nil, f)
+        c:SetPoint("TOPLEFT", 14, y - 3)
+        c:SetSize(16, 16)
         c:SetHitRectInsets(0, -(WIDTH - 40), 0, 0)
+        ApplyFill(c, Palette.fieldFill)
+        AddBlackBorder(c)
+        local tick = c:CreateTexture(nil, "OVERLAY")
+        tick:SetColorTexture(Palette.brand[1], Palette.brand[2], Palette.brand[3], 1)
+        tick:SetSize(8, 8)
+        tick:SetPoint("CENTER")
+        c:SetCheckedTexture(tick)
+        local wash = c:CreateTexture(nil, "HIGHLIGHT")
+        wash:SetColorTexture(1, 1, 1, 0.12)
+        wash:SetAllPoints()
         local text = c:CreateFontString(nil, "OVERLAY", "StockClerkFontHighlight")
-        text:SetPoint("LEFT", c, "RIGHT", 2, 0)
+        text:SetPoint("LEFT", c, "RIGHT", 8, 0)
         text:SetText(label)
         c:SetScript("OnClick", function(self)
             local on = self:GetChecked() and true or false
