@@ -247,8 +247,9 @@ Lua: ~5,650 → ~3,330 lines (-41%), one file fewer.
 - **Fixed:** the 7 font objects copied themselves (a bulk rename hit the
   table meant to point at Blizzard's fonts). Now 3 white fonts + a grey
   disabled font; same look.
-- **Fixed during the rewrite:** a restock stopped mid-search could still
-  arm the flyout when the search came back (caught by the new smoke check).
+- Caught before shipping: the RestockLoop rewrite briefly let a restock
+  stopped mid-search arm the flyout when the search came back; the new
+  smoke check found it (old code didn't have this bug).
 - Locale.lua inlined and removed (no localization planned; easy to bring
   back). `/clerk dump` and `/clerk pending` removed: the `/clerk log`
   report now lists the items (bags/target, cap) and purchases waiting in
@@ -264,7 +265,6 @@ Lua: ~5,650 → ~3,330 lines (-41%), one file fewer.
 
 - Under the hood: Stock Clerk's code was tightened throughout (about 40% smaller) with no change to how it works.
 - `/clerk log` now also lists your items and anything still waiting in the mail, so a bug report has everything in one paste. `/clerk dump` and `/clerk pending` are gone.
-- Fixed: stopping a restock right as a search finished could still show the buy prompt.
 
 Your list, caps and settings carry over unchanged.
 ```
