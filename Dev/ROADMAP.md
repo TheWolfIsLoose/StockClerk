@@ -293,7 +293,6 @@ keyboard navigation was already gone; `Dev/STYLE.md` written.
 
 **Before cutting beta2:**
 - Player's in-game look at the whole pass.
-- C2 check: the window still auto-opens and docks at the AH with Auctionator.
 - ~~C2 AH check~~ **Done:** docking works with Auctionator (it's a tab in the AH window).
 - **Decided 2026-09-27:** Enter adds from either box, so the + button
   became **bulk import** (drawn "list +" icon) and left the side panel;
