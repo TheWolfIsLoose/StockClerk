@@ -280,28 +280,28 @@ MF.Refresh = function() refreshes = refreshes + 1 end
 local row = Frame(nil)
 row.scripts.OnEnter = function() end
 row.scripts.OnLeave = function() end
-local okRow, errRow = pcall(capturedInit, row, { itemID = 42, need = 20, maxPrice = 500000 })
+local okRow, errRow = pcall(capturedInit, row, { itemID = 42, need = 20, maxPrice = 500000, name = "Test Potion", index = 1 })
 io.stdout:write("InitializeRow " .. (okRow and "OK" or ("ERR " .. tostring(errRow))) .. "\n")
 assert(okRow, tostring(errRow))
-for _, k in ipairs({ "capCell", "needCell", "priceEdit", "needEdit", "priceEditBg", "needEditBg", "cap", "need" }) do
+for _, k in ipairs({ "capCell", "needCell", "capEdit", "needEdit", "cap", "need" }) do
   assert(row[k], "row." .. k .. " missing")
 end
 row.capCell.scripts.OnEnter(row.capCell); row.capCell.scripts.OnLeave(row.capCell)
 row.needCell.scripts.OnEnter(row.needCell); row.needCell.scripts.OnLeave(row.needCell)
 -- Cap: open prefills 50g, Enter with 75 commits 750000 copper
 row.capCell.scripts.OnClick(row.capCell)
-assert(row.priceEdit:IsShown() and row.priceEdit._text == "50", "cap prefill: " .. tostring(row.priceEdit._text))
-assert(row.capCell._priceEditActive == true)
-row.priceEdit._text = "75"
-row.priceEdit.scripts.OnEnterPressed(row.priceEdit)
+assert(row.capEdit:IsShown() and row.capEdit._text == "50", "cap prefill: " .. tostring(row.capEdit._text))
+assert(row.capCell.editing == true)
+row.capEdit._text = "75"
+row.capEdit.scripts.OnEnterPressed(row.capEdit)
 assert(#calls == 1 and calls[1][1] == "cap" and calls[1][3] == 750000, "cap commit")
-assert(not row.priceEdit:IsShown() and row.cap:IsShown() and refreshes == 1 and emits[#emits] == "cap_change")
+assert(not row.capEdit:IsShown() and row.cap:IsShown() and refreshes == 1 and emits[#emits] == "cap_change")
 -- Same value again: no DB write, no refresh
-row.capCell.scripts.OnClick(row.capCell); row.priceEdit.scripts.OnEnterPressed(row.priceEdit)
+row.capCell.scripts.OnClick(row.capCell); row.capEdit.scripts.OnEnterPressed(row.capEdit)
 assert(#calls == 1 and refreshes == 1, "no-op commit should not write")
 -- Blank clears the cap
-row.capCell.scripts.OnClick(row.capCell); row.priceEdit._text = ""
-row.priceEdit.scripts.OnEnterPressed(row.priceEdit)
+row.capCell.scripts.OnClick(row.capCell); row.capEdit._text = ""
+row.capEdit.scripts.OnEnterPressed(row.capEdit)
 assert(calls[2][1] == "cap" and calls[2][3] == nil, "blank should clear cap")
 -- Need: Escape aborts
 row.needCell.scripts.OnClick(row.needCell); assert(row.needEdit._text == "20")
@@ -315,7 +315,7 @@ assert(calls[3][1] == "need" and calls[3][3] == 30 and emits[#emits] == "target_
 row.needCell.scripts.OnClick(row.needCell); row.needEdit._text = "55"
 row.needEdit._focus = false -- deferred focus-lost in WoW; sibling close must not commit
 row.capCell.scripts.OnClick(row.capCell)
-assert(not row.needEdit:IsShown() and row.needCell._needEditActive == false and row.priceEdit:IsShown())
+assert(not row.needEdit:IsShown() and row.needCell.editing == false and row.capEdit:IsShown())
 assert(#calls == 3, "switching editors must not commit the sibling")
 -- Invalid need (0) ignored
 row.needCell.scripts.OnClick(row.needCell); row.needEdit._text = "0"; row.needEdit.scripts.OnEnterPressed(row.needEdit)
@@ -391,11 +391,11 @@ do -- Footer keeps the last action through redraws; the short count is on the bu
   local bar = { SetText = function(self, t) self.t = t end }
   local saved, sb, cdp, gii = mf.statusBar, mf.scrollBox, CreateDataProvider, C_Item.GetItemInfo
   mf.statusBar, mf.scrollBox = bar, { SetDataProvider = function() end }
-  CreateDataProvider = function() return { Insert = function() end } end
+  CreateDataProvider = function() return { Insert = function() end, GetSize = function() return 1 end } end
   C_Item.GetItemInfo = gii or function() end
   mf:SetStatus("Added 12 items"); mf:_RefreshNow()
   assert(bar.t == "Added 12 items", "redraw overwrote the footer: " .. tostring(bar.t))
-  assert(mf.restockBtn._label:GetText() == "Restock at AH (1)", "button count: " .. tostring(mf.restockBtn._label:GetText()))
+  assert(mf.restockBtn:GetText() == "Restock at AH (1)", "button count: " .. tostring(mf.restockBtn:GetText()))
   mf.statusBar, mf.scrollBox, CreateDataProvider, C_Item.GetItemInfo = saved, sb, cdp, gii
 end
 do -- Bank: auto-open when set, close only what we opened, track bankOpen
@@ -406,7 +406,7 @@ do -- Bank: auto-open when set, close only what we opened, track bankOpen
   assert(mf.frame._shown and ADDON.bankOpen, "did not auto-open at bank")
   fire("PLAYER_INTERACTION_MANAGER_FRAME_HIDE", 8)
   assert(not mf.frame._shown and not ADDON.bankOpen, "did not close with bank")
-  mf:Toggle()                                        -- user opens it by hand
+  mf:Show()                                          -- user opens it by hand
   fire("PLAYER_INTERACTION_MANAGER_FRAME_SHOW", 8); fire("PLAYER_INTERACTION_MANAGER_FRAME_HIDE", 8)
   assert(mf.frame._shown, "closed a window the user opened")
   mf.frame._shown = false
@@ -421,7 +421,7 @@ do -- Filter chip: shows only short items (items 111 need 5, 42 need 30; bags ho
   local sb = mf.scrollBox
   mf.scrollBox = { SetDataProvider = function(_, p) shown = p end }
   local origCDP = CreateDataProvider
-  CreateDataProvider = function() local t = { n = {} }; function t:Insert(x) self.n[#self.n + 1] = x.itemID end; return t end
+  CreateDataProvider = function() local t = { n = {} }; function t:Insert(x) self.n[#self.n + 1] = x.itemID end; function t:GetSize() return #self.n end; return t end
   local gii = C_Item.GetItemInfo; C_Item.GetItemInfo = gii or function() end
   ADDON.DB:SetStuckOnly(true); mf:_RefreshNow()
   C_Item.GetItemInfo = gii

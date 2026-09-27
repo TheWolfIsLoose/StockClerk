@@ -46,11 +46,11 @@ local function Build()
     ADDON.MainFrame.AddBlackBorder(f)
 
     -- Title
-    local title = f:CreateFontString(nil, "OVERLAY", "StockClerkFontNormal")
+    local title = f:CreateFontString(nil, "OVERLAY", "StockClerkFont")
     title:SetPoint("TOPLEFT", 12, -10)
     title:SetText("|cff98FF98Stock|r|cffffffffClerk|r log")
 
-    local hint = f:CreateFontString(nil, "OVERLAY", "StockClerkFontDisableSmall")
+    local hint = f:CreateFontString(nil, "OVERLAY", "StockClerkFontSmall")
     hint:SetPoint("TOPLEFT", 12, -28)
     hint:SetText("|cff888888Everything is selected: press Ctrl+C and paste it into your bug report.|r")
 
