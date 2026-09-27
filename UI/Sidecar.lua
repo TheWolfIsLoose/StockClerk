@@ -317,6 +317,7 @@ function Sidecar:Toggle(anchorButton)
         f:SetPoint("CENTER")
     end
 
+    if ADDON.BulkImport then ADDON.BulkImport:Close() end  -- one panel at a time
     self:Refresh()
     f:Show()
 end

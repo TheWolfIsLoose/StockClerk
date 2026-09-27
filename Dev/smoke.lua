@@ -212,6 +212,13 @@ ok, err = pcall(function() ADDON.LogPopup:Show() end)
 io.stdout:write("LogPopup " .. (ok and "OK" or ("ERR " .. tostring(err))) .. "\n")
 ok, err = pcall(function() ADDON.BulkImport:Open() end)
 io.stdout:write("BulkImport " .. (ok and "OK" or ("ERR " .. tostring(err))) .. "\n")
+do -- Bulk parser: id [target [cap]], comments skipped, bad lines reported
+  local r = ADDON.BulkImport.ParseBulkText("212283\n7 20 500\n# note\nabc\n1 2 3 4\n5 0")
+  assert(#r == 5, "bulk entries " .. #r)
+  assert(r[1].ok and r[1].need == 1 and not r[1].maxPriceCopper, "bulk id only")
+  assert(r[2].ok and r[2].need == 20 and r[2].maxPriceCopper == 5000000, "bulk id target cap")
+  assert(not r[3].ok and not r[4].ok and not r[5].ok, "bulk bad lines")
+end
 
 -- Row editor behavior
 ADDON.debug = false

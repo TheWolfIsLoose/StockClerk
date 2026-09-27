@@ -1092,6 +1092,7 @@ function MF:Build()
         if ADDON.Sidecar and ADDON.Sidecar.Hide then
             pcall(function() ADDON.Sidecar:Hide() end)
         end
+        pcall(function() ADDON.BulkImport:Close() end)
 
         -- Reset propagate: the root frame keeps the keyboard while hidden.
         f:SetPropagateKeyboardInput(true)
@@ -1245,7 +1246,7 @@ function MF:Build()
         GameTooltip:Show()
     end)
     bulkBtn:HookScript("OnLeave", function() GameTooltip:Hide(); tintBulk(ICON_REST) end)
-    bulkBtn:SetScript("OnClick", function() ADDON.BulkImport:Open() end)
+    bulkBtn:SetScript("OnClick", function() ADDON.BulkImport:Toggle() end)
 
     local function DoAdd()
         local raw = addBox:GetText()

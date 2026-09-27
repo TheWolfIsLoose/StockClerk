@@ -1,34 +1,15 @@
 --[[
     Stock Clerk - UI/BulkImport.lua
 
-    Bulk item-ID paste dialog. Reached from the "+…" button on the main
-    frame toolbar. Accepts a multi-line paste and adds every valid line
-    in one commit.
+    Bulk import panel: paste many item IDs at once. Opened by the square
+    button on the toolbar; docks to the main window's right edge like the
+    side panel (opening one closes the other).
 
-    Format (per line, space-separated):
-        itemID
-        itemID target
-        itemID target cap
-
-    Where:
-        itemID  - positive integer (bare digits; item links must be
-                  reduced to a numeric ID by the user before paste)
-        target  - positive integer stock target (silent default: 1 to
-                  match v1.1's zero-friction single-add behaviour)
-        cap     - whole-gold price cap (converted to copper on commit);
-                  optional, blank = no cap
-
-    Rules:
-      - Blank lines and lines starting with '#' or '//' are skipped.
-      - Any parse or validation error on a line is reported inline and
-        that line is skipped; other lines still commit. No partial-line
-        recovery — the whole line either commits or is skipped.
-      - Commit runs synchronously against ADDON.DB:SetItem then triggers
-        one Refresh at the end (avoids O(n) refresh storm).
-
-    Behaviour is deliberately conservative: no name lookups, no
-    item-link expansion, no server round-trips. It's a power-user paste
-    surface, not a search UI.
+    One item per line, space-separated: itemID, then optionally target, then cap.
+      target  positive integer, default 1
+      cap     whole gold, optional (blank = no cap)
+    Blank lines and lines starting with # or // are skipped. A bad line is
+    reported and skipped; the rest still commit, with one Refresh at the end.
 ]]
 
 local addonName = ...
@@ -77,19 +58,19 @@ local function ParseBulkText(text)
                 entry.ok = false; entry.err = "empty"
             elseif #tokens > 3 then
                 entry.ok = false
-                entry.err = "too many fields (expected: id [target [cap]])"
+                entry.err = "too many numbers (ID, target, cap)"
             else
                 local id = tonumber(tokens[1])
                 if not id or id <= 0 or math.floor(id) ~= id then
-                    entry.ok = false; entry.err = "invalid item ID"
+                    entry.ok = false; entry.err = "not an item ID"
                 else
                     entry.itemID = id
-                    local need = 1  -- v1.1 silent default
+                    local need = 1
                     if tokens[2] then
                         need = tonumber(tokens[2])
                         if not need or need <= 0 or math.floor(need) ~= need then
                             entry.ok = false
-                            entry.err = "target must be a positive integer"
+                            entry.err = "target must be a whole number"
                         end
                     end
                     if entry.ok == nil then
@@ -98,7 +79,7 @@ local function ParseBulkText(text)
                             local capGold = tonumber(tokens[3])
                             if not capGold or capGold < 0 or math.floor(capGold) ~= capGold then
                                 entry.ok = false
-                                entry.err = "cap must be a whole number of gold"
+                                entry.err = "cap must be whole gold"
                             elseif capGold > 0 then
                                 entry.maxPriceCopper = capGold * 10000
                             end
@@ -119,7 +100,7 @@ BI.ParseBulkText = ParseBulkText
 -- ---------------------------------------------------------------------------
 -- Commit
 -- ---------------------------------------------------------------------------
--- Runs the parsed batch. Returns counts { added, skipped, errored }.
+-- Runs the parsed batch. Returns added, updated (already listed), errored.
 local function CommitBatch(entries)
     local added, skipped, errored = 0, 0, 0
     for _, e in ipairs(entries) do
@@ -128,7 +109,7 @@ local function CommitBatch(entries)
                 and ADDON.DB.char.items[e.itemID] ~= nil
             ADDON.DB:SetItem(e.itemID, e.need, e.maxPriceCopper)
             if existed then
-                skipped = skipped + 1  -- overwrite still counts as "already there"
+                skipped = skipped + 1
             else
                 added = added + 1
             end
@@ -140,233 +121,146 @@ local function CommitBatch(entries)
 end
 
 -- ---------------------------------------------------------------------------
--- UI
+-- UI (see Dev/STYLE.md)
 -- ---------------------------------------------------------------------------
--- Styling reuses the main window's palette and helpers so the popup reads
--- as part of the same addon rather than a stock Blizzard dialog.
-local PALETTE = ADDON.MainFrame.Palette
-local ApplyFill, AddBorder = ADDON.MainFrame.ApplyFill, ADDON.MainFrame.AddBlackBorder
-local frame  -- lazy-built singleton
-
-local function StyleFrame(f)
-    ApplyFill(f, PALETTE.bgDark)
-    -- Border lives on a raised child frame at TOOLTIP strata so nothing
-    -- inside can paint over it -- same recipe MainFrame uses.
-    local borderFrame = CreateFrame("Frame", nil, f)
-    borderFrame:SetAllPoints(f)
-    borderFrame:SetFrameStrata("TOOLTIP")
-    borderFrame:SetFrameLevel(f:GetFrameLevel() + 100)
-    AddBorder(borderFrame)
-end
-
-local function StyleBtn(btn)
-    ApplyFill(btn, PALETTE.btnRest)
-    local hover = btn:CreateTexture(nil, "BORDER")
-    hover:SetAllPoints()
-    hover:SetColorTexture(PALETTE.hoverWash[1], PALETTE.hoverWash[2],
-                          PALETTE.hoverWash[3], PALETTE.hoverWash[4])
-    hover:Hide()
-    btn:HookScript("OnEnter", function() hover:Show() end)
-    btn:HookScript("OnLeave", function() hover:Hide() end)
-    AddBorder(btn)
-end
+local MF = ADDON.MainFrame
+local PALETTE = MF.Palette
+local WIDTH, PAD = 260, 12
+local frame  -- built on first open
 
 local function BuildFrame()
-    local f = CreateFrame("Frame", "StockClerkBulkImport", UIParent, "BackdropTemplate")
-    f:SetSize(DIALOG_W, DIALOG_H)
-    f:SetPoint("CENTER")
-    f:SetFrameStrata("DIALOG")
+    local f = CreateFrame("Frame", "StockClerkBulkImport", UIParent)
+    f:SetSize(WIDTH, 400)  -- height matches the main window on open
+    f:SetFrameStrata("HIGH")
+    f:SetFrameLevel(20)
     f:SetToplevel(true)
     f:EnableMouse(true)
-    f:SetMovable(true)
-    f:SetClampedToScreen(true)
-    f:RegisterForDrag("LeftButton")
-    f:SetScript("OnDragStart", f.StartMoving)
-    f:SetScript("OnDragStop", f.StopMovingOrSizing)
     f:Hide()
-    StyleFrame(f)
+    MF.ApplyFill(f, PALETTE.panelBg)
+    MF.AddBlackBorder(f)
+    tinsert(UISpecialFrames, "StockClerkBulkImport")  -- Escape closes it
 
-    -- ---- Title ---------------------------------------------------------
-    local title = f:CreateFontString(nil, "OVERLAY", "StockClerkFontNormalLarge")
-    title:SetPoint("TOPLEFT", PAD, -PAD)
-    title:SetText("Bulk Import")
-    -- Mint accent on the title word to match the main-window title band
-    title:SetTextColor(PALETTE.brand[1], PALETTE.brand[2], PALETTE.brand[3], 1)
+    local title = f:CreateFontString(nil, "OVERLAY", "StockClerkFontNormal")
+    title:SetPoint("TOPLEFT", PAD, -10)
+    title:SetText("|cff98FF98Bulk import|r")
 
-    -- ---- Close (top-right) --------------------------------------------
-    local closeX = CreateFrame("Button", nil, f, "UIPanelCloseButton")
-    closeX:SetPoint("TOPRIGHT", 2, 2)
-    closeX:SetScript("OnClick", function() f:Hide() end)
+    local closeX = MF.HeaderIcon(f, { { 12, 2, 0, math.pi / 4 }, { 12, 2, 0, -math.pi / 4 } },
+        "Close", function() f:Hide() end)
+    closeX:SetPoint("TOPRIGHT", -4, -4)
 
-    -- ---- Instructions --------------------------------------------------
     local instr = f:CreateFontString(nil, "OVERLAY", "StockClerkFontHighlightSmall")
-    instr:SetPoint("TOPLEFT", PAD, -PAD - 24)
-    instr:SetPoint("TOPRIGHT", -PAD, -PAD - 24)
+    instr:SetPoint("TOPLEFT", PAD, -32)
+    instr:SetPoint("RIGHT", -PAD, 0)
     instr:SetJustifyH("LEFT")
-    instr:SetText("One item per line. Formats: |cffffffffid|r, |cffffffffid target|r, |cffffffffid target cap|r (cap = gold).")
+    instr:SetText("One item per line: |cffffffffID|r, |cffffffffID target|r or |cffffffffID target cap|r (cap in gold).")
+    instr:SetTextColor(0.8, 0.8, 0.8, 1)
 
-    -- ---- Multi-line paste area ----------------------------------------
-    -- ScrollFrame + EditBox is the standard WoW pattern for a multi-line
-    -- text field that grows past its visible area.
-    local scroll = CreateFrame("ScrollFrame", "StockClerkBulkImportScroll", f, "UIPanelScrollFrameTemplate")
-    scroll:SetPoint("TOPLEFT", PAD, -76)
-    scroll:SetPoint("TOPRIGHT", -PAD - 22, -76)  -- -22 to clear the scroll bar
-    scroll:SetHeight(EDIT_H)
+    -- Paste area fills the panel between the instructions and the status line.
+    local well = CreateFrame("Frame", nil, f)
+    well:SetPoint("TOPLEFT", PAD, -62)
+    well:SetPoint("BOTTOMRIGHT", -PAD, 72)
+    MF.ApplyFill(well, PALETTE.fieldFill)
+    MF.AddBlackBorder(well)
 
-    -- Backdrop for the edit area so it reads as an inset field. Uses
-    -- fieldFill + pure-black border to match MainFrame's editbox wells.
-    local scrollBg = CreateFrame("Frame", nil, scroll)
-    scrollBg:SetPoint("TOPLEFT", -2, 2)
-    scrollBg:SetPoint("BOTTOMRIGHT", 22, -2)  -- +22 clears the scroll bar
-    scrollBg:SetFrameLevel(scroll:GetFrameLevel() - 1)
-    ApplyFill(scrollBg, PALETTE.fieldFill)
-    AddBorder(scrollBg)
+    local scroll = CreateFrame("ScrollFrame", "StockClerkBulkImportScroll", well, "UIPanelScrollFrameTemplate")
+    scroll:SetPoint("TOPLEFT", 2, -2)
+    scroll:SetPoint("BOTTOMRIGHT", -22, 2)  -- room for the scroll bar
 
     local edit = CreateFrame("EditBox", nil, scroll)
     edit:SetMultiLine(true)
     edit:SetFontObject("ChatFontNormal")
-    edit:SetWidth(DIALOG_W - 2 * PAD - 22)
+    edit:SetWidth(WIDTH - 2 * PAD - 26)
     edit:SetAutoFocus(false)
     edit:SetMaxLetters(4000)
     edit:SetTextInsets(6, 6, 4, 4)
     edit:SetScript("OnEscapePressed", function() f:Hide() end)
+    edit:HookScript("OnHide", function(self) if self:HasFocus() then self:ClearFocus() end end)
     scroll:SetScrollChild(edit)
+    -- Clicking anywhere in the well focuses the box, not just its text.
+    well:EnableMouse(true)
+    well:SetScript("OnMouseDown", function() edit:SetFocus() end)
 
-    -- Ghost / example placeholder. Shown when the edit box is empty
-    -- and unfocused. Not a real placeholder (WoW's EditBox has no
-    -- built-in placeholder support for multi-line), so we render our
-    -- own FontString and toggle it on OnTextChanged / focus events.
+    -- Example shown while empty and unfocused (multi-line boxes have no placeholder).
     local ghost = edit:CreateFontString(nil, "OVERLAY", "StockClerkFontDisableSmall")
     ghost:SetPoint("TOPLEFT", 6, -4)
     ghost:SetJustifyH("LEFT")
-    ghost:SetJustifyV("TOP")
-    local ghostText = "Example paste:\n"
-    for _, ex in ipairs(GHOST_LINES) do ghostText = ghostText .. ex .. "\n" end
-    ghostText = ghostText:sub(1, -2)  -- strip trailing newline
-    ghost:SetText(ghostText)
-    ghost:SetTextColor(0.5, 0.5, 0.5, 0.7)
-
+    ghost:SetText("For example:\n212283\n212283 20\n212283 20 500")
+    ghost:SetTextColor(0.5, 0.5, 0.5, 0.8)
     local function RefreshGhost()
-        local text = edit:GetText()
-        if text == "" and not edit:HasFocus() then
-            ghost:Show()
-        else
-            ghost:Hide()
-        end
+        ghost:SetShown(edit:GetText() == "" and not edit:HasFocus())
     end
     edit:HookScript("OnTextChanged", RefreshGhost)
-    edit:HookScript("OnEditFocusGained", function() ghost:Hide() end)
+    edit:HookScript("OnEditFocusGained", RefreshGhost)
     edit:HookScript("OnEditFocusLost", RefreshGhost)
-    RefreshGhost()
 
-    -- ---- Status line (below edit) -------------------------------------
     local status = f:CreateFontString(nil, "OVERLAY", "StockClerkFontHighlightSmall")
-    status:SetPoint("TOPLEFT", PAD, -76 - EDIT_H - 8)
-    status:SetPoint("TOPRIGHT", -PAD, -76 - EDIT_H - 8)
-    status:SetJustifyH("LEFT")
+    status:SetPoint("BOTTOMLEFT", PAD, 38)
+    status:SetPoint("BOTTOMRIGHT", -PAD, 38)
     status:SetHeight(28)
-    status:SetText("")
+    status:SetJustifyH("LEFT")
+    status:SetJustifyV("TOP")
 
-    local function SetStatus(text, colour)
-        if colour == "err" then
-            status:SetText("|cffff8888" .. text .. "|r")
-        elseif colour == "ok" then
-            status:SetText("|cff98ff98" .. text .. "|r")
-        else
-            status:SetText(text)
-        end
-    end
-
-    -- ---- Buttons -------------------------------------------------------
     local addBtn = CreateFrame("Button", nil, f)
-    addBtn:SetSize(96, BTN_H)
-    addBtn:SetPoint("BOTTOMLEFT", PAD, PAD)
-    StyleBtn(addBtn)
-    local addTxt = addBtn:CreateFontString(nil, "OVERLAY", "StockClerkFontNormal")
-    addTxt:SetPoint("CENTER")
-    addTxt:SetText("Add All")
-    addTxt:SetTextColor(1, 1, 1, 1)
-
-    local cancelBtn = CreateFrame("Button", nil, f)
-    cancelBtn:SetSize(72, BTN_H)
-    cancelBtn:SetPoint("BOTTOMRIGHT", -PAD, PAD)
-    StyleBtn(cancelBtn)
-    local cancelTxt = cancelBtn:CreateFontString(nil, "OVERLAY", "StockClerkFontNormal")
-    cancelTxt:SetPoint("CENTER")
-    cancelTxt:SetText("Close")
-    cancelTxt:SetTextColor(0.9, 0.9, 0.9, 1)
-
-    cancelBtn:SetScript("OnClick", function() f:Hide() end)
-
+    addBtn:SetPoint("BOTTOMLEFT", PAD, 10)
+    addBtn:SetPoint("BOTTOMRIGHT", -PAD, 10)
+    addBtn:SetHeight(22)
+    MF.StyleButton(addBtn)
+    addBtn:SetText("Add all")
+    addBtn:SetNormalFontObject("StockClerkFontHighlight")
     addBtn:SetScript("OnClick", function()
-        local text = edit:GetText()
-        local entries = ParseBulkText(text)
+        local entries = ParseBulkText(edit:GetText())
         if #entries == 0 then
-            SetStatus("Nothing to import.", "err")
+            status:SetText("|cffff8888Nothing to add yet.|r")
             return
         end
-        local added, skipped, errored = CommitBatch(entries)
-        if ADDON.MainFrame and ADDON.MainFrame.Refresh then
-            ADDON.MainFrame:Refresh()
-        end
-        -- Build a summary line. Report all three counts even when a
-        -- category is zero so the caller can see at a glance that the
-        -- parser was consulted for everything they pasted.
-        local msg = ("%d added \194\183 %d overwrote \194\183 %d error%s")
-            :format(added, skipped, errored, errored == 1 and "" or "s")
+        local added, updated, errored = CommitBatch(entries)
+        MF:Refresh()
+        local msg = ("%d added, %d updated"):format(added, updated)
         if errored > 0 then
-            -- On errors we KEEP the dialog open so the user can see the
-            -- inline diagnostics and fix the offending lines. Append the
-            -- first two error lines so it's actionable at a glance
-            -- without scrolling the paste area.
-            local shown, buf = 0, {}
+            -- Stay open so the bad lines can be fixed; name the first two.
+            local bad = {}
             for _, e in ipairs(entries) do
-                if not e.ok and shown < 2 then
-                    buf[#buf + 1] = ("line %d: %s"):format(e.line, e.err)
-                    shown = shown + 1
-                end
+                if not e.ok and #bad < 2 then bad[#bad + 1] = ("line %d: %s"):format(e.line, e.err) end
             end
-            if #buf > 0 then msg = msg .. "\n" .. table.concat(buf, "; ") end
-            SetStatus(msg, "err")
+            status:SetText(("|cffff8888%s, %d skipped.|r %s"):format(msg, errored, table.concat(bad, "; ")))
         else
-            -- Full success: close the dialog. The main window's status
-            -- footer echoes the summary so the user still sees
-            -- confirmation of what was added.
             edit:SetText("")
-            RefreshGhost()
-            SetStatus("", nil)
-            if ADDON.MainFrame and ADDON.MainFrame.SetStatus then
-                ADDON.MainFrame:SetStatus("|cff98ff98" .. msg .. "|r")
-            end
+            status:SetText("")
+            MF:SetStatus("|cff98ff98Bulk import: " .. msg .. ".|r")
             f:Hide()
         end
     end)
 
-    -- Close-on-escape at the frame level too so the dialog can be
-    -- dismissed from anywhere, not just the edit box.
-    f:EnableKeyboard(true)
-    f:SetScript("OnKeyDown", function(self, key)
-        if key == "ESCAPE" then
-            self:SetPropagateKeyboardInput(false)
-            self:Hide()
-        else
-            self:SetPropagateKeyboardInput(true)
-        end
-    end)
-
+    f:SetScript("OnShow", RefreshGhost)
     frame = f
     return f
 end
 
 -- ---------------------------------------------------------------------------
--- Public: Open / Close
+-- Public
 -- ---------------------------------------------------------------------------
 function BI:Open()
-    if not frame then BuildFrame() end
-    frame:Show()
-    frame:Raise()
+    local f = frame or BuildFrame()
+    local main = MF.frame
+    if ADDON.Sidecar then ADDON.Sidecar:Hide() end  -- one panel at a time
+    f:ClearAllPoints()
+    if main then
+        f:SetPoint("TOPLEFT", main, "TOPRIGHT", 1, 0)
+        f:SetHeight(main:GetHeight())
+    else
+        f:SetPoint("CENTER")
+    end
+    f:Show()
 end
 
 function BI:Close()
     if frame then frame:Hide() end
+end
+
+function BI:IsShown()
+    return frame and frame:IsShown()
+end
+
+function BI:Toggle()
+    if self:IsShown() then self:Close() else self:Open() end
 end
