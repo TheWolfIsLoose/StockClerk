@@ -10,6 +10,36 @@ or, where it had no entry, from that version's GitHub release notes.
 > There is no v1.1.2 stable: the v1.1.2 alphas are the start of v1.2.0
 > (efficiency pass). v1.2.0 plan: `Dev/ROADMAP.md`.
 
+## v1.2.0-beta4 (2026-09-27)
+
+Checkout mode: the AH buy flyout is replaced by the list and footer.
+
+- The Restock button becomes Buy during a run (100px, same right edge as
+  Restock); Skip beside it; × at the footer's far left and Escape are the
+  only ways to stop (right-click stop and the footer Stop label are gone).
+- Footer stays 30px: "20 × Name" over the total plus progress ("2 of 4 ·
+  spent …") or amber warnings. Receipt after the run: "Done: bought N for
+  …g · N over cap · N not bought" (Stopped / AH closed variants).
+- Row marks in the grip slot: dot queued, mint chevron current (mint wash,
+  scrolled into view), mint check bought/pulled, dashes for skipped (grey),
+  over cap (amber, tooltip has the cheapest price) and not bought (red).
+  Unreached rows lose their marks on stop; the rest clear when the AH or
+  bank closes.
+- Buy waits 1.5s ("Buy (2)") only with a warning: copies in bank/warband,
+  no cap, or average unit price >125% of the Last Seen read before the
+  search. Otherwise live at once, except within 0.5s of the last click
+  (a double-click on Restock can't buy).
+- During a run: drag-reorder and click-to-search are off; Cap editing stays.
+- Restock from Bank uses the same bar and marks; button reads "Pulling...".
+- `AH:BuyUpTo` returns the cheapest price when every listing is over the cap.
+- Dev: `Dev\update.bat` stamps the commit into `Build.lua`; the header,
+  `/clerk log` and the version log line show "dev <hash>" for checkouts.
+- Resize grip is a drawn stepped-dot triangle in the corner margin; the
+  footer buttons moved 6px left to clear it.
+- In-game check 2026-09-27: double-click Restock, risk lock, Skip, Buy,
+  over cap, Escape and × stops, drag/search lock, AH close, bank pull
+  (mailed items correctly not pulled). No errors.
+
 ## v1.2.0-beta3 (2026-09-27)
 
 Full Ponytail pass (whole-repo audit, all 22 findings applied); behaviour

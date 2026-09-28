@@ -11,19 +11,10 @@ disagree), **Open** (needs an answer before build).
 
 ## Next session: start here
 
-**Handoff 2026-09-27 ~17:30 ET.** `v1.2.0-beta3` is released (in-game log
-was clean). `dev` now holds **Checkout mode for `v1.2.0-beta4`**, built and
-smoke-green but not yet seen in game (CHANGELOG.md still says beta3, so
-pushes to `dev` don't release). In order:
-
-1. **Beta4 in-game check:** the checklist in the Checkout mode section
-   (player syncs with `Dev\update.bat dev`, `/reload`). Screenshots of the
-   checkout bar at the 420px minimum width help.
-2. Fix what turns up; the tunables are at the top of the running section
-   in `RestockLoop.lua` (`BUY_LOCK`, `DEBOUNCE`, `PRICEY`).
-3. **Cut `v1.2.0-beta4`:** CHANGELOG.md ← the drafted beta4 notes,
-   Dev/HISTORY.md entry, push `dev`. Then stable `v1.2.0` (tasks under the
-   v1.2.0 section).
+**Handoff 2026-09-27 ~21:20 ET.** `v1.2.0-beta4` (Checkout mode) is
+released after a full in-game check. Next: stable `v1.2.0` (tasks and
+CHANGELOG draft under the v1.2.0 section; add Checkout mode to the draft),
+merge `dev` → `main`.
 
 State: `main` is still v1.1.1 plus the `update.bat` fix.
 
@@ -37,7 +28,7 @@ a release push's tag (`git ls-remote --tags origin`) before pushing again.
 
 ---
 
-## Checkout mode (v1.2.0-beta4): replace the AH buy flyout (Built 2026-09-27 on `dev`, awaiting in-game check)
+## Checkout mode (v1.2.0-beta4): replace the AH buy flyout (released 2026-09-27)
 
 Every AH purchase needs a player click (hardware event), so the run is
 always one click per item; this redesigns everything around that click.
