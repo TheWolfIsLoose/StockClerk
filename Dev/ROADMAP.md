@@ -11,9 +11,23 @@ disagree), **Open** (needs an answer before build).
 
 ## Next session: start here
 
-**Handoff 2026-09-27 ~21:50 ET.** Stable `v1.2.0` is released (`dev`
-merged into `main`). Next: pick up from the v1.3 candidates / Later list
-below; nothing is in flight.
+**Handoff 2026-09-27 ~22:15 ET (parked; resume later this week).**
+Stable `v1.2.0` is out (`main` = `dev`; only roadmap commits since).
+Next is **v1.3.0: deposit to the bank + warband supplier mode**, scoped
+in its section below, nothing built. In order:
+
+1. Get the player's answers to the three open decisions:
+   (a) Express-Restock at Bank auto-deposits for suppliers? (default no);
+   (b) surplus deposit for normal characters in 1.3 or later?;
+   (c) Copy list (bulk import export/paste) in 1.3? (recommended yes).
+2. In-game spike: addon code placing a bag stack into a warband tab slot
+   (`PickupContainerItem`), tab filters don't block it, chaining speed.
+3. Build as `v1.3.0-alpha1` on `dev`.
+
+Pending on the player's side: paste the CurseForge description and the
+GitHub "About" line (drafted in the 2026-09-27 session: pitch "A
+pocket-sized shopping list for WoW consumables..."; README intro is the
+same copy).
 
 State: `main` = `dev` = v1.2.0.
 
