@@ -21,7 +21,7 @@ Open follow-ups:
    Deposit (red mark, footer); a full warband bank.
 2. Tab deposit-filter preference if the probe (`/clerk bankprobe
    <itemID>`) shows filters matter.
-3. **v1.4 (planned, likely the feature-complete release):** minimap icon
+3. **v1.4 (planned, see its section):** minimap icon
    (setting to hide it) + cost estimate for your own list at the AH ("3
    short, about 1,240g at last seen prices"; the warband button tooltip
    already does this) + all screenshots retaken on that version.
@@ -748,6 +748,26 @@ hero shots of the Warband Bank stock.
 **Spike (short, in-game; probe on `dev`: `/clerk bankprobe <itemID>`):**
 placing a bag stack into a warband tab slot from addon code; tab deposit
 filters vs addon placement; how fast deposits chain.
+
+## v1.4.0 — Feature-complete polish (Planned 2026-09-28, not built)
+
+Likely the feature-complete release. Scope (Decided):
+- **Minimap icon** to open Stock Clerk, with a side-panel setting to hide
+  it.
+- **Cost estimate for your own list at the AH**: e.g. "3 short, about
+  1,240g at last seen prices" on the Restock button tooltip or footer
+  (skip stale prices). The warband button already does this
+  (`MF:RestockState`); reuse it for the "mine" lane.
+- **All screenshots retaken** on that version (README hero, bank, warband;
+  CurseForge Images tab).
+
+Undecided: **vendor restock** (at a merchant, buy short items it sells,
+checkout pattern; the player is thinking about it).
+Very low priority: **mailbox pickup** for listed items (scope creep: the
+player uses a mail addon for this).
+
+Release: internal testing on `dev`, then a stable tag (no public beta
+unless the scope grows; see `Dev/RELEASING.md`).
 
 ## Later (unscheduled)
 
