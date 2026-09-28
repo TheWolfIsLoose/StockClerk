@@ -86,7 +86,7 @@ end
 -- character's transit to its surplus (spent, deposited or never looted).
 function Loop:Sweep()
     for id in pairs(Ledger()) do self:_EffectiveHave(id) end
-    local transit = Transit()
+    local transit = ADDON.DB.global.transit[ADDON.DB:CharKey()] or {}  -- don't create one just to read it
     for id, qty in pairs(transit) do
         local left = math.min(qty, self:Surplus(id))
         transit[id] = left > 0 and left or nil

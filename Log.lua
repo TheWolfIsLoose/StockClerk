@@ -101,8 +101,8 @@ local SETTING_LABELS = {
     shopWarband = "Shop for the warband on this character",
 }
 
--- " on the warband list" for entries about the warband list.
-local function OnList(p) return p.list == "warband" and " on the warband list" or "" end
+-- "warband " before target/cap for warband-list entries (short: the feed is narrow).
+local function OnList(p) return p.list == "warband" and "warband " or "" end
 
 local STOP_REASONS = {
     done = "Restock finished", user_stop = "Restock stopped by you", user_esc = "Restock stopped by you",
@@ -116,12 +116,12 @@ local FORMAT = {
         return ("Added %s (target %s)"):format(item, p.need or "?")
     end,
     remove        = function(p, item) return ("Removed %s%s"):format(item, p.list == "warband" and " from the warband list" or "") end,
-    target_change = function(p, item) return ("%s%s: target %s to %s"):format(item, OnList(p), p.from or "?", p.to or "?") end,
+    target_change = function(p, item) return ("%s: %starget %s to %s"):format(item, OnList(p), p.from or "?", p.to or "?") end,
     cap_change    = function(p, item)
-        item = item .. OnList(p)
-        if not p.toCopper then return ("%s: cap removed"):format(item) end
-        if not p.fromCopper then return ("%s: cap set to %s"):format(item, Money(p.toCopper)) end
-        return ("%s: cap %s to %s"):format(item, Money(p.fromCopper), Money(p.toCopper))
+        local cap = OnList(p) .. "cap"
+        if not p.toCopper then return ("%s: %s removed"):format(item, cap) end
+        if not p.fromCopper then return ("%s: %s set to %s"):format(item, cap, Money(p.toCopper)) end
+        return ("%s: %s %s to %s"):format(item, cap, Money(p.fromCopper), Money(p.toCopper))
     end,
     buy_success   = function(p, item)
         return ("Bought %s %s%s for %s"):format(p.qty or "?", item, p.lane == "warband" and " for the warband" or "", Money(p.spentCopper))

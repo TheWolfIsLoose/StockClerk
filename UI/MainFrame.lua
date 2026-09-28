@@ -775,8 +775,9 @@ local function InitializeRow(row, data)
     if ADDON.debug then  -- trace only when this row's numbers change
         MF._traced = MF._traced or {}
         local sig = ("%d/%d/%d"):format(have, stashed, data.need)
-        if MF._traced[itemID] ~= sig then
-            MF._traced[itemID] = sig
+        local key = MF:View() .. itemID  -- per view, so switching views doesn't re-log every row
+        if MF._traced[key] ~= sig then
+            MF._traced[key] = sig
             ADDON.Debug("Row", ("%s id=%d have=%d stashed=%d need=%d"):format(MF:View(), itemID, have, stashed, data.need))
         end
     end
