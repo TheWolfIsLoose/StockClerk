@@ -11,20 +11,22 @@ disagree), **Open** (needs an answer before build).
 
 ## Next session: start here
 
-**2026-09-28: stable v1.3.0 released** (`main` = `dev`). Warband list,
-warband AH pass, deposit. Open follow-ups:
+**2026-09-28 ~11:55 ET: parked after stable v1.3.0** (`main` = `dev`).
+The player is using the addon and collecting feedback; StockClerk is close
+to feature-complete. New release policy in `Dev/RELEASING.md`: commit to
+`dev`, test internally, no public prereleases except big features.
+Open follow-ups:
 1. Not yet covered in-game: buy on one character, switch before
    depositing (transit: not short there); a soulbound listed item at
    Deposit (red mark, footer); a full warband bank.
 2. Tab deposit-filter preference if the probe (`/clerk bankprobe
    <itemID>`) shows filters matter.
-3. Player: paste the updated copy into CurseForge (same wording as the
-   README intro and the two new feature bullets).
+3. Candidates for later (see "Later"): vendor auto-buy, mailbox loot for
+   listed items, minimap icon.
 
-Pending on the player's side: paste the CurseForge description and the
-GitHub "About" line (drafted in the 2026-09-27 session: pitch "A
-pocket-sized shopping list for WoW consumables..."; README intro is the
-same copy).
+Pending on the player's side: paste the v1.3.0 CurseForge description
+(drafted 2026-09-28: README intro + features, commands as a list, no
+credits) and upload the warband screenshot to the CurseForge Images tab.
 
 State: `main` = `dev` = v1.2.0.
 
