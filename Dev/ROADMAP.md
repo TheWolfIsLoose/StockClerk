@@ -546,22 +546,79 @@ timers too.
 
 ---
 
-## v1.3 candidate — Deposit surplus (depends on 1.2 usage)
+## v1.3.0 — Deposit to the bank + warband supplier (Scoped 2026-09-27, not built)
 
-Only after Restock from Bank has proven reliable in the field.
+**Goal.** Let players put stock *into* the bank, so one character can buy
+in bulk for the warband and the others restock from it with the v1.2
+Restock from Bank.
 
-- **Decided:** never automatic. Extra copies in your bags are your call;
-  the addon doesn't move them unless you press a button.
-- Candidate UX: a **Deposit Surplus** button at the bank that moves
-  anything above target from bags to the bank, with a choice of
-  character bank or warband bank (warband is shared by every character
-  on the account; a character bank is only reachable by that character).
-- Reuses the 1.2 planner/executor in the other direction.
-- Open when scheduled: default destination, whether surplus of
-  soulbound items (which can't go in the warband bank) falls back to the
-  character bank.
+**The catch (why plain "deposit surplus" isn't enough).** A list's Target
+means one thing today: *how many to keep in this character's bags*, and
+Have counts bags only. A buyer alt using that model breaks:
+- Set Target 200 to buy 200 → after buying, nothing is "surplus", so
+  there's nothing to deposit.
+- Deposit anyway → bags drop to 0 → next AH trip buys 200 more, even
+  with 300 already in the warband bank. The alt's list can't see the
+  stock it's building.
+So the buyer alt needs its targets to mean *keep N in the warband bank*.
+That is one per-character switch, not a new list or new columns.
 
----
+**Design (Default; confirm before build)**
+1. **Supplier mode** (side panel checkbox, per character: "Stock the
+   warband bank"). Same list, same UI; the words change meaning:
+   - Target = how many to keep in the warband bank.
+   - Have = warband bank + bags + purchases in the mail (the alt's bags
+     are just the truck between the AH and the bank). The warband count is
+     readable anywhere (`GetItemCount` with the account-bank flag), so
+     checkout at the AH knows the real stock without a bank visit.
+   - Checkout buys to the warband target; the "N in your warband bank"
+     warning is off (that stock is the point). Character-bank copies
+     still warn.
+   - At the bank the footer button reads **Deposit to Warband (N)**:
+     every bag copy of a listed item goes into the warband bank (the
+     supplier keeps none). Rows tick like a pull.
+   - Visible cue so a main never runs in the wrong mode by accident: Have
+     column header reads **Warband**, and the header shows "supplier"
+     beside the version.
+2. **Surplus deposit for normal characters.** At the bank, a small drawn
+   icon button left of Restock from Bank, shown only when something in
+   your bags is above target: deposits the extra into the warband bank.
+   Nearly free once (3) exists.
+3. **Engine: reuse, don't write.** `BR.PlanPulls` is already
+   direction-free (sources, targets, amounts): a deposit is PlanPulls
+   with bag slots as sources, warband tab slots as targets and the
+   surplus as the amounts. The executor's "did it land" check changes
+   from "bag count went up" to "target slot grew and the cursor is
+   empty". Skip items the warband bank refuses
+   (`C_Bank.IsItemAllowedInBankType`, e.g. soulbound) and say so.
+
+**Rules (Decided unless marked)**
+- Never automatic: deposits only on a button press. Express-Restock at
+  Bank never deposits (**Default**; revisit for suppliers, where
+  auto-deposit is arguably the whole point).
+- Destination is the warband bank only (**Default**): the feature exists
+  to share stock; a character-bank deposit helps nobody else. Items that
+  can't go there are skipped and named in the footer.
+- One bank action per press; the location-switching footer button stays
+  one button (pull for normal characters, deposit for suppliers).
+
+**Open**
+- Setting up the supplier's list: lists are per character
+  (`SavedVariablesPerCharacter`), so an alt can't read a main's list.
+  Cheapest route: **Copy list** in bulk import (item IDs and targets as
+  text; paste on the other character). Moving lists account-wide is a
+  bigger change; skip unless asked.
+- Supplier targets for many mains: one number per item (e.g. 200 flasks
+  for everyone). Per-character demand math is out of scope.
+- Surplus deposit (2): ship with (1), or wait for demand?
+
+**Spike first (short, in-game):** placing a bag stack into a warband tab
+slot via `PickupContainerItem` from addon code; tab deposit-filter
+settings don't block manual placement; how fast deposits can chain.
+
+**Size estimate:** ~100-150 lines (mostly supplier-mode branches in
+Inventory/RestockLoop/footer and the deposit wrapper); no new files
+beyond maybe the copy-list text box reusing bulk import.
 
 ## Later (unscheduled)
 
