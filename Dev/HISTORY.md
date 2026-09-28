@@ -10,6 +10,14 @@ or, where it had no entry, from that version's GitHub release notes.
 > There is no v1.1.2 stable: the v1.1.2 alphas are the start of v1.2.0
 > (efficiency pass). v1.2.0 plan: `Dev/ROADMAP.md`.
 
+## v1.3.0 (2026-09-28)
+
+Stable release of v1.3.0-beta1 (below), fixes included. README: warband
+intro line, "A warband list" and "Deposit at the bank" features, new
+warband screenshot (`.assets/screenshots/warband.png`). Not yet covered
+in-game at release: switching characters before depositing (transit), a
+soulbound listed item at Deposit, a full warband bank.
+
 ## v1.3.0-beta1 (2026-09-28)
 
 Warband list: shared stock in the warband bank (design in `Dev/ROADMAP.md`).

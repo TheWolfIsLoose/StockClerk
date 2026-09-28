@@ -11,16 +11,15 @@ disagree), **Open** (needs an answer before build).
 
 ## Next session: start here
 
-**2026-09-28: v1.3.0-beta1 released** (Warband list). Verified in-game
-the same day: warband pass, alternating lanes, pull, deposit (fixed
-landing check). Next:
-1. Still unchecked in-game: buy on one character, switch before
+**2026-09-28: stable v1.3.0 released** (`main` = `dev`). Warband list,
+warband AH pass, deposit. Open follow-ups:
+1. Not yet covered in-game: buy on one character, switch before
    depositing (transit: not short there); a soulbound listed item at
    Deposit (red mark, footer); a full warband bank.
 2. Tab deposit-filter preference if the probe (`/clerk bankprobe
    <itemID>`) shows filters matter.
-3. Before stable v1.3.0: new public copy (README, CurseForge) and hero
-   shots of the Warband Bank stock.
+3. Player: paste the updated copy into CurseForge (same wording as the
+   README intro and the two new feature bullets).
 
 Pending on the player's side: paste the CurseForge description and the
 GitHub "About" line (drafted in the 2026-09-27 session: pitch "A
