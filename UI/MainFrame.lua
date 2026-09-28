@@ -987,7 +987,7 @@ function MF:Build()
     -- cursor never moves); RestockLoop debounces it against a double click.
     local restockBtn = CreateFrame("Button", nil, footer)
     restockBtn:SetSize(160, 22)
-    restockBtn:SetPoint("RIGHT", -12, 0)
+    restockBtn:SetPoint("RIGHT", -18, 0)  -- leaves the corner to the resize grip
     StyleButton(restockBtn)
     restockBtn:SetMotionScriptsWhileDisabled(true)  -- a disabled button still explains itself
     restockBtn:SetScript("OnClick", function()
@@ -1048,22 +1048,23 @@ function MF:Build()
     stopX:Hide()
     skipBtn:Hide()
 
-    -- ---- Resize grip (Blizzard's chat-frame size grabber art) -------------
+    -- ---- Resize grip: three drawn diagonals in the corner margin (clear of
+    -- the footer buttons), grey at rest, mint on hover ----------------------
     local grip = CreateFrame("Button", nil, f)
-    grip:SetSize(16, 16)
-    grip:SetPoint("BOTTOMRIGHT", -1, 1)
+    grip:SetSize(12, 12)
+    grip:SetPoint("BOTTOMRIGHT", -2, 2)
     grip:SetFrameLevel(f:GetFrameLevel() + 5)
-    grip:SetNormalTexture("Interface\\ChatFrame\\UI-ChatIM-SizeGrabber-Up")
-    grip:SetPushedTexture("Interface\\ChatFrame\\UI-ChatIM-SizeGrabber-Down")
-    grip:SetHighlightTexture("Interface\\ChatFrame\\UI-ChatIM-SizeGrabber-Highlight")
+    local d = math.pi / 4
+    local tintResize = DrawGlyph(grip, { { 11, 1, 0, d, 0 }, { 6, 1, -2.5, d, 2.5 }, { 3, 1, -4.5, d, 4.5 } })
     grip:SetScript("OnMouseDown", function(_, button) if button == "LeftButton" then f:StartSizing("BOTTOMRIGHT") end end)
     grip:SetScript("OnMouseUp", function() f:StopMovingOrSizing(); SavePosition(f, true) end)
     grip:SetScript("OnEnter", function()
+        tintResize(Palette.brand)
         GameTooltip:SetOwner(grip, "ANCHOR_LEFT")
         GameTooltip:SetText("Drag to resize", 1, 1, 1)
         GameTooltip:Show()
     end)
-    grip:SetScript("OnLeave", GameTooltip_Hide)
+    grip:SetScript("OnLeave", function() tintResize(ICON_REST); GameTooltip:Hide() end)
 
     -- ---- The list -----------------------------------------------------------
     local listHolder = CreateFrame("Frame", nil, f)
