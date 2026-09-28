@@ -370,7 +370,7 @@ do -- Checkout: search -> arm -> Buy (risk lock, debounce, double click buys onc
   assert(ADDON.DB.char.pendingBuys[42].qty == 23 and L:PreviewShortfallCount() == 0, "mail ledger counts the buy")
   assert(mf.marks[42].kind == "done", "bought row is ticked")
   flush(mark)
-  assert(not L:IsActive() and footer:find("bought 1 for") and footer:find("check your mail"), "receipt: " .. tostring(footer))
+  assert(not L:IsActive() and footer:find("bought 1 for"), "receipt: " .. tostring(footer))
 
   -- Capped, no warnings: Buy is live at once, but not within 0.5s of the Restock click.
   ADDON.DB.char.pendingBuys = {}

@@ -98,8 +98,9 @@ debounce, double click, marks, receipt, over cap, late results after Stop).
   editing stays live (the next run uses it). Also: clicking a row to search
   is off during a run (it would cancel the run's own search).
 - Receipt in the footer: "Done: bought 3 for 1,219g · 1 over cap · 1 not
-  bought · check your mail" (Stopped / AH closed variants). Long receipts
-  truncate at min width; the log has the detail.
+  bought" (Stopped / AH closed variants). No "check your mail": it
+  truncated even above min width, and the tick's tooltip says "on its way
+  by mail" (Decided 2026-09-27; players keep the window small).
 - Bank: same bar ("Pulling 20 × Name", "2 items pulled so far"), button
   reads "Pulling..." (disabled), × or Escape stops; rows tick as items land.
 - Flyout, its countdown/pulse tickers and right-click stop removed:

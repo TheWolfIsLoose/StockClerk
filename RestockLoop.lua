@@ -274,7 +274,6 @@ function Loop:Stop(reason)
                     or "nothing bought" }
     if s.skippedCapped > 0 then parts[#parts + 1] = s.skippedCapped .. " over cap" end
     if s.stillShort > 0 then parts[#parts + 1] = s.stillShort .. " not bought" end
-    if s.touched > 0 then parts[#parts + 1] = "check your mail" end
     Status(head .. ": " .. table.concat(parts, " \194\183 "))
 end
 
