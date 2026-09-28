@@ -1048,14 +1048,19 @@ function MF:Build()
     stopX:Hide()
     skipBtn:Hide()
 
-    -- ---- Resize grip: three drawn diagonals in the corner margin (clear of
-    -- the footer buttons), grey at rest, mint on hover ----------------------
+    -- ---- Resize grip: a stepped triangle of 2px dots in the corner margin
+    -- (unrotated, so crisp at any UI scale), clear of the footer buttons ----
     local grip = CreateFrame("Button", nil, f)
     grip:SetSize(12, 12)
     grip:SetPoint("BOTTOMRIGHT", -2, 2)
     grip:SetFrameLevel(f:GetFrameLevel() + 5)
-    local d = math.pi / 4
-    local tintResize = DrawGlyph(grip, { { 11, 1, 0, d, 0 }, { 6, 1, -2.5, d, 2.5 }, { 3, 1, -4.5, d, 4.5 } })
+    local GRIP_DOTS = {}
+    for _, xy in ipairs({ { 4, -4 }, { 0, -4 }, { -4, -4 }, { 4, 0 }, { 0, 0 }, { 4, 4 } }) do
+        GRIP_DOTS[#GRIP_DOTS + 1] = { 2, 2, xy[2], nil, xy[1] }
+    end
+    local RESIZE_REST = { 0.55, 0.55, 0.55 }
+    local tintResize = DrawGlyph(grip, GRIP_DOTS)
+    tintResize(RESIZE_REST)
     grip:SetScript("OnMouseDown", function(_, button) if button == "LeftButton" then f:StartSizing("BOTTOMRIGHT") end end)
     grip:SetScript("OnMouseUp", function() f:StopMovingOrSizing(); SavePosition(f, true) end)
     grip:SetScript("OnEnter", function()
@@ -1064,7 +1069,7 @@ function MF:Build()
         GameTooltip:SetText("Drag to resize", 1, 1, 1)
         GameTooltip:Show()
     end)
-    grip:SetScript("OnLeave", function() tintResize(ICON_REST); GameTooltip:Hide() end)
+    grip:SetScript("OnLeave", function() tintResize(RESIZE_REST); GameTooltip:Hide() end)
 
     -- ---- The list -----------------------------------------------------------
     local listHolder = CreateFrame("Frame", nil, f)
