@@ -40,7 +40,7 @@ local function Build()
         MF.ApplyFill(c, Palette.fieldFill)
         MF.AddBlackBorder(c)
         local tick = c:CreateTexture(nil, "OVERLAY")
-        tick:SetColorTexture(unpack(Palette.brand))
+        tick:SetColorTexture(0.596, 1, 0.596)  -- mint: settings aren't tied to a list view
         tick:SetSize(8, 8)
         tick:SetPoint("CENTER")
         c:SetCheckedTexture(tick)

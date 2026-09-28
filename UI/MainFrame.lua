@@ -25,8 +25,9 @@ ADDON.MainFrame = MF
 
 local ROW_HEIGHT = 24
 local MoneyText  = ADDON.MoneyText
-local EMPTY_WARBAND = "Keep at least this many in your warband bank, for all your characters. Anything above your own targets is deposited here when you visit the bank.\n\nAdd items the same way as your own list: the Item ID box, dragging an item onto it, or bulk import."
-local EMPTY_LIST = "No items yet.\n\nAdd items by:\n |cffffffff1.|r Typing an item ID into the Item ID box and pressing Enter\n |cffffffff2.|r Dragging an item from your bags onto the Item ID box\n |cffffffff3.|r Opening bulk import (the button right of Target) to drop or paste many at once"
+local ADD_STEPS = "Add items by:\n |cffffffff1.|r Typing an item ID into the Item ID box and pressing Enter\n |cffffffff2.|r Dragging an item from your bags onto the Item ID box\n |cffffffff3.|r Opening bulk import (the button right of Target) to drop or paste many at once"
+local EMPTY_LIST = "No items yet.\n\n" .. ADD_STEPS
+local EMPTY_WARBAND = "No warband items yet.\n\nFor each item on this list, Stock Clerk keeps at least the number you set in your warband bank, so all your characters can restock from it.\n\n" .. ADD_STEPS
 
 -- ---------------------------------------------------------------------------
 -- Fonts: three sizes in white, plus grey for disabled buttons. Face is Expressway when LibSharedMedia has it
@@ -1007,7 +1008,7 @@ function MF:Build()
     end
     Header("Item", 36)
     Header("Have", -212)
-    self.needHeader = Header("Need", -166)  -- Need/Cap: cell edge -6, over the digits; "Keep ≥" for the warband
+    self.needHeader = Header("Need", -166)  -- Need/Cap: cell edge -6, over the digits; "Keep" for the warband
     Header("Cap",  -106)
     Header("Seen", -30)
 
@@ -1176,7 +1177,8 @@ function MF:SetView(view)
     for i = 1, 4 do Palette.brand[i] = c[i] end
     if not self.frame then return end
     for _, fs in ipairs(self.headerLabels) do fs:SetTextColor(unpack(Palette.brand)) end
-    self.needHeader:SetText(view == "warband" and "Keep \226\137\165" or "Need")
+    self.needHeader:SetText(view == "warband" and "Keep" or "Need")  -- no "≥": WoW's fonts lack it
+    ADDON.BulkImport:Paint()
     SetBorderColor(self._dropRing, Palette.brand)
     self._paintFilter()
     self:Refresh()

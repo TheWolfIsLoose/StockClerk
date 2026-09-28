@@ -134,7 +134,8 @@ local function BuildFrame()
 
     local title = f:CreateFontString(nil, "OVERLAY", "StockClerkFont")
     title:SetPoint("TOPLEFT", PAD, -10)
-    title:SetText("|cff98FF98Bulk import|r")
+    title:SetText("Bulk import")
+    f.title = title
 
     local closeX = MF.HeaderIcon(f, MF.CLOSE_GLYPH, "Close", function() f:Hide() end)
     closeX:SetPoint("TOPRIGHT", -4, -4)
@@ -265,6 +266,12 @@ end
 -- ---------------------------------------------------------------------------
 function BI:Open()
     MF:ShowPanel(self.frame or BuildFrame())
+    self:Paint()
+end
+
+-- Title in the accent: it imports into the list on screen.
+function BI:Paint()
+    if self.frame then self.frame.title:SetTextColor(unpack(PALETTE.brand)) end
 end
 
 function BI:Close()

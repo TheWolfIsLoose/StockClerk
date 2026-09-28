@@ -21,7 +21,7 @@ Went straight to beta (design settled up front; no alpha).
 - Header switch `Mine · Warband N` (inactive side shows its short count;
   locked during a run). The view sets what the list shows and where adds go
   (add box, drag, bulk import, Add common consumables); `Palette.brand` is
-  recoloured in place (mint / #5AA9FF); Need header reads "Keep ≥" and Have
+  recoloured in place (mint / #5AA9FF); Need header reads "Keep" (WoW fonts lack "≥") and Have
   shows the warband bank (+ on the way) in the Warband view.
 - AH: `RestockLoop` lanes. After the personal run, the Restock button
   offers "Restock warband (N)" (tooltip: estimate at last seen prices)

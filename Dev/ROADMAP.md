@@ -674,6 +674,9 @@ flag), so AH checkout knows warband stock without a bank visit.
 - None left; remaining details settle at build/in-game review.
 
 **As built (v1.3.0-beta1)**, see `Dev/HISTORY.md`. Deviations and gaps:
+- 2026-09-28 in-game fixes: bulk import title follows the accent; side
+  panel ticks stay mint (settings aren't a list view); empty Warband copy
+  rewritten in the same shape as the Mine list's; "Keep ≥" → "Keep".
 - **Tab deposit-filter preference not built yet:** deposits fill existing
   stacks, then free slots in tab order. Mapping item types to tab filter
   flags can't be verified outside the game; waits on the probe.
@@ -685,8 +688,8 @@ flag), so AH checkout knows warband stock without a bank visit.
 - Warband shopping is a second pass, not a combined buy (per-list caps).
 
 **In-game checklist (beta1)**
-- Header at 420px: `StockClerk <version>  Mine · Warband N  ≡ ×` fits;
-  the "≥" in "Keep ≥" renders in Expressway (Barlow has it).
+- Header at 420px: `StockClerk <version>  Mine · Warband N  ≡ ×` fits.
+  (2026-09-28: fits. "≥" doesn't render in WoW's fonts: header is "Keep".)
 - Side panel: "Shop for the warband on this character" fits without
   widening the panel; Recent Activity still lines up below it.
 - Switch views: accent turns blue (hover borders, headers, filter, drop
