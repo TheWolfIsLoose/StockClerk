@@ -57,16 +57,24 @@ order.
 ## Screenshots
 
 <p align="center">
-  <img src=".assets/screenshots/hero.jpg" alt="Stock Clerk main window and sidecar" width="900">
+  <img src=".assets/screenshots/hero.png" alt="Stock Clerk after an Auction House checkout, with the side panel open" width="900">
   <br>
-  <em>Shopping list with the Skip/Buy confirm step and the settings and
-  activity side panel.</em>
+  <em>After a checkout at the Auction House: bought rows are ticked, skipped
+  and over-cap rows are marked, and the receipt stays in the footer.</em>
 </p>
 
 <p align="center">
-  <img src=".assets/screenshots/have-tooltip.jpg" alt="Have cell tooltip showing storage breakdown" width="900">
+  <img src=".assets/screenshots/bank-pull.png" alt="Stock Clerk after Restock from Bank, with settings and Recent Activity" width="900">
   <br>
-  <em>Hover Have to see where the rest of your stock lives.</em>
+  <em>Restock from Bank fills every row in one click; Recent Activity reads
+  like a receipt.</em>
+</p>
+
+<p align="center">
+  <img src=".assets/screenshots/list.png" alt="The Stock Clerk shopping list" width="480">
+  <br>
+  <em>The shopping list: have, target, price cap and the last AH price
+  you saw. Copies in your bank show as a dim (+N).</em>
 </p>
 
 ## Commands
