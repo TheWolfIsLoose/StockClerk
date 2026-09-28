@@ -1,13 +1,9 @@
-## v1.2.0
+## v1.3.0
 
-- New: **Restock from Bank.** At the bank, one click moves exactly what you're short from your bank and warband bank into your bags. The window can open by itself at the bank, and Express-Restock at Bank does the pull as soon as you arrive.
-- New: **checkout at the Auction House.** Restock at AH goes down your list with the item and price at the bottom of the window, and **Buy** right where the Restock button was. Rows tick off as you go; items above your cap are marked with the cheapest price.
-- Buy only waits a moment when something needs a second look: you have copies in your bank, the item has no cap, or the price is well above what you last saw.
-- New: **Add common consumables** in the side panel fills your list with this expansion's staples.
-- New look: slimmer rows, quality-coloured icon borders, and help moved into tooltips. Stock Clerk uses Expressway when your UI provides it.
-- Adding items is quicker: drag an item onto the Item ID box, or open bulk import to drop or paste many at once.
-- The filter now shows only items you're short on.
-- Recent Activity reads like a receipt, and `/clerk log` gives you a report to paste into a bug report. `/clerk dump` and `/clerk pending` are gone.
-- Smoother at the Auction House alongside Auctionator or TSM, and a smaller download.
+- New: **Warband list.** Switch between **Mine** and **Warband** at the top of the window. The warband list keeps at least the number you set of each item in your warband bank, for all your characters.
+- After your own shopping at the Auction House, Stock Clerk offers to restock the warband list, with its own price caps. Turn this off per character in the side panel.
+- New: **Deposit** at the bank. Anything above your own targets goes into the warband bank, where every character can restock from it. Always a button, never automatic.
+- Purchases still in the mail, and warband buys your other characters haven't deposited yet, count as stock, so nothing gets bought twice.
+- Last Seen prices are now shared by all your characters.
 
 Your list, caps and settings carry over unchanged.

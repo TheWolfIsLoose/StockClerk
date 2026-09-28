@@ -15,7 +15,10 @@ place. New UI follows these rules; the helpers named here already exist in
 ## Look
 - One window fill (`Palette.bgDark`); regions are separated by 1px black
   borders and the faint `bandTint` strip, never by extra shades.
-- Accent is mint `#98FF98` (`Palette.brand`): hover, focus, "on", the title.
+- Accent (`Palette.brand`): hover, focus, "on", marks. Mint `#98FF98` in the
+  Mine view, warband blue `#5AA9FF` in the Warband view (`MF:SetView`
+  recolours the table in place). Deposit marks are blue in either view. The
+  mint "Stock" in the title never changes. Colour is never the only cue.
 - Buttons: `StyleButton` only (flat fill, band, hover wash, press flash, black
   ring; label via `SetText`, grey when disabled). No Blizzard button or
   checkbox templates.

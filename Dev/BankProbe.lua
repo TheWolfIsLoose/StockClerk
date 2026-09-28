@@ -1,26 +1,29 @@
 --[[
     Stock Clerk - Dev/BankProbe.lua   [DEV ONLY, never ships: #@debug@ in TOC]
 
-    One-off spike for v1.2 "Restock from Bank": do the container calls still
-    move bank -> bag items for addons on the live client, and how fast?
+    v1.3 spike: can addon code deposit bag stacks into the warband bank,
+    do tab deposit filters block it, and how fast can deposits chain?
+    (The v1.2 pull probe this replaces is in git history.)
 
-        /clerk bankprobe <itemID>        scan, then run every move test
+        /clerk bankprobe <itemID>        scan, then run every deposit test
         /clerk bankprobe <itemID> scan   scan only (moves nothing)
 
-    Prep: ~20 of one stackable item in the character bank and ~20 in the
-    warband bank, a few free bag slots plus one partial stack of the same
-    item in bags. At a banker, out of combat.
+    Prep: ~30 of one stackable item in bags, in 2+ stacks; one partial
+    stack of it already in a warband tab; free slots in every warband tab.
+    Optional: set one tab's deposit filter to exclude this item's type
+    (step 7 places 1 into every tab and reports each). At a banker, out
+    of combat.
 
-    Every line is printed to chat AND saved to StockClerkDB.bankProbe, so
-    after a /reload it can be read from WTF\...\SavedVariables\StockClerk.lua.
+    Every line is printed to chat AND saved to StockClerkDB.bankProbe; after
+    a /reload it can be read from WTF\...\SavedVariables\StockClerk.lua.
 --]]
 
 local addonName = ...
 local ADDON     = _G[addonName]
 local C         = C_Container
+local BAGS      = { 0, 1, 2, 3, 4 }
 
-local out, stepErrors, bankOpen = {}, {}, false
-local seenTypes = {}                         -- interaction types since load
+local out, errs, bankOpen, co = {}, {}, false, nil
 
 local function P(fmt, ...)
     local line = select("#", ...) > 0 and fmt:format(...) or fmt
@@ -28,30 +31,16 @@ local function P(fmt, ...)
     print("|cffff9933[probe]|r " .. line)
 end
 
-local function enumName(enum, v)
-    for k, x in pairs(enum or {}) do if x == v then return k end end
-    return "?"
-end
-
--- Events: bank open/close, interaction types, UI errors, blocked actions.
 local f = CreateFrame("Frame")
 for _, e in ipairs({ "BANKFRAME_OPENED", "BANKFRAME_CLOSED", "UI_ERROR_MESSAGE",
-    "PLAYER_INTERACTION_MANAGER_FRAME_SHOW", "PLAYER_INTERACTION_MANAGER_FRAME_HIDE",
     "ADDON_ACTION_BLOCKED", "ADDON_ACTION_FORBIDDEN" }) do f:RegisterEvent(e) end
 f:SetScript("OnEvent", function(_, e, a, b)
     if e == "BANKFRAME_OPENED" then bankOpen = true
     elseif e == "BANKFRAME_CLOSED" then bankOpen = false
-    elseif e == "PLAYER_INTERACTION_MANAGER_FRAME_SHOW" then
-        table.insert(seenTypes, ("show %s(%s)"):format(enumName(Enum.PlayerInteractionType, a), tostring(a)))
-        if #seenTypes > 8 then table.remove(seenTypes, 1) end
-    elseif e == "UI_ERROR_MESSAGE" then stepErrors[#stepErrors + 1] = tostring(b)
-    elseif (e == "ADDON_ACTION_BLOCKED" or e == "ADDON_ACTION_FORBIDDEN") and a == addonName then
-        stepErrors[#stepErrors + 1] = e .. ": " .. tostring(b)
-    end
+    elseif e == "UI_ERROR_MESSAGE" then errs[#errs + 1] = tostring(b)
+    elseif a == addonName then errs[#errs + 1] = e .. ": " .. tostring(b) end
 end)
 
--- Coroutine helpers ---------------------------------------------------------
-local co
 local function sleep(s)
     local me = coroutine.running()
     C_Timer.After(s, function()
@@ -62,180 +51,184 @@ local function sleep(s)
 end
 
 -- Scanning ------------------------------------------------------------------
-local function bankBags(kind)
-    if not (C_Bank and C_Bank.FetchPurchasedBankTabIDs and Enum.BankType) then return {} end
-    return C_Bank.FetchPurchasedBankTabIDs(Enum.BankType[kind]) or {}
-end
-
+local function tabs() return C_Bank.FetchPurchasedBankTabIDs(Enum.BankType.Account) or {} end
 local function info(bag, slot) return C.GetContainerItemInfo(bag, slot) end
+local function maxStack(id) return C_Item.GetItemMaxStackSizeByID(id) or 1 end
 
-local function slotsWith(bags, itemID)            -- { {bag, slot, count}, ... } biggest first
+local function slotsWith(bags, id)                -- { {bag, slot, count}, ... } biggest first
     local r = {}
     for _, bag in ipairs(bags) do
         for slot = 1, C.GetContainerNumSlots(bag) do
             local i = info(bag, slot)
-            if i and i.itemID == itemID then r[#r + 1] = { bag, slot, i.stackCount } end
+            if i and i.itemID == id then r[#r + 1] = { bag, slot, i.stackCount } end
         end
     end
     table.sort(r, function(x, y) return x[3] > y[3] end)
     return r
 end
 
-local BAGS = { 0, 1, 2, 3, 4 }                    -- backpack + 4 bags (reagent bag excluded)
-local function emptyBagSlot()
-    for _, bag in ipairs(BAGS) do
+local function total(bags, id)
+    local n = 0
+    for _, s in ipairs(slotsWith(bags, id)) do n = n + s[3] end
+    return n
+end
+
+local function emptySlot(bags)
+    for _, bag in ipairs(bags) do
         for slot = 1, C.GetContainerNumSlots(bag) do
             if not info(bag, slot) then return bag, slot end
         end
     end
 end
 
-local function maxStack(itemID)
-    return (C_Item.GetItemMaxStackSizeByID and C_Item.GetItemMaxStackSizeByID(itemID))
-        or select(8, C_Item.GetItemInfo(itemID)) or 1
-end
-
-local function partialBagSlot(itemID, room)
-    for _, s in ipairs(slotsWith(BAGS, itemID)) do
-        if s[3] + room <= maxStack(itemID) then return s[1], s[2] end
+local function partialSlot(bags, id, room)
+    for _, s in ipairs(slotsWith(bags, id)) do
+        if s[3] + room <= maxStack(id) then return s[1], s[2] end
     end
 end
 
--- One move, then wait until the bag count rises by `n` (or timeout). -------
-local function settle(itemID, before, n, timeout)
-    local t0 = GetTimePreciseSec()
-    repeat
-        sleep(0.03)
-        if C_Item.GetItemCount(itemID) >= before + n and not GetCursorInfo() then
-            return true, (GetTimePreciseSec() - t0) * 1000
-        end
-    until GetTimePreciseSec() - t0 > timeout
-    return false, timeout * 1000
+local function fmt(list)
+    local t = {}
+    for _, s in ipairs(list) do t[#t + 1] = ("%d.%d=%d"):format(s[1], s[2], s[3]) end
+    return #t > 0 and table.concat(t, " ") or "none"
 end
 
-local function report(label, ok, ms, itemID, before)
-    local got = C_Item.GetItemCount(itemID) - before
-    P("%s %s: %s in %dms, bags +%d%s", ok and "|cff4ade80OK|r" or "|cffff4444FAIL|r", label,
-        ok and "landed" or "timed out", ms, got,
-        #stepErrors > 0 and ("  errors: " .. table.concat(stepErrors, " | ")) or "")
-    if GetCursorInfo() then P("  cursor still held an item -> ClearCursor()"); ClearCursor() end
+local function allowed(bag, slot)
+    local ok, r = pcall(C_Bank.IsItemAllowedInBankType, Enum.BankType.Account,
+        ItemLocation:CreateFromBagAndSlot(bag, slot))
+    return ok and tostring(r) or ("error: " .. tostring(r))
 end
 
+-- One deposit, then wait until the warband count rises by n (or timeout). -
 local function guard()
     if InCombatLockdown() then P("ABORT: entered combat"); return false end
     if not bankOpen then P("ABORT: bank not open (after a /reload, close and reopen the bank)"); return false end
     return true
 end
 
--- split n from the biggest stack in `bags` onto (toBag, toSlot)
-local function splitMove(label, itemID, bags, n, toBag, toSlot)
-    if not guard() then return false end
-    local src = slotsWith(bags, itemID)[1]
-    if not src or src[3] < n then P("SKIP %s: not enough in source", label); return true end
-    if not toBag then P("SKIP %s: no suitable bag slot", label); return true end
-    wipe(stepErrors)
-    local before = C_Item.GetItemCount(itemID)
-    C.SplitContainerItem(src[1], src[2], n)
-    if GetCursorInfo() then C.PickupContainerItem(toBag, toSlot)
-    else stepErrors[#stepErrors + 1] = "split put nothing on cursor" end
-    local ok, ms = settle(itemID, before, n, 3)
-    report(("%s (%d.%d x%d -> %d.%d)"):format(label, src[1], src[2], n, toBag, toSlot), ok, ms, itemID, before)
-    return true
+local function settle(bags, id, before, n)
+    local t0 = GetTimePreciseSec()
+    repeat
+        sleep(0.03)
+        if total(bags, id) >= before + n and not GetCursorInfo() then
+            return true, (GetTimePreciseSec() - t0) * 1000
+        end
+    until GetTimePreciseSec() - t0 > 3
+    return false, 3000
 end
 
-local function wholeMove(label, itemID, bags)
+local function report(label, ok, ms, bags, id, before)
+    P("%s %s: %s in %dms, warband +%d, GetItemCount(account) %d%s",
+        ok and "|cff4ade80OK|r" or "|cffff4444FAIL|r", label, ok and "landed" or "timed out", ms,
+        total(bags, id) - before, C_Item.GetItemCount(id, true, false, true, true) - C_Item.GetItemCount(id, true, false, true),
+        #errs > 0 and ("  errors: " .. table.concat(errs, " | ")) or "")
+    if GetCursorInfo() then P("  cursor still held an item -> ClearCursor()"); ClearCursor() end
+end
+
+-- Split n off the biggest bag stack (or pick it up whole if n == its size)
+-- into `bags`: onto a partial stack with room unless into == "empty".
+local function deposit(label, id, n, bags, into)
     if not guard() then return false end
-    local src = slotsWith(bags, itemID)[1]
-    if not src then P("SKIP %s: nothing left in source", label); return true end
-    wipe(stepErrors)
-    local before = C_Item.GetItemCount(itemID)
-    C.UseContainerItem(src[1], src[2])
-    local ok, ms = settle(itemID, before, src[3], 3)
-    report(("%s (UseContainerItem %d.%d x%d)"):format(label, src[1], src[2], src[3]), ok, ms, itemID, before)
-    local where = {}
-    for _, s in ipairs(slotsWith(BAGS, itemID)) do where[#where + 1] = ("%d.%d=%d"):format(s[1], s[2], s[3]) end
-    P("  bag stacks now: %s", table.concat(where, " "))
+    local src = slotsWith(BAGS, id)[1]
+    if not src or src[3] < n then P("SKIP %s: not enough in bags", label); return true end
+    local toBag, toSlot
+    if into ~= "empty" then toBag, toSlot = partialSlot(bags, id, n) end
+    if not toBag then toBag, toSlot = emptySlot(bags) end
+    if not toBag then P("SKIP %s: no target slot", label); return true end
+    wipe(errs)
+    local before = total(bags, id)
+    if n == src[3] then C.PickupContainerItem(src[1], src[2]) else C.SplitContainerItem(src[1], src[2], n) end
+    if GetCursorInfo() then C.PickupContainerItem(toBag, toSlot)
+    else errs[#errs + 1] = "nothing on cursor after pickup" end
+    local ok, ms = settle(bags, id, before, n)
+    report(("%s (%d.%d x%d -> %d.%d)"):format(label, src[1], src[2], n, toBag, toSlot), ok, ms, bags, id, before)
     return true
 end
 
 -- The probe -----------------------------------------------------------------
-local function run(itemID, scanOnly)
+local function run(id, scanOnly)
     local build, _, _, iface = GetBuildInfo()
-    P("StockClerk bank probe  item %d (%s)  client %s / %s  %s",
-        itemID, C_Item.GetItemInfo(itemID) or "?", build, iface, date("%Y-%m-%d %H:%M"))
-
-    P("1. bankOpen=%s  interactions seen: %s", tostring(bankOpen),
-        #seenTypes > 0 and table.concat(seenTypes, ", ") or "none")
-    if C_Bank and C_Bank.CanViewBank and Enum.BankType then
-        P("   CanViewBank character=%s account=%s",
-            tostring(C_Bank.CanViewBank(Enum.BankType.Character)), tostring(C_Bank.CanViewBank(Enum.BankType.Account)))
+    P("StockClerk DEPOSIT probe  item %d (%s)  client %s / %s  %s",
+        id, C_Item.GetItemInfo(id) or "?", build, iface, date("%Y-%m-%d %H:%M"))
+    local acct = tabs()
+    P("1. bankOpen=%s  CanViewBank(account)=%s", tostring(bankOpen),
+        tostring(C_Bank.CanViewBank(Enum.BankType.Account)))
+    for _, t in ipairs(C_Bank.FetchPurchasedBankTabData(Enum.BankType.Account) or {}) do
+        P("   tab %s \"%s\" depositFlags=%s", tostring(t.ID), tostring(t.name), tostring(t.depositFlags))
     end
-
-    local charBags, acctBags = bankBags("Character"), bankBags("Account")
-    local function fmt(list) local t = {}
-        for _, s in ipairs(list) do t[#t + 1] = ("%d.%d=%d"):format(s[1], s[2], s[3]) end
-        return #t > 0 and table.concat(t, " ") or "none" end
-    P("2. character tabs {%s}: %s", table.concat(charBags, ","), fmt(slotsWith(charBags, itemID)))
-    P("   warband tabs {%s}: %s", table.concat(acctBags, ","), fmt(slotsWith(acctBags, itemID)))
-    local eb, es = emptyBagSlot()
-    P("   bags: %s  first empty slot %s  max stack %d", fmt(slotsWith(BAGS, itemID)),
-        eb and (eb .. "." .. es) or "NONE", maxStack(itemID))
+    P("2. warband {%s}: %s", table.concat(acct, ","), fmt(slotsWith(acct, id)))
+    local bagSlots = slotsWith(BAGS, id)
+    P("   bags: %s  max stack %d", fmt(bagSlots), maxStack(id))
+    if bagSlots[1] then P("   IsItemAllowedInBankType(account) for this item: %s", allowed(bagSlots[1][1], bagSlots[1][2])) end
+    local refused = {}
+    for _, bag in ipairs(BAGS) do
+        for slot = 1, C.GetContainerNumSlots(bag) do
+            local i = info(bag, slot)
+            local a = i and allowed(bag, slot)
+            if a and a ~= "true" then refused[#refused + 1] = ("%s(%s)"):format(i.itemID, a) end
+        end
+    end
+    P("   bag items the warband bank refuses: %s", #refused > 0 and table.concat(refused, " ", 1, math.min(#refused, 12)) or "none")
     if scanOnly then P("scan only; nothing moved."); return end
-
     if GetCursorInfo() then P("ABORT: cursor already holds something"); return end
+
+    -- 4: split to an empty slot, split onto a partial stack.
+    if not deposit("4a split -> empty", id, 5, acct, "empty") then return end
+    if not deposit("4b split -> partial", id, 3, acct) then return end
+
+    -- 5a: three split+place pairs in one frame (expect the lock to refuse 2 of them).
     if not guard() then return end
-    local start = C_Item.GetItemCount(itemID)
-
-    -- Character bank. Splits and throttle tests first, whole stack last,
-    -- so ~20 in the bank covers every step (5 + 3 + 3 + 3 + remainder).
-    if not splitMove("4a char split -> empty", itemID, charBags, 5, emptyBagSlot()) then return end
-    if not splitMove("4b char split -> partial", itemID, charBags, 3, partialBagSlot(itemID, 3)) then return end
-
-    -- 6a/6b pacing tests: character bank if it has the item, else warband.
-    local burstBags = #slotsWith(charBags, itemID) > 0 and charBags or acctBags
-    if #slotsWith(burstBags, itemID) == 0 then P("SKIP 6a/6b: item in neither bank") end
-    P("6a/6b source: %s bank", burstBags == charBags and "character" or "warband")
-
-    -- 6a: three split+place pairs in the same frame (no waiting).
-    if not guard() then return end
-    wipe(stepErrors)
-    local before, issued = C_Item.GetItemCount(itemID), 0
+    wipe(errs)
+    local before, issued = total(acct, id), 0
     for _ = 1, 3 do
-        local src, tb, ts = slotsWith(burstBags, itemID)[1], partialBagSlot(itemID, 1)
+        local src, tb, ts = slotsWith(BAGS, id)[1], partialSlot(acct, id, 1)
         if src and tb then
             C.SplitContainerItem(src[1], src[2], 1)
             if GetCursorInfo() then C.PickupContainerItem(tb, ts); issued = issued + 1 end
             if GetCursorInfo() then ClearCursor() end
         end
     end
-    local ok, ms = settle(itemID, before, 3, 3)
-    P("6a burst: 3 moves in one frame, %d placed", issued)
-    report("6a burst", ok, ms, itemID, before)
+    local ok, ms = settle(acct, id, before, 3)
+    P("5a burst: 3 deposits in one frame, %d placed", issued)
+    report("5a burst", ok, ms, acct, id, before)
 
-    -- 6b: three moves back to back, each as soon as the last one landed.
+    -- 5b: three single deposits back to back, each once the last landed.
     local times = {}
     for n = 1, 3 do
         if not guard() then return end
-        local src, tb, ts = slotsWith(burstBags, itemID)[1], partialBagSlot(itemID, 1)
+        local src, tb, ts = slotsWith(BAGS, id)[1], partialSlot(acct, id, 1)
         if not (src and tb) then break end
-        wipe(stepErrors)
-        before = C_Item.GetItemCount(itemID)
+        wipe(errs)
+        before = total(acct, id)
         C.SplitContainerItem(src[1], src[2], 1)
         if GetCursorInfo() then C.PickupContainerItem(tb, ts) end
-        ok, ms = settle(itemID, before, 1, 3)
+        ok, ms = settle(acct, id, before, 1)
         times[#times + 1] = ok and ("%dms"):format(ms) or "timeout"
-        if not ok then report("6b move " .. n, ok, ms, itemID, before) end
+        if not ok then report("5b deposit " .. n, ok, ms, acct, id, before) end
     end
-    P("6b sequential single moves: %s", table.concat(times, ", "))
+    P("5b sequential single deposits: %s", table.concat(times, ", "))
 
-    if not wholeMove("3 char whole stack", itemID, charBags) then return end
+    -- 6: whole stack (pickup, no split) onto a partial with room, else empty.
+    local src = slotsWith(BAGS, id)[#slotsWith(BAGS, id)]   -- smallest stack
+    if src then
+        local tb, ts = partialSlot(acct, id, src[3])
+        if not tb then tb, ts = emptySlot(acct) end
+        if not guard() then return end
+        wipe(errs)
+        before = total(acct, id)
+        C.PickupContainerItem(src[1], src[2])
+        if GetCursorInfo() then C.PickupContainerItem(tb, ts) end
+        ok, ms = settle(acct, id, before, src[3])
+        report(("6 whole stack (%d.%d x%d -> %s.%s)"):format(src[1], src[2], src[3], tostring(tb), tostring(ts)),
+            ok, ms, acct, id, before)
+    end
 
-    -- Warband bank.
-    if not splitMove("5a warband split -> empty", itemID, acctBags, 5, emptyBagSlot()) then return end
-    if not splitMove("5b warband split -> partial", itemID, acctBags, 3, partialBagSlot(itemID, 3)) then return end
-    if not wholeMove("5c warband whole stack", itemID, acctBags) then return end
+    -- 7: one into every tab (deposit filters vs addon placement).
+    for _, tab in ipairs(acct) do
+        if not deposit("7 tab " .. tab, id, 1, { tab }) then return end
+    end
 
-    P("DONE. bags %d -> %d. Now /reload so the log is saved.", start, C_Item.GetItemCount(itemID))
+    P("DONE. warband %s. Now /reload so the log is saved.", fmt(slotsWith(acct, id)))
 end
 
 -- Hook /clerk bankprobe into Core's slash handler (Core loads first).

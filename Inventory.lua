@@ -36,6 +36,7 @@ end
 -- (MF:Show repaints on open anyway).
 function INV:OnInventoryChanged()
     self:Invalidate()
+    ADDON.RestockLoop:Sweep()
     local mf = ADDON.MainFrame
     if mf.frame and mf.frame:IsShown() then mf:Refresh() end
 end

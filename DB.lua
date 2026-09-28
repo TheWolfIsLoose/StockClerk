@@ -2,14 +2,24 @@
     Stock Clerk - DB.lua
     SavedVariables and the per-character list.
 
+    Two lists with the same entry shape, { need, maxPrice?, sortOrder }:
+      "mine"    StockClerkCharDB.items   keep N in this character's bags
+      "warband" StockClerkDB.global.warband  keep at least N in the warband bank
+    sortOrder is the player's list order, which is also restock priority.
+    Every list call takes the list name last; nil means "mine".
+
     StockClerkCharDB (per character):
-      items[itemID] = { need, maxPrice?, lastPrice? = { copper, seenAt, source }, sortOrder }
-        sortOrder is the player's list order, which is also restock priority.
       uiPos = { point, x, y, width?, height? }
       ui.stuckOnly   "short items only" filter (old name kept for saved data)
+      ui.view        "mine" | "warband": the list the window shows
+      shopWarband    offer the warband pass at the AH on this character
       pendingBuys    mail ledger, see RestockLoop
-    StockClerkDB.global (account): settings, log. The `.global` layer is the
-    old AceDB shape, kept so existing data loads as-is.
+    StockClerkDB.global (account): settings, log, warband list,
+      prices[itemID] = { copper, seenAt, source }  Last Seen, shared by every
+        character and both lists
+      transit[charKey][itemID] = qty  warband buys not yet deposited, so
+        other characters don't buy them again (see RestockLoop)
+    The `.global` layer is the old AceDB shape, kept so existing data loads as-is.
     New fields go in `defaults`; Initialize fills them in without a migration.
 --]]
 
@@ -24,10 +34,14 @@ DB.defaults = {
     char = {
         items       = {},
         uiPos       = { point = "CENTER", x = 0, y = 0 },
-        ui          = { stuckOnly = false },
+        ui          = { stuckOnly = false, view = "mine" },
         pendingBuys = {},
+        shopWarband = true,
     },
     global = {
+        warband  = {},
+        prices   = {},
+        transit  = {},
         settings = {
             autoOpenAtAH    = true,
             autoOpenAtBank  = true,
@@ -84,6 +98,20 @@ function DB:Initialize()
         end
     end
     self.char.pendingBuys = ledger
+
+    -- Last Seen used to live on each character's items: fold it into the
+    -- shared table (newest wins).
+    local prices = self.global.prices
+    for itemID, entry in pairs(items) do
+        local lp = entry.lastPrice
+        if lp and (not prices[itemID] or prices[itemID].seenAt < lp.seenAt) then prices[itemID] = lp end
+        entry.lastPrice = nil
+    end
+end
+
+-- "Name-Realm", the key for this character's warband transit.
+function DB:CharKey()
+    return UnitName("player") .. "-" .. GetRealmName()
 end
 
 function DB:Settings()
@@ -98,51 +126,55 @@ function DB:SetStuckOnly(on)
     self.char.ui.stuckOnly = on and true or false
 end
 
--- The raw items table (read-only for callers).
-function DB:GetItems()
-    return self.char.items
+-- The raw items table of a list (read-only for callers).
+function DB:GetItems(list)
+    return list == "warband" and self.global.warband or self.char.items
 end
 
--- The list in the player's order. Restock order and priority follow it.
-function DB:GetSortedItems()
-    local list = {}
-    for itemID, entry in pairs(self.char.items) do
-        list[#list + 1] = {
+function DB:LastPrice(itemID)
+    return self.global.prices[itemID]
+end
+
+-- A list in the player's order. Restock order and priority follow it.
+function DB:GetSortedItems(list)
+    local out = {}
+    for itemID, entry in pairs(self:GetItems(list)) do
+        out[#out + 1] = {
             itemID    = itemID,
             name      = C_Item.GetItemInfo(itemID) or ("item:" .. itemID),
             need      = entry.need,
             maxPrice  = entry.maxPrice,
-            lastPrice = entry.lastPrice,
+            lastPrice = self.global.prices[itemID],
             sortOrder = entry.sortOrder,
         }
     end
-    table.sort(list, function(a, b)
+    table.sort(out, function(a, b)
         if a.sortOrder ~= b.sortOrder then return a.sortOrder < b.sortOrder end
         return a.itemID < b.itemID
     end)
-    return list
+    return out
 end
 
 -- Apply a new full order (10, 20, 30... leaves gaps). Refused unless it
--- names every tracked item.
-function DB:ReorderItems(orderedIDs)
-    local seen = {}
+-- names every item on the list.
+function DB:ReorderItems(orderedIDs, list)
+    local items, seen = self:GetItems(list), {}
     for _, id in ipairs(orderedIDs) do seen[id] = true end
-    for id in pairs(self.char.items) do
+    for id in pairs(items) do
         if not seen[id] then return false end
     end
     for i, id in ipairs(orderedIDs) do
-        if self.char.items[id] then self.char.items[id].sortOrder = i * 10 end
+        if items[id] then items[id].sortOrder = i * 10 end
     end
     return true
 end
 
 -- Create or update an item. need 0 removes it; maxPrice (copper) changes
 -- only when given. New items go last: the order is the player's priority.
-function DB:SetItem(itemID, need, maxPrice)
+function DB:SetItem(itemID, need, maxPrice, list)
     itemID, need = tonumber(itemID), tonumber(need)
     if not itemID or not need or need < 0 then return end
-    local items = self.char.items
+    local items = self:GetItems(list)
     if need == 0 then
         items[itemID] = nil
     elseif items[itemID] then
@@ -155,35 +187,34 @@ function DB:SetItem(itemID, need, maxPrice)
     end
 end
 
--- Adds each Data/Consumables.lua item not yet tracked, at target 1; tracked
--- items are never touched. Returns how many were added.
-function DB:AddCommonConsumables()
+-- Adds each Data/Consumables.lua item not yet on the list, at target 1;
+-- listed items are never touched. Returns how many were added.
+function DB:AddCommonConsumables(list)
     local added = 0
     for _, itemID in ipairs(ADDON.CommonConsumables) do
-        if not self.char.items[itemID] then
-            self:SetItem(itemID, 1)
+        if not self:GetItems(list)[itemID] then
+            self:SetItem(itemID, 1, nil, list)
             added = added + 1
         end
     end
     return added
 end
 
-function DB:SetItemMaxPrice(itemID, maxPriceCopper)
-    local entry = self.char.items[itemID]
+function DB:SetItemMaxPrice(itemID, maxPriceCopper, list)
+    local entry = self:GetItems(list)[itemID]
     if entry then entry.maxPrice = maxPriceCopper end
 end
 
--- Last AH unit price ("click" or "loop" search). Ignored for untracked items
--- (a search that returns after the item was removed).
+-- Last AH unit price ("click" or "loop" search), for items on either list
+-- (a search that returns after the item was removed is ignored).
 function DB:StampLastPrice(itemID, copperPerUnit, source)
-    local entry = self.char.items[itemID]
-    if entry and copperPerUnit > 0 then
-        entry.lastPrice = { copper = copperPerUnit, seenAt = time(), source = source or "unknown" }
+    if copperPerUnit > 0 and (self.char.items[itemID] or self.global.warband[itemID]) then
+        self.global.prices[itemID] = { copper = copperPerUnit, seenAt = time(), source = source or "unknown" }
     end
 end
 
-function DB:RemoveItem(itemID)
-    self.char.items[itemID] = nil
+function DB:RemoveItem(itemID, list)
+    self:GetItems(list)[itemID] = nil
 end
 
 function DB:ClearAll()

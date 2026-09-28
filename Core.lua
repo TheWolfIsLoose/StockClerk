@@ -85,7 +85,8 @@ On("PLAYER_LOGIN", function()
         -- Fires for every item any addon asks about (thousands in an AH scan):
         -- repaint only for ours, and only while the window shows.
         local mf = ADDON.MainFrame
-        if ADDON.DB:GetItems()[itemID] and mf.frame and mf.frame:IsShown() then mf:Refresh() end
+        local DB = ADDON.DB
+        if (DB:GetItems()[itemID] or DB:GetItems("warband")[itemID]) and mf.frame and mf.frame:IsShown() then mf:Refresh() end
     end)
 
     -- Bag and bank changes, collapsed into one inventory refresh per 0.25s.
@@ -157,6 +158,7 @@ end
 function ADDON:OnAuctionHouseClosed()
     self.AH:OnAuctionHouseClosed()
     self.RestockLoop:Stop("AH closed")
+    self.RestockLoop.lastLane = nil  -- the next visit starts with your own list
     local mf = self.MainFrame
     mf:ClearMarks()  -- a restock's row marks last until you leave the AH
     mf:RefreshRestockBtn()
@@ -183,6 +185,9 @@ function ADDON:OnBankShow()
         end)
     elseif n > 0 then
         mf:SetStatus(("%d short item%s can come from your bank."):format(n, n == 1 and "" or "s"), true)
+    else
+        local d = self.BankRestock:DepositableCount()
+        if d > 0 then mf:SetStatus(("|cff5AA9FFWarband: deposit %d item%s.|r"):format(d, d == 1 and "" or "s"), true) end
     end
 end
 

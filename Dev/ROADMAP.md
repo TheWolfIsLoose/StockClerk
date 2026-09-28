@@ -11,9 +11,20 @@ disagree), **Open** (needs an answer before build).
 
 ## Next session: start here
 
-**Handoff 2026-09-27 ~21:50 ET.** Stable `v1.2.0` is released (`dev`
-merged into `main`). Next: pick up from the v1.3 candidates / Later list
-below; nothing is in flight.
+**2026-09-28: stable v1.3.0 released** (`main` = `dev`). Warband list,
+warband AH pass, deposit. Open follow-ups:
+1. Not yet covered in-game: buy on one character, switch before
+   depositing (transit: not short there); a soulbound listed item at
+   Deposit (red mark, footer); a full warband bank.
+2. Tab deposit-filter preference if the probe (`/clerk bankprobe
+   <itemID>`) shows filters matter.
+3. Player: paste the updated copy into CurseForge (same wording as the
+   README intro and the two new feature bullets).
+
+Pending on the player's side: paste the CurseForge description and the
+GitHub "About" line (drafted in the 2026-09-27 session: pitch "A
+pocket-sized shopping list for WoW consumables..."; README intro is the
+same copy).
 
 State: `main` = `dev` = v1.2.0.
 
@@ -546,22 +557,190 @@ timers too.
 
 ---
 
-## v1.3 candidate — Deposit surplus (depends on 1.2 usage)
+## v1.3.0 — Warband list: shared stock in the warband bank (v1.3.0-beta1 built 2026-09-28)
 
-Only after Restock from Bank has proven reliable in the field.
+**Goal.** Let players keep shared stock in the warband bank, bought by
+whichever character is at the AH, and keep every character's own bags
+topped up from it (v1.2 Restock from Bank).
 
-- **Decided:** never automatic. Extra copies in your bags are your call;
-  the addon doesn't move them unless you press a button.
-- Candidate UX: a **Deposit Surplus** button at the bank that moves
-  anything above target from bags to the bank, with a choice of
-  character bank or warband bank (warband is shared by every character
-  on the account; a character bank is only reachable by that character).
-- Reuses the 1.2 planner/executor in the other direction.
-- Open when scheduled: default destination, whether surplus of
-  soulbound items (which can't go in the warband bank) falls back to the
-  character bank.
+**Why not a "supplier mode" (Decided 2026-09-28).** A per-character
+switch assumed a character is either a buyer or a consumer. The player's
+main is both: it keeps its own list and also buys in bulk for alts. The
+role belongs to the list, not the character.
 
----
+**Design (Decided 2026-09-28)**
+- **Two lists, two lanes; scope is only items you've listed.**
+  - **Personal list** (per character, as today): Target = keep N in my
+    bags.
+  - **Warband list** (new, account-wide, one target per item): keep **at
+    least** N in the warband bank. It drives buying only. The same item
+    can sit on both lists with different numbers.
+- **Surplus is defined by the personal list**: anything above a listed
+  item's personal target is surplus, because stock in one character's
+  bags is useless to the others. Surplus belongs in the warband bank,
+  whether it came from the AH, crafting or anywhere else. Deposits are
+  not capped by the warband target (it's a floor for buying, not a cap).
+  An item on the warband list but not this character's personal list
+  counts as personal target 0 (all of it deposits: the pure buyer alt).
+- **At the AH:** personal checkout first; then, if anything on the
+  warband list is short, an optional continuation ("Warband: 3 short,
+  ~12,400g"). A second pass, not a combined buy: **each list has its own
+  caps** (Decided 2026-09-28: pay more for tonight's flasks, less for
+  bulk), and skipping the warband step leaves the personal run intact.
+- **At the bank, per listed item:** short in bags → pull from the warband
+  (v1.2); over the personal target → deposit the extra to the warband.
+  Never both for one item in one visit. The deposit is a continuation
+  after the personal pull ("Warband: deposit 20 flasks"): still a click,
+  never automatic (Express-Restock never deposits). Items the warband
+  bank refuses (soulbound etc.) are skipped and named in the footer.
+- **Pulls may drop the warband below its floor**: personal needs come
+  first; the warband list then shows it short and the next AH trip
+  refills it.
+- **Per-character setting "Never ask this character to restock the
+  warband"**: hides the AH continuation only. Deposits are never
+  blocked (a crafter alt that never shops is exactly who makes surplus).
+- **Superseded:** supplier mode, the "Warband" Have-header swap, the
+  standalone surplus-deposit button, Copy list (bulk import covers list
+  setup: `ID target cap` per line).
+
+**Engine (Default):** `BR.PlanPulls` is direction-free; a deposit is
+PlanPulls with bag slots as sources, warband tab slots as targets and the
+surplus as amounts. "Landed" check: target slot grew and the cursor is
+empty. Warband counts are readable anywhere (`GetItemCount` account
+flag), so AH checkout knows warband stock without a bank visit.
+
+**UI (Default, proposed 2026-09-28)**
+- Header switch, text only: `Mine · Warband 3` between version and the
+  icons; active word lit, the inactive side shows its short count. Last
+  view remembered per character. The view changes what you see and where
+  adds go (add box, drag, bulk import, Add common consumables); it never
+  changes what Restock does.
+- **Both cues in the Warband view (Decided):** Target header reads
+  "Keep ≥", and the accent colour switches from mint to a warband blue.
+  The accent follows the lane of whatever is happening: the warband AH
+  continuation and bank deposit use blue for the current row, marks and
+  bar. The "Stock" in the title stays mint (brand, not state). Colour is
+  never the only cue (header word + "Keep ≥").
+
+- **Warband blue = #5AA9FF (Decided 2026-09-28).** Separated from mint
+  by lightness, not just hue (mint luminance 0.81, blue 0.38: 2.0:1 apart),
+  so it holds under colour-deficiency correction filters and every CVD
+  type (tritan included, where mint vs cyan would merge). 8.2:1 on the
+  window background. WoW's own #00CCFF was rejected: only 1.5:1 from mint.
+
+- **Opt-out (Decided copy):** side-panel checkbox, per character, on by
+  default: "Shop for the warband on this character". Tooltip: "Offer to
+  restock the warband list after your own shopping at the Auction House.
+  Surplus is always deposited at the bank." **Check it fits the side
+  panel at its current width; the panel must not get wider** (reword or
+  wrap the label instead).
+- **Bank continuation (Decided copy):** personal pull as today, then the
+  footer reads "Warband: deposit 3 items" and the button turns blue,
+  "Deposit". Rows tick blue. Receipt: "Done: pulled 2 · deposited 3 to
+  the warband" (+ "· 1 can't go in the warband", hover for which).
+  Nothing to pull → deposit offered at once; nothing to deposit → no
+  step.
+
+**More decisions (2026-09-28)**
+- **Mail guardrail (Decided):** warband Have = warband bank + bags +
+  purchases still in the mail, so a second AH trip before looting never
+  rebuys. Never tell the player to buy what's already on its way. The bank
+  step notes mail it can't deposit yet ("3 more waiting in your mail").
+- **Deposit target (Decided):** top up an existing stack of the item →
+  a tab whose deposit filter matches → any free slot. Warband full →
+  footer "Warband bank is full". (Spike confirms whether filters bind.)
+- **Header (Decided):** keep the version in the header, a size smaller if
+  needed to fit `Mine · Warband 3` at 420px; move it to the side panel
+  only if it truly can't fit.
+- **Empty Warband view (Decided):** one line of guidance, e.g. "Keep at
+  least this many in your warband bank, for all your characters.
+  Anything above your own targets is deposited here." Final copy at build.
+- **Shared price history (Decided):** Last Seen moves from each
+  character's item entry (`StockClerkCharDB.items[id].lastPrice`) to
+  account-wide `StockClerkDB.global.prices[id]`, recorded for items on
+  either list; on first load fold existing per-character prices in
+  (newest wins). Lives in DB.lua (it already owns both saved tables), so
+  no new file unless it grows.
+- **Activity log (Decided):** deposits and warband buys get their own
+  lines, e.g. "Deposited 20 × Flask to warband (tab 2)", plus skips
+  (refused, full).
+- **Naming (Decided):** UI copy says "warband" / "warband bank" (the
+  game's term), never "warbank".
+- Storage: warband list in account-wide `StockClerkDB.global`.
+
+**Open (UI)**
+- None left; remaining details settle at build/in-game review.
+
+**As built (v1.3.0-beta1)**, see `Dev/HISTORY.md`. Deviations and gaps:
+- 2026-09-28 in-game fixes: bulk import title follows the accent; side
+  panel ticks stay mint (settings aren't a list view); empty Warband copy
+  rewritten in the same shape as the Mine list's; "Keep ≥" → "Keep".
+- **Tab deposit-filter preference not built yet:** deposits fill existing
+  stacks, then free slots in tab order. Mapping item types to tab filter
+  flags can't be verified outside the game; waits on the probe.
+- The warband pass is offered once your own list has nothing short (the
+  button becomes "Restock warband (N)"), and the receipt says "warband: N
+  short". Deposit marks are blue in either view; a deposit doesn't switch
+  the view (its items can be on either list). A pull switches to Mine; a
+  warband AH pass switches to Warband.
+- Warband shopping is a second pass, not a combined buy (per-list caps).
+
+**Built 2026-09-28 (`Loop:NextLane`):** at the AH the button offers
+whichever list hasn't run yet this visit, yours first. Today the warband
+pass is only offered when your own list has nothing short, so an over-cap,
+skipped or failed item blocks it for the whole visit. New flow: open AH →
+"Restock at AH (N)"; after that run ends (even with leftovers) → "Restock
+warband (N)"; after the warband pass, back to "Restock at AH (N)" if still
+short (a cap may have been raised); AH close resets.
+
+**Bug (found in the 2026-09-28 AH + bank log; fixed the same day):** deposit
+"a move didn't finish" (Phoenix Oil, twice; a third press finished). The
+deposit "landed" check is "bag count dropped and cursor empty", which is
+true the instant the client places the stack, before the server confirms.
+The next move is planned at once and targets the same warband stack while
+it's still locked; the drop fails and times out (the stalled stacks did
+land later: Phoenix Oil reached 100, the log counted 20 short). (Pulls don't hit this:
+their bag count only rises on server confirmation.) Fix, as the design
+said: landed = target slot shows the new count, unlocked, cursor empty;
+and never pick a locked warband slot as a target.
+
+**In-game checklist (beta1)**
+- Header at 420px: `StockClerk <version>  Mine · Warband N  ≡ ×` fits.
+  (2026-09-28: fits. "≥" doesn't render in WoW's fonts: header is "Keep".)
+- Side panel: "Shop for the warband on this character" fits without
+  widening the panel; Recent Activity still lines up below it.
+- Switch views: accent turns blue (hover borders, headers, filter, drop
+  outline), title "Stock" stays mint, list and empty text change; adds,
+  drag, bulk import and Add common consumables go to the visible list.
+- AH: own list first; then "Restock warband (N)" (blue) with its caps;
+  Buy has no "in your warband bank" warning on that pass; receipt.
+  Untick the side-panel box: no warband offer.
+- Mail guardrail: buy warband stock, don't loot, reopen the AH: not short
+  again. Log onto another character before depositing: not short there
+  either (transit).
+- Bank: pull as before; then "Deposit (N)" (blue): rows tick blue, receipt
+  "Done: deposited N to the warband"; a soulbound listed item gets the red
+  mark "Can't go in the warband bank"; mail note when purchases are unlooted.
+
+**v1.3.0-beta1 CHANGELOG (released 2026-09-28):**
+```
+## v1.3.0-beta1
+
+- New: **Warband list.** Switch between **Mine** and **Warband** at the top of the window. The warband list says how many to keep, at least, in your warband bank for all your characters.
+- After your own shopping at the Auction House, Stock Clerk offers to restock the warband list, with its own price caps. Turn this off per character in the side panel ("Shop for the warband on this character").
+- New: **Deposit** at the bank. Anything above your own targets goes into the warband bank, where every character can restock from it. Always a button, never automatic.
+- Purchases still in the mail, and warband buys your other characters haven't deposited yet, count as stock, so nothing gets bought twice.
+- Last Seen prices are now shared by all your characters.
+
+Your list, caps and settings carry over unchanged.
+```
+
+**Release (stable v1.3.0):** updated public copy (README, CurseForge) and
+hero shots of the Warband Bank stock.
+
+**Spike (short, in-game; probe on `dev`: `/clerk bankprobe <itemID>`):**
+placing a bag stack into a warband tab slot from addon code; tab deposit
+filters vs addon placement; how fast deposits chain.
 
 ## Later (unscheduled)
 

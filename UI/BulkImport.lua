@@ -105,8 +105,9 @@ local function CommitBatch(entries)
     local added, skipped, errored = 0, 0, 0
     for _, e in ipairs(entries) do
         if e.ok then
-            local existed = ADDON.DB:GetItems()[e.itemID] ~= nil
-            ADDON.DB:SetItem(e.itemID, e.need, e.maxPriceCopper)
+            local list = ADDON.MainFrame:View()  -- into the list on screen
+            local existed = ADDON.DB:GetItems(list)[e.itemID] ~= nil
+            ADDON.DB:SetItem(e.itemID, e.need, e.maxPriceCopper, list)
             if existed then
                 skipped = skipped + 1
             else
@@ -133,7 +134,8 @@ local function BuildFrame()
 
     local title = f:CreateFontString(nil, "OVERLAY", "StockClerkFont")
     title:SetPoint("TOPLEFT", PAD, -10)
-    title:SetText("|cff98FF98Bulk import|r")
+    title:SetText("Bulk import")
+    f.title = title
 
     local closeX = MF.HeaderIcon(f, MF.CLOSE_GLYPH, "Close", function() f:Hide() end)
     closeX:SetPoint("TOPRIGHT", -4, -4)
@@ -249,7 +251,7 @@ local function BuildFrame()
         else
             edit:SetText("")
             status:SetText("")
-            MF:SetStatus("|cff98ff98Bulk import: " .. msg .. ".|r")
+            MF:SetStatus("|cff98ff98Bulk import: " .. msg .. (MF:View() == "warband" and " on the warband list" or "") .. ".|r")
             f:Hide()
         end
     end)
@@ -264,6 +266,12 @@ end
 -- ---------------------------------------------------------------------------
 function BI:Open()
     MF:ShowPanel(self.frame or BuildFrame())
+    self:Paint()
+end
+
+-- Title in the accent: it imports into the list on screen.
+function BI:Paint()
+    if self.frame then self.frame.title:SetTextColor(unpack(PALETTE.brand)) end
 end
 
 function BI:Close()

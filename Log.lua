@@ -34,7 +34,7 @@ Log.MAX_ENTRIES = 1000
 Log.LEVEL = {
     add = "activity", remove = "activity", target_change = "activity", cap_change = "activity",
     buy_success = "activity", buy_fail = "activity", buy_skip = "activity", auto_refuse = "activity",
-    bank_pull = "activity", loop_stop = "activity", error = "activity",
+    bank_pull = "activity", bank_deposit = "activity", deposit_skip = "activity", loop_stop = "activity", error = "activity",
     ah_search = "detail", buy_attempt = "detail", loop_start = "detail", status = "detail",
     bank_run = "detail", setting = "detail", version = "detail", auto_toggle = "detail",
     trace = "trace",
@@ -98,7 +98,11 @@ end
 local SETTING_LABELS = {
     autoOpenAtAH = "Auto-open at Auction House", autoOpenAtBank = "Auto-open at Bank",
     autoRestock = "Express-Restock at Auction House", autoRestockBank = "Express-Restock at Bank",
+    shopWarband = "Shop for the warband on this character",
 }
+
+-- "warband " before target/cap for warband-list entries (short: the feed is narrow).
+local function OnList(p) return p.list == "warband" and "warband " or "" end
 
 local STOP_REASONS = {
     done = "Restock finished", user_stop = "Restock stopped by you", user_esc = "Restock stopped by you",
@@ -107,15 +111,21 @@ local STOP_REASONS = {
 
 -- FORMAT[kind](p, item) -> sentence. `item` is the item's name (or id).
 local FORMAT = {
-    add           = function(p, item) return ("Added %s (target %s)"):format(item, p.need or "?") end,
-    remove        = function(p, item) return ("Removed %s"):format(item) end,
-    target_change = function(p, item) return ("%s: target %s to %s"):format(item, p.from or "?", p.to or "?") end,
-    cap_change    = function(p, item)
-        if not p.toCopper then return ("%s: cap removed"):format(item) end
-        if not p.fromCopper then return ("%s: cap set to %s"):format(item, Money(p.toCopper)) end
-        return ("%s: cap %s to %s"):format(item, Money(p.fromCopper), Money(p.toCopper))
+    add           = function(p, item)
+        if p.list == "warband" then return ("Added %s to the warband list (keep %s)"):format(item, p.need or "?") end
+        return ("Added %s (target %s)"):format(item, p.need or "?")
     end,
-    buy_success   = function(p, item) return ("Bought %s %s for %s"):format(p.qty or "?", item, Money(p.spentCopper)) end,
+    remove        = function(p, item) return ("Removed %s%s"):format(item, p.list == "warband" and " from the warband list" or "") end,
+    target_change = function(p, item) return ("%s: %starget %s to %s"):format(item, OnList(p), p.from or "?", p.to or "?") end,
+    cap_change    = function(p, item)
+        local cap = OnList(p) .. "cap"
+        if not p.toCopper then return ("%s: %s removed"):format(item, cap) end
+        if not p.fromCopper then return ("%s: %s set to %s"):format(item, cap, Money(p.toCopper)) end
+        return ("%s: %s %s to %s"):format(item, cap, Money(p.fromCopper), Money(p.toCopper))
+    end,
+    buy_success   = function(p, item)
+        return ("Bought %s %s%s for %s"):format(p.qty or "?", item, p.lane == "warband" and " for the warband" or "", Money(p.spentCopper))
+    end,
     buy_fail      = function(p, item) return ("Couldn't buy %s: %s"):format(item, Plain(p.reason or "unknown reason")) end,
     buy_skip      = function(p, item)
         if p.reason == "over cap" or p.reason == "cap out (silent)" then return ("Skipped %s: cheapest price is above your cap"):format(item) end
@@ -124,8 +134,15 @@ local FORMAT = {
     end,
     auto_refuse   = function(p) return "Express-Restock didn't start: " .. Plain(p.reason or "?") end,
     bank_pull     = function(p, item) return ("Pulled %s %s from your bank"):format(p.qty or "?", item) end,
+    bank_deposit  = function(p, item)
+        return ("Deposited %s %s to the warband bank%s"):format(p.qty or "?", item, p.tab and (" (tab %d)"):format(p.tab) or "")
+    end,
+    deposit_skip  = function(p, item)
+        return ("Couldn't deposit %s: %s"):format(item, p.reason == "refused" and "the warband bank won't take it" or Plain(p.reason or "?"))
+    end,
     loop_stop     = function(p)
         local txt = STOP_REASONS[p.reason] or ("Restock stopped: " .. Plain(p.reason or "?"))
+        if p.lane == "warband" then txt = "Warband " .. txt:gsub("^R", "r") end
         local bought = (p.touched or 0) > 0 and ("bought %d item%s for %s"):format(p.touched,
             p.touched == 1 and "" or "s", Money(p.spentCopper)) or "nothing bought"
         txt = txt .. ", " .. bought
@@ -142,12 +159,13 @@ local FORMAT = {
         return ("Buying %s %s, up to %s"):format(p.qty or "?", item, Money(p.plannedSpendCopper))
     end,
     loop_start    = function(p)
-        return ("Restock started (%s, %s items to check)"):format(p.mode or "manual", p.queueSize or "?")
+        return ("%s started (%s, %s items to check)"):format(p.lane == "warband" and "Warband restock" or "Restock",
+            p.mode or "manual", p.queueSize or "?")
     end,
     status        = function(p) return "Footer: " .. Plain(p.text) end,
     bank_run      = function(p)
-        local txt = ("Bank restock (%s): pulled %d item%s"):format(p.mode or "manual", p.items or 0,
-            p.items == 1 and "" or "s")
+        local txt = ("Bank %s (%s): %s %d item%s"):format(p.dir == "deposit" and "deposit" or "restock", p.mode or "manual",
+            p.dir == "deposit" and "deposited" or "pulled", p.items or 0, p.items == 1 and "" or "s")
         return p.reason and (txt .. ", stopped: " .. p.reason) or txt
     end,
     setting       = function(p)
@@ -207,6 +225,7 @@ function Log:Report()
     for _, key in ipairs({ "autoOpenAtAH", "autoOpenAtBank", "autoRestock", "autoRestockBank" }) do
         settings[#settings + 1] = SETTING_LABELS[key] .. " " .. (s[key] and "on" or "off")
     end
+    settings[#settings + 1] = SETTING_LABELS.shopWarband .. " " .. (ADDON.DB.char.shopWarband and "on" or "off")
 
     local list = ADDON.DB:GetSortedItems()
     local short = #ADDON.BankRestock:Shortfalls()
@@ -238,6 +257,13 @@ function Log:Report()
             it.maxPrice and (" cap " .. Money(it.maxPrice)) or "")
     end
     lines[#lines + 1] = "List (bags/target): " .. (#rows > 0 and table.concat(rows, "; ") or "empty")
+    local wb = {}  -- warband list: in the bank + on the way / floor
+    for _, it in ipairs(ADDON.DB:GetSortedItems("warband")) do
+        local bank = ADDON.Inventory:GetBreakdown(it.itemID).warband
+        wb[#wb + 1] = ("%s (#%d) %d+%d/%d%s"):format((ItemInfo(it.itemID)), it.itemID, bank,
+            ADDON.RestockLoop:WarbandHave(it.itemID) - bank, it.need, it.maxPrice and (" cap " .. Money(it.maxPrice)) or "")
+    end
+    lines[#lines + 1] = "Warband list (bank+on the way/keep): " .. (#wb > 0 and table.concat(wb, "; ") or "empty")
     local mail = {}
     for id, p in pairs(ADDON.DB.char.pendingBuys) do
         mail[#mail + 1] = ("%s (#%d) x%d"):format((ItemInfo(id)), id, p.qty)

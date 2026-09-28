@@ -12,6 +12,12 @@
     every Restock press would buy the same items again. "Have" here is
     always _EffectiveHave (bags + ledger). Kept honest by 30-day expiry on
     load, mailbox reconciliation, and decay as bag counts catch up.
+
+    Two lanes, one per list. "mine" buys to this character's targets.
+    "warband" (offered after it, unless the character opted out) buys to
+    the warband list's floors, counting WarbandHave: warband bank + this
+    character's surplus (bags and mail above its own target, which the bank
+    deposits) + other characters' warband buys not yet deposited (transit).
 --]]
 
 local addonName = ...
@@ -27,6 +33,11 @@ Loop.state = NewState()
 
 local function Status(msg) ADDON.MainFrame:SetStatus(msg) end
 local function Ledger() return ADDON.DB.char.pendingBuys end
+local function Transit()
+    local t, key = ADDON.DB.global.transit, ADDON.DB:CharKey()
+    t[key] = t[key] or {}
+    return t[key]
+end
 
 -- ---------------------------------------------------------------------------
 -- Mail ledger
@@ -51,6 +62,35 @@ function Loop:_EffectiveHave(itemID)
         return have
     end
     return have + unlooted
+end
+
+-- This character's surplus of an item: bags + mail above its own target
+-- (0 when it isn't on this character's list).
+function Loop:Surplus(itemID)
+    local mine = ADDON.DB:GetItems()[itemID]
+    return math.max(0, self:_EffectiveHave(itemID) - (mine and mine.need or 0))
+end
+
+-- Toward a warband floor: in the warband bank, this character's surplus (on
+-- its way there), and other characters' undeposited warband buys.
+function Loop:WarbandHave(itemID)
+    local n, me = ADDON.Inventory:GetBreakdown(itemID).warband + self:Surplus(itemID), ADDON.DB:CharKey()
+    for key, items in pairs(ADDON.DB.global.transit) do
+        if key ~= me then n = n + (items[itemID] or 0) end
+    end
+    return n
+end
+
+-- Inventory changed: settle the ledger for every item in it (items only on
+-- the warband list aren't checked by anything else), and clamp this
+-- character's transit to its surplus (spent, deposited or never looted).
+function Loop:Sweep()
+    for id in pairs(Ledger()) do self:_EffectiveHave(id) end
+    local transit = ADDON.DB.global.transit[ADDON.DB:CharKey()] or {}  -- don't create one just to read it
+    for id, qty in pairs(transit) do
+        local left = math.min(qty, self:Surplus(id))
+        transit[id] = left > 0 and left or nil
+    end
 end
 
 -- Mailbox open: clamp the ledger to what's actually in the mail. Not there =
@@ -91,14 +131,35 @@ local AMBER, GREY = "|cffffa866", "|cff999999"
 
 local function MF() return ADDON.MainFrame end
 
--- How many items a Restock would try right now. The one shortfall answer for
--- the button, Express-Restock and the footer, so they can't disagree.
-function Loop:PreviewShortfallCount()
+-- How many of an item a lane is short.
+function Loop:Short(lane, itemID, need)
+    return need - (lane == "warband" and self:WarbandHave(itemID) or self:_EffectiveHave(itemID))
+end
+
+-- How many items a Restock of `lane` would try right now. The one shortfall
+-- answer for the button, Express-Restock and the footer, so they can't disagree.
+function Loop:PreviewShortfallCount(lane)
     local n = 0
-    for itemID, entry in pairs(ADDON.DB:GetItems()) do
-        if entry.need > self:_EffectiveHave(itemID) then n = n + 1 end
+    for itemID, entry in pairs(ADDON.DB:GetItems(lane)) do
+        if self:Short(lane, itemID, entry.need) > 0 then n = n + 1 end
     end
     return n
+end
+
+-- Whether the warband pass is offered here: this character hasn't opted
+-- out, and something on the warband list is short.
+function Loop:WarbandOffered()
+    return ADDON.DB.char.shopWarband and self:PreviewShortfallCount("warband") > 0
+end
+
+-- The lane the Restock button offers at the AH: whichever has something short
+-- and didn't run last this visit, your own first. So a skipped or over-cap
+-- item never blocks the warband pass, and after it your own list comes back
+-- (a cap may have been raised). nil: nothing short. The AH closing resets it.
+function Loop:NextLane()
+    local mine, warband = self:PreviewShortfallCount() > 0, self:WarbandOffered()
+    if mine and warband then return self.lastLane == "mine" and "warband" or "mine" end
+    return mine and "mine" or warband and "warband" or nil
 end
 
 -- "2 of 4 · spent 2,420g"
@@ -109,24 +170,27 @@ function Loop:_Progress()
     return txt
 end
 
-function Loop:Start(express)
+-- lane: "mine" (default) or "warband".
+function Loop:Start(express, lane)
     if self.state.active then return end
+    lane = lane or "mine"
     if not (AuctionHouseFrame and AuctionHouseFrame:IsShown()) then
         return Status("|cffff8888Open the auction house first.|r")
     end
     local queue = {}
-    for _, it in ipairs(ADDON.DB:GetSortedItems()) do  -- list order is the priority
-        if it.need > self:_EffectiveHave(it.itemID) then queue[#queue + 1] = it end
+    for _, it in ipairs(ADDON.DB:GetSortedItems(lane)) do  -- list order is the priority
+        if self:Short(lane, it.itemID, it.need) > 0 then queue[#queue + 1] = it end
     end
     if #queue == 0 then
         -- The button is greyed when nothing is short, so this is a race.
         return Status("|cfff87171Nothing to restock -- every row is at or above its need.|r")
     end
     self.state = NewState()
-    self.state.active, self.state.queue, self.state.clickAt = true, queue, GetTime()
+    self.state.active, self.state.queue, self.state.clickAt, self.state.lane = true, queue, GetTime(), lane
+    MF():SetView(lane)  -- the run ticks off the list it's buying for
     MF():ClearMarks()
     for _, it in ipairs(queue) do MF():Mark(it.itemID, "queued", "In this restock") end
-    ADDON.Log:Emit("loop_start", nil, { queueSize = #queue, mode = express and "express" or "manual" })
+    ADDON.Log:Emit("loop_start", nil, { queueSize = #queue, mode = express and "express" or "manual", lane = lane })
     self:Advance()
 end
 
@@ -139,19 +203,18 @@ function Loop:Advance()
     if not item then return self:Stop("done") end
 
     -- An earlier buy (or run) may have covered it already.
-    local have = self:_EffectiveHave(item.itemID)
-    local short = item.need - have
+    local short = self:Short(s.lane, item.itemID, item.need)
     if short <= 0 then
         MF():Mark(item.itemID, nil)
         return self:Advance()
     end
-    ADDON.Debug("Loop", ("processing id=%d need=%d have=%d short=%d cap=%s"):format(
-        item.itemID, item.need, have, short, tostring(item.maxPrice)))
+    ADDON.Debug("Loop", ("processing %s id=%d need=%d short=%d cap=%s"):format(
+        s.lane, item.itemID, item.need, short, tostring(item.maxPrice)))
     Status(("Searching AH: %s (%d/%d in queue)"):format(item.name, s.index, #s.queue))
     MF():Mark(item.itemID, "current", "Checking the AH")
     MF():SetCheckout(GREY .. "Checking " .. item.name .. "...|r", GREY .. self:_Progress() .. "|r")
     -- The search re-stamps Last Seen, so read the previous price first.
-    local seen = (ADDON.DB:GetItems()[item.itemID] or {}).lastPrice  -- nil if removed mid-run
+    local seen = ADDON.DB:LastPrice(item.itemID)
 
     ADDON.AH:BuyUpTo(item.itemID, short, item.maxPrice, function(ok, plan, overCap)
         if not s.active then return end  -- stopped meanwhile
@@ -172,7 +235,8 @@ function Loop:Advance()
         -- Anything that makes this buy worth a second look slows Buy down.
         local bd, warn = ADDON.Inventory:GetBreakdown(item.itemID), {}
         if bd.bank > 0 then warn[#warn + 1] = ("%d in your bank"):format(bd.bank) end
-        if bd.warband > 0 then warn[#warn + 1] = ("%d in your warband bank"):format(bd.warband) end
+        -- (Buying for the warband, its stock is already counted.)
+        if bd.warband > 0 and s.lane == "mine" then warn[#warn + 1] = ("%d in your warband bank"):format(bd.warband) end
         if not item.maxPrice then warn[#warn + 1] = "No cap set" end
         local unit = plan.plannedSpend / plan.planQuantity
         if seen and unit > seen.copper * PRICEY then
@@ -230,7 +294,12 @@ function Loop:Fire()
         if ok then
             s.spentCopper, s.touched = s.spentCopper + plan.plannedSpend, s.touched + 1
             self:_RecordPurchase(plan.itemID, plan.planQuantity)  -- first, so the next check counts it
-            ADDON.Log:Emit("buy_success", plan.itemID, { qty = plan.planQuantity, spentCopper = plan.plannedSpend })
+            if s.lane == "warband" then  -- other characters count it until it's deposited
+                local t = Transit()
+                t[plan.itemID] = (t[plan.itemID] or 0) + plan.planQuantity
+            end
+            ADDON.Log:Emit("buy_success", plan.itemID, { qty = plan.planQuantity, spentCopper = plan.plannedSpend,
+                                                         lane = s.lane })
             Status(("Bought %d %s for %s (via mail)"):format(plan.planQuantity, plan.name, ADDON.MoneyText(plan.plannedSpend)))
             MF():Mark(plan.itemID, "done", ("Bought %d for %s, on its way by mail"):format(
                 plan.planQuantity, ADDON.MoneyText(plan.plannedSpend, "gold")))
@@ -259,8 +328,9 @@ function Loop:Stop(reason)
     if not s.active then return end
     s.active = false  -- pending AH callbacks hold this table; they must see the stop
     self.state = NewState()
+    self.lastLane = reason ~= "AH closed" and s.lane or nil  -- a new AH visit starts with your own list
     ADDON.Log:Emit("loop_stop", nil, { reason = reason, spentCopper = s.spentCopper, touched = s.touched,
-                                        stillShort = s.stillShort, skippedCapped = s.skippedCapped })
+                                        stillShort = s.stillShort, skippedCapped = s.skippedCapped, lane = s.lane })
     -- Items the run never reached lose their marks; results stay until the AH closes.
     for i = s.index, #s.queue do
         local m = MF().marks[s.queue[i].itemID]
@@ -274,6 +344,10 @@ function Loop:Stop(reason)
                     or "nothing bought" }
     if s.skippedCapped > 0 then parts[#parts + 1] = s.skippedCapped .. " over cap" end
     if s.stillShort > 0 then parts[#parts + 1] = s.stillShort .. " not bought" end
+    -- After your own shopping, point at the warband pass (the button offers it).
+    if reason ~= "AH closed" and s.lane == "mine" and self:WarbandOffered() then
+        parts[#parts + 1] = ("|cff5AA9FFwarband: %d short|r"):format(self:PreviewShortfallCount("warband"))
+    end
     Status(head .. ": " .. table.concat(parts, " \194\183 "))
 end
 
