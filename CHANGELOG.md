@@ -1,9 +1,13 @@
-## v1.2.0-beta4
+## v1.2.0
 
-- New: **checkout at the Auction House.** Restock at AH now works like ticking off a shopping list. The item and its price show at the bottom of the window, and **Buy** appears right where the Restock button was, so you can buy item after item without moving the mouse.
-- Rows tick off as you go: bought, skipped, or over your cap (hover the mark to see the cheapest price, then set a new cap right there).
+- New: **Restock from Bank.** At the bank, one click moves exactly what you're short from your bank and warband bank into your bags. The window can open by itself at the bank, and Express-Restock at Bank does the pull as soon as you arrive.
+- New: **checkout at the Auction House.** Restock at AH goes down your list with the item and price at the bottom of the window, and **Buy** right where the Restock button was. Rows tick off as you go; items above your cap are marked with the cheapest price.
 - Buy only waits a moment when something needs a second look: you have copies in your bank, the item has no cap, or the price is well above what you last saw.
-- Stop any time with Escape or the x at the bottom left. The end-of-run receipt stays at the bottom of the window.
-- Restock from Bank ticks rows off the same way.
+- New: **Add common consumables** in the side panel fills your list with this expansion's staples.
+- New look: slimmer rows, quality-coloured icon borders, and help moved into tooltips. Stock Clerk uses Expressway when your UI provides it.
+- Adding items is quicker: drag an item onto the Item ID box, or open bulk import to drop or paste many at once.
+- The filter now shows only items you're short on.
+- Recent Activity reads like a receipt, and `/clerk log` gives you a report to paste into a bug report. `/clerk dump` and `/clerk pending` are gone.
+- Smoother at the Auction House alongside Auctionator or TSM, and a smaller download.
 
 Your list, caps and settings carry over unchanged.

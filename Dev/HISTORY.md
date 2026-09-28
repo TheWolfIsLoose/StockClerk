@@ -10,6 +10,15 @@ or, where it had no entry, from that version's GitHub release notes.
 > There is no v1.1.2 stable: the v1.1.2 alphas are the start of v1.2.0
 > (efficiency pass). v1.2.0 plan: `Dev/ROADMAP.md`.
 
+## v1.2.0 (2026-09-27)
+
+Stable release of everything since v1.1.1: the v1.1.2 efficiency alphas,
+v1.2.0-alpha1 and beta1-beta4 (detailed notes below). Also on `dev` after
+beta4: README rewritten player-first (release process moved to
+`Dev/RELEASING.md`, commands table matches the addon), new screenshots.
+`main` gains the whole `dev` history (its two update.bat commits were
+already on `dev`).
+
 ## v1.2.0-beta4 (2026-09-27)
 
 Checkout mode: the AH buy flyout is replaced by the list and footer.

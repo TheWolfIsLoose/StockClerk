@@ -11,12 +11,11 @@ disagree), **Open** (needs an answer before build).
 
 ## Next session: start here
 
-**Handoff 2026-09-27 ~21:20 ET.** `v1.2.0-beta4` (Checkout mode) is
-released after a full in-game check. Next: stable `v1.2.0` (tasks and
-CHANGELOG draft under the v1.2.0 section; add Checkout mode to the draft),
-merge `dev` → `main`.
+**Handoff 2026-09-27 ~21:50 ET.** Stable `v1.2.0` is released (`dev`
+merged into `main`). Next: pick up from the v1.3 candidates / Later list
+below; nothing is in flight.
 
-State: `main` is still v1.1.1 plus the `update.bat` fix.
+State: `main` = `dev` = v1.2.0.
 
 Session setup: player syncs with `Dev\update.bat dev` and `/reload`;
 Claude reads `WTF\Account\SAVAGEFEARLESS\SavedVariables\StockClerk.lua`
