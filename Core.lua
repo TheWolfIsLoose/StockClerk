@@ -24,6 +24,14 @@ function ADDON.MoneyText(copper, precision)
     return #parts > 0 and table.concat(parts, " ") or "0g"
 end
 
+-- "1.2.0-beta4" for a release; "dev 7c13266" for a git checkout synced by
+-- Dev\update.bat (the packager fills the .toc version, update.bat Build.lua).
+function ADDON.VersionText()
+    local v = C_AddOns.GetAddOnMetadata(addonName, "Version") or "?"
+    if v:sub(1, 1) ~= "@" then return v end
+    return ADDON.build and ("dev " .. ADDON.build) or "dev"
+end
+
 function ADDON:Print(msg)
     print("|cff33ff99StockClerk|r: " .. tostring(msg))
 end
@@ -60,7 +68,7 @@ On("ADDON_LOADED", function(name)
     ADDON.DB:Initialize()
 
     -- One log line per version change, so a report shows when an update landed.
-    local g, version = ADDON.DB.global, C_AddOns.GetAddOnMetadata(addonName, "Version") or "?"
+    local g, version = ADDON.DB.global, ADDON.VersionText()
     if g.lastVersion ~= version then
         ADDON.Log:Emit("version", nil, { from = g.lastVersion, to = version })
         g.lastVersion = version

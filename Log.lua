@@ -199,8 +199,7 @@ local WATCHED_ADDONS = {
 }
 
 function Log:Report()
-    local version = C_AddOns.GetAddOnMetadata(addonName, "Version") or "?"
-    if version:sub(1, 1) == "@" then version = "dev (git checkout)" end
+    local version = ADDON.VersionText()
     local wowVersion, build = GetBuildInfo()
 
     local s = ADDON.DB:Settings()

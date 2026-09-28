@@ -835,17 +835,11 @@ function MF:Build()
     local title = header:CreateFontString(nil, "OVERLAY", "StockClerkFontLarge")
     title:SetPoint("LEFT", 12, 0)
     title:SetText("|cff98FF98Stock|rClerk")
-    -- Version from the .toc; amber for alpha/beta. A git checkout still has
-    -- the packager keyword "@project-version@": shown as "dev".
-    local version = C_AddOns.GetAddOnMetadata(addonName, "Version") or ""
+    -- Version ("dev 7c13266" in a git checkout); amber for alpha/beta.
+    local version = ADDON.VersionText()
     local versionLabel = header:CreateFontString(nil, "OVERLAY", "StockClerkFontSmall")
     versionLabel:SetPoint("LEFT", title, "RIGHT", 6, -1)
-    if version == "" or version:sub(1, 1) == "@" then
-        versionLabel:SetText("|cff888888dev|r")
-    else
-        versionLabel:SetText((version:match("%-alpha") or version:match("%-beta")) and ("|cffFFAA00" .. version .. "|r")
-            or ("|cff888888" .. version .. "|r"))
-    end
+    versionLabel:SetText(((version:match("%-alpha") or version:match("%-beta")) and "|cffFFAA00" or "|cff888888") .. version .. "|r")
 
     local closeX = HeaderIcon(header, CLOSE_GLYPH, "Close", function() MF:Hide() end)
     closeX:SetPoint("RIGHT", -4, 0)
