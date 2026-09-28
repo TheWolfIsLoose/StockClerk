@@ -1,33 +1,8 @@
 --[[
     Stock Clerk - UI/Sidecar.lua
-
-    v0.7 redesign: right-docked companion panel that merges the two v0.6
-    surfaces (SettingsDropdown + LogFrame) into a single flyout. Toggled
-    from the header hamburger button. Anchored TOPLEFT to the MainFrame's
-    TOPRIGHT so it grows out to the right without covering the list.
-
-    Layout:
-      * ~260w fixed, height matches MainFrame
-      * Top section: Settings (auto-purchase toggle, default cap, budget,
-        auto-open at AH). Ported from SettingsDropdown so users see the
-        same fields in the same order.
-      * Hairline 1px divider
-      * Bottom section: Recent Activity feed (last ~30 entries, newest
-        first). Two-tier filtering will land in Phase D; this initial
-        build shows every entry uncoloured for parity.
-
-    Persistence:
-      * char.ui.sidecar_open  boolean, remembered per character so the
-        panel stays open across reloads/sessions when the user prefers it
-
-    Fallback contract:
-      * SettingsDropdown remains loaded so any external caller (macro,
-        slash command, other addon) that calls
-        ADDON.SettingsDropdown:Toggle(...) still works.
-      * The hamburger's phase-A stub prefers Sidecar when present and
-        falls back to SettingsDropdown; installing this file switches
-        the header button to Sidecar automatically.
-]]
+    Side panel (the header's hamburger): settings, "Add common consumables",
+    and Recent Activity (activity-level log entries, newest first).
+--]]
 
 local addonName = ...
 local ADDON     = _G[addonName]
@@ -35,340 +10,204 @@ local ADDON     = _G[addonName]
 local Sidecar = {}
 ADDON.Sidecar = Sidecar
 
--- -------------------------------------------------------------------------
--- Palette shim: mirror MainFrame's when available so the sidecar matches
--- the current theme, but degrade to sensible defaults on early Boot before
--- MainFrame has published its palette table.
--- -------------------------------------------------------------------------
-local function P()
-    return (ADDON.MainFrame and ADDON.MainFrame.Palette) or {
-        bg       = { 0.06, 0.06, 0.06, 0.98 },
-        bgMedium = { 0.10, 0.10, 0.10, 1 },
-        bgDark   = { 0.04, 0.04, 0.04, 1 },
-        bandTint = { 1, 1, 1, 0.02 },
-        border   = { 0, 0, 0, 1 },
-        brand    = { 0.60, 1.00, 0.60, 1 },
-    }
+local MF      = ADDON.MainFrame
+local Palette = MF.Palette
+local FEED_MAX, CAP_DEBOUNCE = 30, 10  -- feed lines; seconds
+
+local function Tooltip(owner, title, body)
+    GameTooltip:SetOwner(owner, "ANCHOR_RIGHT")
+    GameTooltip:SetText(title, 1, 1, 1)
+    GameTooltip:AddLine(body, 0.8, 0.8, 0.8, true)
+    GameTooltip:Show()
 end
 
-local WIDTH = 260
+local function Build()
+    MF.ApplyFontFace()
+    local f = MF.DockedPanel("StockClerkSidecar")
 
--- -------------------------------------------------------------------------
--- Small helpers copied from MainFrame's style vocab so the sidecar reads
--- as the same chrome without introducing a shared style module (that's a
--- Phase F/refactor concern, not v0.7).
--- -------------------------------------------------------------------------
-local function ApplyFill(frame, colour)
-    local t = frame:CreateTexture(nil, "BACKGROUND", nil, -8)
-    t:SetAllPoints()
-    t:SetColorTexture(colour[1], colour[2], colour[3], colour[4] or 1)
-    return t
-end
-
-local function AddBlackEdge(frame, side)
-    local t = frame:CreateTexture(nil, "OVERLAY", nil, 6)
-    t:SetColorTexture(0, 0, 0, 1)
-    if side == "left" then
-        t:SetWidth(1); t:SetPoint("TOPLEFT", 0, 0); t:SetPoint("BOTTOMLEFT", 0, 0)
-    elseif side == "right" then
-        t:SetWidth(1); t:SetPoint("TOPRIGHT", 0, 0); t:SetPoint("BOTTOMRIGHT", 0, 0)
-    elseif side == "top" then
-        t:SetHeight(1); t:SetPoint("TOPLEFT", 0, 0); t:SetPoint("TOPRIGHT", 0, 0)
-    else
-        t:SetHeight(1); t:SetPoint("BOTTOMLEFT", 0, 0); t:SetPoint("BOTTOMRIGHT", 0, 0)
-    end
-    return t
-end
-
--- -------------------------------------------------------------------------
--- Build the Sidecar panel lazily. Uses the same StaticPopup contract for
--- auto-purchase enable that SettingsDropdown does -- both surfaces point
--- at the shared "STOCKCLERK_AUTO_ENABLE" dialog, so the confirmation
--- flow is identical no matter which one triggered it.
--- -------------------------------------------------------------------------
-local function Build(anchor)
-    local f = CreateFrame("Frame", "StockClerkSidecar", UIParent, "BackdropTemplate")
-    f:SetSize(WIDTH, 400)  -- height overridden in Toggle to match MainFrame
-    f:SetFrameStrata("HIGH")
-    f:SetFrameLevel(20)
-    f:SetToplevel(true)
-    f:EnableMouse(true)
-    f:Hide()
-
-    ApplyFill(f, P().bg)
-    AddBlackEdge(f, "top")
-    AddBlackEdge(f, "bottom")
-    AddBlackEdge(f, "left")
-    AddBlackEdge(f, "right")
-
-    -- Anchor default (may be re-anchored by Toggle if MainFrame moves).
-    if anchor then
-        f:SetPoint("TOPLEFT", anchor, "TOPRIGHT", 1, 0)
-    else
-        f:SetPoint("CENTER")
-    end
-
-    -- ---- Settings section --------------------------------------------
-    local settingsTitle = f:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+    local settingsTitle = f:CreateFontString(nil, "OVERLAY", "StockClerkFont")
     settingsTitle:SetPoint("TOPLEFT", 12, -10)
     settingsTitle:SetText("|cff98FF98Settings|r")
 
-    -- The auto-purchase checkbox, default
-    -- cap edit, and daily budget edit are gone. Restock is user-driven
-    -- now (WoW's commodity API requires a hardware event per purchase,
-    -- so silent auto was always impossible). No budget = no readout.
+    -- Flat checkbox (sunken well, mint square when on) whose label is part of
+    -- the click area. Tooltip only where the label needs more.
+    local function Check(y, label, key, tip)
+        local c = CreateFrame("CheckButton", nil, f)
+        c:SetPoint("TOPLEFT", 14, y - 3)
+        c:SetSize(16, 16)
+        c:SetHitRectInsets(0, -220, 0, 0)
+        MF.ApplyFill(c, Palette.fieldFill)
+        MF.AddBlackBorder(c)
+        local tick = c:CreateTexture(nil, "OVERLAY")
+        tick:SetColorTexture(unpack(Palette.brand))
+        tick:SetSize(8, 8)
+        tick:SetPoint("CENTER")
+        c:SetCheckedTexture(tick)
+        local wash = c:CreateTexture(nil, "HIGHLIGHT")
+        wash:SetColorTexture(1, 1, 1, 0.12)
+        wash:SetAllPoints()
+        local text = c:CreateFontString(nil, "OVERLAY", "StockClerkFont")
+        text:SetPoint("LEFT", c, "RIGHT", 8, 0)
+        text:SetText(label)
+        c:SetScript("OnClick", function(self)
+            local on = self:GetChecked()
+            ADDON.DB:Settings()[key] = on
+            ADDON.Log:Emit("setting", nil, { key = key, on = on })
+        end)
+        if tip then
+            c:SetScript("OnEnter", function(self) Tooltip(self, label, tip) end)
+            c:SetScript("OnLeave", GameTooltip_Hide)
+        end
+        c.key = key
+        return c
+    end
+    -- "autoRestock" predates the Express-Restock name; kept for saved settings.
+    f.checks = {
+        Check(-30, "Auto-open at Auction House", "autoOpenAtAH"),
+        Check(-52, "Auto-open at Bank", "autoOpenAtBank"),
+        Check(-74, "Express-Restock at Auction House", "autoRestock",
+            "When you open the AH and something is short, start buying right away. You still confirm each purchase."),
+        Check(-96, "Express-Restock at Bank", "autoRestockBank",
+            "When you open your bank and something is short, pull it from your bank and warband bank right away."),
+    }
 
-    -- Auto-open at AH (default ON).
-    local ahCheck = CreateFrame("CheckButton", "StockClerkSidecarAHCheck", f, "UICheckButtonTemplate")
-    ahCheck:SetPoint("TOPLEFT", 8, -32)
-    ahCheck:SetSize(22, 22)
-    _G[ahCheck:GetName() .. "Text"]:SetText("Auto-open at Auction House")
-    _G[ahCheck:GetName() .. "Text"]:SetTextColor(0.9, 0.9, 0.9, 1)
-    f._ahCheck = ahCheck
+    local add = CreateFrame("Button", nil, f)
+    add:SetPoint("TOPLEFT", 12, -126)
+    add:SetPoint("RIGHT", -12, 0)
+    add:SetHeight(22)
+    MF.StyleButton(add)
+    add:SetText("Add common consumables")
+    add:HookScript("OnEnter", function(self)
+        Tooltip(self, "Add common consumables",
+            "Adds this expansion's go-to potions, flasks and weapon oils with a target of 1. Items already on your list are left as they are.")
+    end)
+    add:HookScript("OnLeave", GameTooltip_Hide)
+    add:SetScript("OnClick", function()
+        local n = ADDON.DB:AddCommonConsumables()
+        MF:Refresh()
+        MF:SetStatus(n > 0 and ("Added %d items. Remove any you don't need with the red X on each row."):format(n)
+            or "All the common consumables are already on your list.")
+    end)
 
-    local ahHint = f:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
-    ahHint:SetPoint("TOPLEFT", 30, -54)
-    ahHint:SetPoint("RIGHT", -8, 0)
-    ahHint:SetJustifyH("LEFT")
-    ahHint:SetWordWrap(true)
-    ahHint:SetText("Pop the shopping list open when you visit the AH.")
-
-    -- Express-Restock on AH open (default OFF). v1.1 rename; internal
-    -- identifier stays StockClerkSidecarAutoRestockCheck / DB field
-    -- autoRestock for compatibility.
-    local arCheck = CreateFrame("CheckButton", "StockClerkSidecarAutoRestockCheck", f, "UICheckButtonTemplate")
-    arCheck:SetPoint("TOPLEFT", 8, -78)
-    arCheck:SetSize(22, 22)
-    _G[arCheck:GetName() .. "Text"]:SetText("Express-Restock on AH open")
-    _G[arCheck:GetName() .. "Text"]:SetTextColor(0.9, 0.9, 0.9, 1)
-    f._autoRestockCheck = arCheck
-
-    local arHint = f:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
-    arHint:SetPoint("TOPLEFT", 30, -100)
-    arHint:SetPoint("RIGHT", -8, 0)
-    arHint:SetJustifyH("LEFT")
-    arHint:SetWordWrap(true)
-    arHint:SetText("Also start the restock loop when the AH opens (if anything is short).")
-
-    -- ---- Divider -----------------------------------------------------
-    local divider = f:CreateTexture(nil, "OVERLAY", nil, 6)
+    local divider = f:CreateTexture(nil, "OVERLAY")
     divider:SetColorTexture(0, 0, 0, 1)
     divider:SetHeight(1)
-    divider:SetPoint("TOPLEFT", 8, -136)
-    divider:SetPoint("TOPRIGHT", -8, -136)
+    divider:SetPoint("TOPLEFT", 8, -158)
+    divider:SetPoint("TOPRIGHT", -8, -158)
 
-    -- ---- Activity feed section --------------------------------------
-    local feedTitle = f:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-    feedTitle:SetPoint("TOPLEFT", 12, -144)
+    -- Recent Activity. Hovering the title (or the "/clerk log" link, which
+    -- opens the log) explains how to send a bug report.
+    local feedTitle = f:CreateFontString(nil, "OVERLAY", "StockClerkFont")
+    feedTitle:SetPoint("TOPLEFT", 12, -166)
     feedTitle:SetText("|cff98FF98Recent Activity|r")
+    local function FeedHelp(owner)
+        GameTooltip:SetOwner(owner, "ANCHOR_RIGHT")
+        GameTooltip:SetText("Recent Activity", 1, 1, 1)
+        GameTooltip:AddLine("What StockClerk did, newest first.", 0.8, 0.8, 0.8, true)
+        GameTooltip:AddLine(" ")
+        GameTooltip:AddLine("Something not working?", 1, 1, 1)
+        GameTooltip:AddLine("1. Type /clerk log (or click the link) and press Ctrl+C.", 0.8, 0.8, 0.8, true)
+        GameTooltip:AddLine("2. Paste it into your bug report.", 0.8, 0.8, 0.8, true)
+        GameTooltip:AddLine(" ")
+        GameTooltip:AddLine("If the problem happens again and again: type /clerk debug first, repeat the problem, then /clerk log.", 0.8, 0.8, 0.8, true)
+        GameTooltip:Show()
+    end
+    local help = CreateFrame("Frame", nil, f)
+    help:SetAllPoints(feedTitle)
+    help:EnableMouse(true)
+    help:SetScript("OnEnter", FeedHelp)
+    help:SetScript("OnLeave", GameTooltip_Hide)
 
-    -- "log" hint anchored to feedTitle's right so the user can find the
-    -- full log dump.
-    local feedHint = f:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
-    feedHint:SetPoint("TOPRIGHT", -12, -148)
-    feedHint:SetText("|cff6a6a6a/clerk log|r")
+    local link = CreateFrame("Button", nil, f)
+    link:SetPoint("TOPRIGHT", -12, -168)
+    link:SetSize(60, 14)
+    local linkText = link:CreateFontString(nil, "OVERLAY", "StockClerkFontSmall")
+    linkText:SetPoint("RIGHT")
+    linkText:SetText("/clerk log")
+    linkText:SetTextColor(0.42, 0.42, 0.42)
+    link:SetScript("OnEnter", function(self) linkText:SetTextColor(unpack(Palette.brand)); FeedHelp(self) end)
+    link:SetScript("OnLeave", function() linkText:SetTextColor(0.42, 0.42, 0.42); GameTooltip:Hide() end)
+    link:SetScript("OnClick", function() ADDON.LogPopup:Toggle() end)
 
-    -- Scrollframe hosts the feed rows. Simple, no fancy pooling -- the
-    -- panel is bounded and refreshes on Emit, so ~30 rows is the ceiling.
-    local scrollBg = f:CreateTexture(nil, "BACKGROUND")
-    scrollBg:SetColorTexture(P().bgDark[1], P().bgDark[2], P().bgDark[3], 0.6)
-    scrollBg:SetPoint("TOPLEFT", 8, -166)
-    scrollBg:SetPoint("BOTTOMRIGHT", -8, 8)
-
-    local scrollFrame = CreateFrame("ScrollFrame", "StockClerkSidecarScroll", f, "UIPanelScrollFrameTemplate")
-    scrollFrame:SetPoint("TOPLEFT", 10, -168)
-    scrollFrame:SetPoint("BOTTOMRIGHT", -28, 10)  -- -28 leaves room for the scrollbar
-
-    local feedContent = CreateFrame("Frame", nil, scrollFrame)
-    feedContent:SetSize(WIDTH - 40, 1)  -- height grows in Refresh
-    scrollFrame:SetScrollChild(feedContent)
-    f._feedContent = feedContent
-    f._feedRows = {}
-
-    -- ---- Wire behavior ----------------------------------------------
-    ahCheck:SetScript("OnClick", function(self)
-        ADDON.DB:Settings().autoOpenAtAH = self:GetChecked() and true or false
-    end)
-    arCheck:SetScript("OnClick", function(self)
-        ADDON.DB:Settings().autoRestock = self:GetChecked() and true or false
-    end)
+    local feedBg = f:CreateTexture(nil, "BACKGROUND")
+    feedBg:SetColorTexture(Palette.bgDark[1], Palette.bgDark[2], Palette.bgDark[3], 0.6)
+    feedBg:SetPoint("TOPLEFT", 8, -188)
+    feedBg:SetPoint("BOTTOMRIGHT", -8, 8)
+    local scroll = CreateFrame("ScrollFrame", "StockClerkSidecarScroll", f, "UIPanelScrollFrameTemplate")
+    scroll:SetPoint("TOPLEFT", 10, -190)
+    scroll:SetPoint("BOTTOMRIGHT", -28, 10)  -- room for the scroll bar
+    f.feed = CreateFrame("Frame", nil, scroll)
+    f.feed:SetSize(220, 1)
+    scroll:SetScrollChild(f.feed)
+    f.feedRows = {}
 
     Sidecar.frame = f
     return f
 end
 
--- -------------------------------------------------------------------------
--- Format one log entry as one line of feed text. Deliberately short -- the
--- sidecar is a preview, not the full log. Phase D adds tag prefixes
--- ([BUY]/[CAP]/[AUTO-BLOCK]) and cap-change debouncing.
--- -------------------------------------------------------------------------
-local function FormatEntry(entry)
-    local kind = entry.kind or "?"
-    local pay  = entry.payload or {}
-    local itemLink = nil
-    if entry.itemID then
-        -- GetItemInfo may return nil if the client hasn't cached this id
-        -- yet; fall back to id string in that case.
-        local _, link = GetItemInfo(entry.itemID)
-        itemLink = link or ("item:" .. entry.itemID)
-    end
-    local when = date("%H:%M", entry.ts or time())
-
-    if kind == "buy_success" then
-        local g = math.floor((pay.spentCopper or 0) / 10000)
-        return ("|cff98FF98[%s] [BUY]|r %sx%s (%dg)"):format(when, itemLink or "?", pay.qty or "?", g)
-    elseif kind == "cap_change" then
-        local from = pay.fromCopper and math.floor(pay.fromCopper / 10000) .. "g" or "unset"
-        local to   = pay.toCopper   and math.floor(pay.toCopper   / 10000) .. "g" or "unset"
-        return ("|cffe5e0a5[%s] [CAP]|r %s -> %s on %s"):format(when, from, to, itemLink or "?")
-    elseif kind == "auto_refuse" then
-        return ("|cffe5624a[%s] [AUTO-BLOCK]|r %s"):format(when, pay.reason or "?")
-    elseif kind == "buy_fail" then
-        return ("|cffe5624a[%s] [BUY-FAIL]|r %s (%s)"):format(when, itemLink or "?", pay.reason or "?")
-    elseif kind == "target_change" then
-        return ("|cffcccccc[%s]|r target %s -> %s on %s"):format(when, pay.from or "?", pay.to or "?", itemLink or "?")
-    elseif kind == "add" then
-        return ("|cffcccccc[%s]|r added %s (need %s)"):format(when, itemLink or "?", pay.need or "?")
-    elseif kind == "remove" then
-        return ("|cff888888[%s]|r removed %s|r"):format(when, itemLink or "?")
-    elseif kind == "loop_start" then
-        return ("|cff98FF98[%s]|r loop start (%s, %s items)"):format(when, pay.mode or "?", pay.queueSize or 0)
-    elseif kind == "loop_stop" then
-        local g = math.floor((pay.spentCopper or 0) / 10000)
-        return ("|cff888888[%s]|r loop stop: %s (%dg spent)"):format(when, pay.reason or "?", g)
-    elseif kind == "auto_toggle" then
-        return ("|cffcccccc[%s]|r auto %s"):format(when, pay.on and "ON" or "OFF")
-    elseif kind == "status" then
-        return ("|cff888888[%s]|r %s"):format(when, pay.text or "")
-    elseif kind == "kbd_stuck" then
-        -- Keyboard-capture watchdog. Alarm red so it stands out in
-        -- the recent activity list if the bug ever recurs on a tester.
-        return ("|cff888888[%s]|r |cffff6666[KBD] %s|r"):format(when, tostring(pay.reason or "unknown"))
-    else
-        return ("|cff888888[%s]|r %s|r"):format(when, kind)
-    end
+-- Feed line i, created on first use at a fixed height. A cut-off line shows
+-- in full in a tooltip (WoW's scroll frames don't scroll sideways).
+local function FeedRow(f, i)
+    local row = f.feedRows[i]
+    if row then return row end
+    row = CreateFrame("Frame", nil, f.feed)
+    row:SetPoint("TOPLEFT", 4, -(i - 1) * 14)
+    row:SetPoint("RIGHT", -4, 0)
+    row:SetHeight(14)
+    row.text = row:CreateFontString(nil, "ARTWORK", "StockClerkFontSmall")
+    row.text:SetAllPoints()
+    row.text:SetJustifyH("LEFT")
+    row.text:SetWordWrap(false)
+    row:SetScript("OnEnter", function(self)
+        if not self.text:IsTruncated() then return end
+        GameTooltip:SetOwner(self, "ANCHOR_LEFT")
+        GameTooltip:SetText(self.text:GetText(), 1, 1, 1, 1, true)
+        GameTooltip:Show()
+    end)
+    row:SetScript("OnLeave", GameTooltip_Hide)
+    f.feedRows[i] = row
+    return row
 end
 
--- -------------------------------------------------------------------------
--- Public: Refresh both sections.
--- -------------------------------------------------------------------------
 function Sidecar:Refresh()
     local f = self.frame
-    if not f then return end
-    local s = ADDON.DB:Settings()
+    local settings = ADDON.DB:Settings()
+    for _, c in ipairs(f.checks) do c:SetChecked(settings[c.key]) end
 
-    -- Settings widgets
-    f._ahCheck:SetChecked(s.autoOpenAtAH and true or false)
-    if f._autoRestockCheck then
-        f._autoRestockCheck:SetChecked(s.autoRestock and true or false)
-    end
-
-    -- Activity feed. Two-tier model per v0.7 spec:
-    -- * BASIC (this sidecar): curated action-focused entries only.
-    --   Buys, cap changes (debounced 10s per item), and auto-blocks.
-    --   Cap-change debouncing collapses rapid retyping of the cap edit
-    --   box so the feed doesn't churn on every keystroke.
-    -- * VERBOSE (LogPopup / `/clerk log`): everything, unfiltered.
-    for _, r in ipairs(f._feedRows) do r:Hide() end
-
-    local raw = {}
-    if ADDON.Log and ADDON.Log.Query then
-        raw = ADDON.Log:Query()  -- newest-first
-    end
-
-    local BASIC_KINDS = {
-        buy_success = true,
-        buy_fail    = true,
-        cap_change  = true,
-        auto_refuse = true,
-        loop_start  = true,
-        loop_stop   = true,
-    }
-    local CAP_DEBOUNCE_SEC = 10
-
-    local entries = {}
-    local lastCapByItem = {}  -- itemID -> ts of last kept cap_change
-    for i = 1, #raw do
-        local e = raw[i]
-        if BASIC_KINDS[e.kind] then
-            if e.kind == "cap_change" and e.itemID then
-                local prev = lastCapByItem[e.itemID]
-                -- Raw is newest-first, so "prev" is a NEWER kept entry;
-                -- we drop this one if it's within 10s of that newer one.
-                if prev and (prev - (e.ts or 0)) < CAP_DEBOUNCE_SEC then
-                    -- Swallow
-                else
-                    lastCapByItem[e.itemID] = e.ts or 0
-                    entries[#entries + 1] = e
-                end
-            else
-                entries[#entries + 1] = e
-            end
+    -- Activity entries, newest first. Cap changes on one item within 10s
+    -- collapse to the newest, so retyping a cap doesn't flood the feed.
+    local shown, lastCap = 0, {}
+    for _, e in ipairs(ADDON.Log:Query()) do
+        if shown == FEED_MAX then break end
+        local keep = ADDON.Log.LEVEL[e.kind] == "activity"
+        if keep and e.kind == "cap_change" then
+            keep = not (lastCap[e.itemID] and lastCap[e.itemID] - e.ts < CAP_DEBOUNCE)
+            if keep then lastCap[e.itemID] = e.ts end
+        end
+        if keep then
+            shown = shown + 1
+            local row = FeedRow(f, shown)
+            -- Base colour on the font string (red for failures), so the item
+            -- name's |r falls back to it; the name itself is quality-coloured.
+            row.text:SetText(("|cff888888[%s]|r %s"):format(date("%H:%M", e.ts), ADDON.Log:Format(e, false, true)))
+            row.text:SetTextColor(unpack((e.kind == "error" or e.kind == "buy_fail") and { 1, 0.53, 0.53 } or { 1, 1, 1 }))
+            row:Show()
         end
     end
-
-    local MAX = 30
-    local content = f._feedContent
-    local y = 0
-    for i = 1, math.min(#entries, MAX) do
-        local e = entries[i]
-        local row = f._feedRows[i]
-        if not row then
-            row = content:CreateFontString(nil, "ARTWORK", "GameFontHighlightSmall")
-            row:SetPoint("TOPLEFT", 4, -y)
-            row:SetPoint("RIGHT", -4, 0)
-            row:SetJustifyH("LEFT")
-            row:SetWordWrap(false)
-            f._feedRows[i] = row
-        else
-            row:ClearAllPoints()
-            row:SetPoint("TOPLEFT", 4, -y)
-            row:SetPoint("RIGHT", -4, 0)
-        end
-        row:SetText(FormatEntry(e))
-        row:Show()
-        y = y + 14
-    end
-    content:SetHeight(math.max(1, y))
+    for i = shown + 1, #f.feedRows do f.feedRows[i]:Hide() end
+    f.feed:SetHeight(math.max(1, shown * 14))
 end
 
--- -------------------------------------------------------------------------
--- Public: toggle the panel anchored to the header hamburger button. We
--- prefer to anchor to the MainFrame's TOPRIGHT (not the button) so the
--- sidecar hangs off the window itself; the button is only passed so we
--- can traverse up to the frame if MainFrame's reference isn't available.
--- -------------------------------------------------------------------------
-function Sidecar:Toggle(anchorButton)
-    local mainFrame = (ADDON.MainFrame and ADDON.MainFrame.frame) or nil
-    local anchor    = mainFrame or (anchorButton and anchorButton:GetParent()) or UIParent
-    local f = self.frame or Build(anchor)
+-- Log calls this for each new activity entry.
+function Sidecar:OnActivity()
+    if self:IsShown() then self:Refresh() end
+end
 
-    if f:IsShown() then
-        f:Hide()
-        if ADDON.DB and ADDON.DB.db and ADDON.DB.db.char then
-            ADDON.DB.db.char.ui = ADDON.DB.db.char.ui or {}
-            ADDON.DB.db.char.ui.sidecar_open = false
-        end
-        return
-    end
-
-    -- Re-anchor to current main frame each open so a moved main window
-    -- carries the sidecar with it. Match height to the main frame.
-    f:ClearAllPoints()
-    if mainFrame then
-        f:SetPoint("TOPLEFT", mainFrame, "TOPRIGHT", 1, 0)
-        f:SetHeight(mainFrame:GetHeight())
-    else
-        f:SetPoint("CENTER")
-    end
-
+function Sidecar:Toggle()
+    local f = self.frame or Build()
+    if f:IsShown() then return f:Hide() end
     self:Refresh()
-    f:Show()
-
-    if ADDON.DB and ADDON.DB.db and ADDON.DB.db.char then
-        ADDON.DB.db.char.ui = ADDON.DB.db.char.ui or {}
-        ADDON.DB.db.char.ui.sidecar_open = true
-    end
+    MF:ShowPanel(f)
 end
 
 function Sidecar:Hide()
@@ -377,31 +216,4 @@ end
 
 function Sidecar:IsShown()
     return self.frame and self.frame:IsShown()
-end
-
--- -------------------------------------------------------------------------
--- Bridge: when the log emits a new entry AND the sidecar is open, refresh
--- the feed. Log.lua already has a hook that refreshes LogFrame if it's
--- open; we ride the same convention by having Log check for us too.
--- Rather than editing Log.lua to know about a second consumer, we hook
--- Log:Emit here at file-load time.
--- -------------------------------------------------------------------------
-do
-    if ADDON.Log and ADDON.Log.Emit and not ADDON.Log._sidecar_hook then
-        local origEmit = ADDON.Log.Emit
-        ADDON.Log.Emit = function(self, kind, itemID, payload)
-            origEmit(self, kind, itemID, payload)
-            if Sidecar.frame and Sidecar.frame:IsShown() then
-                -- Guard: avoid recursive refresh if a Refresh() call ends
-                -- up emitting its own log entry (nothing today does, but
-                -- cheap insurance for future changes).
-                if not Sidecar._refreshing then
-                    Sidecar._refreshing = true
-                    pcall(Sidecar.Refresh, Sidecar)
-                    Sidecar._refreshing = false
-                end
-            end
-        end
-        ADDON.Log._sidecar_hook = true
-    end
 end

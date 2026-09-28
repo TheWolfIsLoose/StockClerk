@@ -9,26 +9,22 @@
 ## X-Category: Inventory
 ## X-Curse-Project-ID: 1700292
 
-Libs\Libs.xml
-
-Locale.lua
 DB.lua
+Build.lua
+Data\Consumables.lua
 Log.lua
 ItemResolver.lua
 Inventory.lua
 AH.lua
 Core.lua
-
-Sources\Bags.lua
-
 RestockLoop.lua
+BankRestock.lua
 
 UI\MainFrame.lua
 UI\BulkImport.lua
-UI\SettingsDropdown.lua
 UI\Sidecar.lua
 UI\LogPopup.lua
 
 #@debug@
-Dev\RecommendedLists.lua
+Dev\BankProbe.lua
 #@end-debug@

@@ -90,6 +90,9 @@ git clean -fdq
 
 REM ---- Report ---------------------------------------------------------
 for /f "delims=" %%h in ('git log -1 --format^=%%h') do set "AFTER=%%h"
+REM Stamp the commit for the window header and /clerk log ("dev 7c13266").
+REM The next sync's reset --hard restores the committed Build.lua first.
+> Build.lua echo _G[...].build = "%AFTER%"
 echo.
 if "%BEFORE%"=="" (
     echo Installed: %AFTER% on %BRANCH%
