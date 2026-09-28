@@ -11,18 +11,19 @@ disagree), **Open** (needs an answer before build).
 
 ## Next session: start here
 
-**Handoff 2026-09-27 ~22:15 ET (parked; resume later this week).**
-Stable `v1.2.0` is out (`main` = `dev`; only roadmap commits since).
-Next is **v1.3.0: deposit to the bank + warband supplier mode**, scoped
-in its section below, nothing built. In order:
-
-1. Get the player's answers to the three open decisions:
-   (a) Express-Restock at Bank auto-deposits for suppliers? (default no);
-   (b) surplus deposit for normal characters in 1.3 or later?;
-   (c) Copy list (bulk import export/paste) in 1.3? (recommended yes).
-2. In-game spike: addon code placing a bag stack into a warband tab slot
-   (`PickupContainerItem`), tab filters don't block it, chaining speed.
-3. Build as `v1.3.0-alpha1` on `dev`.
+**2026-09-28: decisions answered; spike ready.** Stable `v1.2.0` is out.
+Next is **v1.3.0: deposit to the bank + warband supplier mode** (section
+below). Decided: (a) Express-Restock never deposits, suppliers included;
+(b) surplus deposit for normal characters ships in 1.3; (c) no Copy list:
+Add common consumables covers first-line stock, and bulk import (ID /
+target / cap per line) is the path for mats, fish etc.
+1. **In-game deposit spike** (on `dev`): `Dev\update.bat dev`, `/reload`,
+   then at a banker `/clerk bankprobe <itemID>` (prep in the header of
+   `Dev/BankProbe.lua`: ~30 of a stackable in 2+ bag stacks, a partial
+   stack of it in a warband tab, free slots in every tab; optionally one
+   tab's deposit filter set to exclude the item). `/reload` after, then
+   Claude reads `StockClerkDB.bankProbe` from SavedVariables.
+2. Build as `v1.3.0-alpha1` on `dev`.
 
 Pending on the player's side: paste the CurseForge description and the
 GitHub "About" line (drafted in the 2026-09-27 session: pitch "A
@@ -608,8 +609,9 @@ That is one per-character switch, not a new list or new columns.
 
 **Rules (Decided unless marked)**
 - Never automatic: deposits only on a button press. Express-Restock at
-  Bank never deposits (**Default**; revisit for suppliers, where
-  auto-deposit is arguably the whole point).
+  Bank never deposits, suppliers included (**Decided 2026-09-28**).
+- Surplus deposit for normal characters (2) ships in 1.3 (**Decided
+  2026-09-28**).
 - Destination is the warband bank only (**Default**): the feature exists
   to share stock; a character-bank deposit helps nobody else. Items that
   can't go there are skipped and named in the footer.
@@ -617,16 +619,15 @@ That is one per-character switch, not a new list or new columns.
   one button (pull for normal characters, deposit for suppliers).
 
 **Open**
-- Setting up the supplier's list: lists are per character
-  (`SavedVariablesPerCharacter`), so an alt can't read a main's list.
-  Cheapest route: **Copy list** in bulk import (item IDs and targets as
-  text; paste on the other character). Moving lists account-wide is a
-  bigger change; skip unless asked.
+- Setting up the supplier's list (**Decided 2026-09-28: no Copy list**):
+  lists are per character; Add common consumables covers first-line
+  stock, and bulk import (ID / target / cap lines) covers the rest (mats,
+  fish), adjusted on the list afterwards. Account-wide lists: skip unless
+  asked.
 - Supplier targets for many mains: one number per item (e.g. 200 flasks
   for everyone). Per-character demand math is out of scope.
-- Surplus deposit (2): ship with (1), or wait for demand?
 
-**Spike first (short, in-game):** placing a bag stack into a warband tab
+**Spike first (short, in-game; probe ready: `/clerk bankprobe <itemID>`):** placing a bag stack into a warband tab
 slot via `PickupContainerItem` from addon code; tab deposit-filter
 settings don't block manual placement; how fast deposits can chain.
 
