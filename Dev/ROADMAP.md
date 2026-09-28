@@ -11,15 +11,14 @@ disagree), **Open** (needs an answer before build).
 
 ## Next session: start here
 
-**2026-09-28: v1.3.0-beta1 built on `dev`** (Warband list; design and
-"as built" in the v1.3 section below). Next:
-1. Player: `Dev\update.bat dev`, `/reload`, run the in-game checklist in
-   the v1.3 section (and the deposit probe, `/clerk bankprobe <itemID>`,
-   if convenient). `/reload` after; Claude reads the log and
-   `StockClerkDB.bankProbe` from SavedVariables.
-2. Fix what comes up; then release beta1 (draft CHANGELOG in the v1.3
-   section; `CHANGELOG.md` still reads v1.2.0 so pushes don't publish).
-   Tab deposit-filter preference if the probe shows filters matter.
+**2026-09-28: v1.3.0-beta1 released** (Warband list). Verified in-game
+the same day: warband pass, alternating lanes, pull, deposit (fixed
+landing check). Next:
+1. Still unchecked in-game: buy on one character, switch before
+   depositing (transit: not short there); a soulbound listed item at
+   Deposit (red mark, footer); a full warband bank.
+2. Tab deposit-filter preference if the probe (`/clerk bankprobe
+   <itemID>`) shows filters matter.
 3. Before stable v1.3.0: new public copy (README, CurseForge) and hero
    shots of the Warband Bank stock.
 
@@ -724,8 +723,7 @@ and never pick a locked warband slot as a target.
   "Done: deposited N to the warband"; a soulbound listed item gets the red
   mark "Can't go in the warband bank"; mail note when purchases are unlooted.
 
-**v1.3.0-beta1 CHANGELOG (draft; goes into CHANGELOG.md to release, after
-the in-game check):**
+**v1.3.0-beta1 CHANGELOG (released 2026-09-28):**
 ```
 ## v1.3.0-beta1
 
