@@ -6,6 +6,10 @@
     restock). Style rules: Dev/STYLE.md. The helpers here are shared with
     the side panel, bulk import and log windows (MF.*).
 
+    Two lists (header switch: Mine · Warband). The view decides what the
+    list shows and where adds go; it never changes what Restock does. The
+    accent (Palette.brand) is mint for Mine, warband blue for Warband.
+
     Row: [grip] [icon] name ........ have (+stash)  [need]  [cap]  seen  [x]
     Click Need or Cap to edit; shift-click to link; with the AH open, click
     to search. Drag the grip to reorder (list order = restock priority).
@@ -21,6 +25,7 @@ ADDON.MainFrame = MF
 
 local ROW_HEIGHT = 24
 local MoneyText  = ADDON.MoneyText
+local EMPTY_WARBAND = "Keep at least this many in your warband bank, for all your characters. Anything above your own targets is deposited here when you visit the bank.\n\nAdd items the same way as your own list: the Item ID box, dragging an item onto it, or bulk import."
 local EMPTY_LIST = "No items yet.\n\nAdd items by:\n |cffffffff1.|r Typing an item ID into the Item ID box and pressing Enter\n |cffffffff2.|r Dragging an item from your bags onto the Item ID box\n |cffffffff3.|r Opening bulk import (the button right of Target) to drop or paste many at once"
 
 -- ---------------------------------------------------------------------------
@@ -65,11 +70,15 @@ local Palette = {
     hoverWash    = { 0.851, 0.851, 0.851, 0.15 }, -- "the mouse is here"
     pressFill    = { 0.851, 0.851, 0.851, 0.22 },
     border       = { 0, 0, 0, 1 },
-    brand        = { 0.596, 1, 0.596, 1 },        -- mint #98FF98: hover, focus, on
+    brand        = { 0.596, 1, 0.596, 1 },        -- accent: mint, or warband blue in the Warband view (SetView)
     short        = { 0.90, 0.30, 0.30, 1 },
     rowSeparator = { 0.15, 0.15, 0.15, 1 },
 }
 MF.Palette = Palette
+-- #5AA9FF: apart from mint in lightness, not just hue (holds under colour-
+-- deficiency filters); WoW's own Warbound #00CCFF is too close to mint.
+local MINT, WARBAND = { 0.596, 1, 0.596, 1 }, { 0.353, 0.663, 1, 1 }
+MF.WARBAND_HEX = "5AA9FF"
 
 local TRASH_TEX     = "Interface\\Buttons\\UI-GroupLoot-Pass-Up"  -- native red X
 local QUESTION_ICON = 134400
@@ -286,7 +295,7 @@ local function MakeEditBox(parent, placeholder, maxLetters, tipTitle, tipBody)
         GameTooltip:ClearAllPoints()
         GameTooltip:SetPoint("BOTTOM", box, "TOP", 0, 4)
         GameTooltip:SetText(tipTitle, 1, 1, 1)
-        GameTooltip:AddLine(tipBody, 0.8, 0.8, 0.8, true)
+        GameTooltip:AddLine(type(tipBody) == "function" and tipBody() or tipBody, 0.8, 0.8, 0.8, true)
         GameTooltip:Show()
     end
     local function leave()
@@ -444,11 +453,20 @@ local function BuildRow(row)
     row.have:SetPoint("RIGHT", -6, 0)
     row.haveCell:SetScript("OnEnter", function(self)
         OnChildEnter(self)
-        local bd = self:GetParent()._breakdown
+        local r = self:GetParent()
+        local bd = r._breakdown
         GameTooltip:SetOwner(self, "ANCHOR_TOP")
-        GameTooltip:SetText(("Have: %d in bags"):format(bd.bags), 1, 1, 1)
-        if bd.bank > 0 then GameTooltip:AddLine(("+%d in bank (this character)"):format(bd.bank), 0.78, 0.78, 0.78) end
-        if bd.warband > 0 then GameTooltip:AddLine(("+%d in warband bank (account-wide)"):format(bd.warband), 0.78, 0.78, 0.78) end
+        if MF:View() == "warband" then
+            local mine = ADDON.RestockLoop:Surplus(r._itemID)
+            local others = ADDON.RestockLoop:WarbandHave(r._itemID) - bd.warband - mine
+            GameTooltip:SetText(("Have: %d in the warband bank"):format(bd.warband), 1, 1, 1)
+            if mine > 0 then GameTooltip:AddLine(("+%d from this character (above your own target, deposited at the bank)"):format(mine), 0.78, 0.78, 0.78, true) end
+            if others > 0 then GameTooltip:AddLine(("+%d bought by your other characters, not yet deposited"):format(others), 0.78, 0.78, 0.78, true) end
+        else
+            GameTooltip:SetText(("Have: %d in bags"):format(bd.bags), 1, 1, 1)
+            if bd.bank > 0 then GameTooltip:AddLine(("+%d in bank (this character)"):format(bd.bank), 0.78, 0.78, 0.78) end
+            if bd.warband > 0 then GameTooltip:AddLine(("+%d in warband bank (account-wide)"):format(bd.warband), 0.78, 0.78, 0.78) end
+        end
         GameTooltip:Show()
     end)
     row.haveCell:SetScript("OnLeave", OnChildLeave)
@@ -536,8 +554,8 @@ local function BuildRow(row)
     row.trash:SetScript("OnLeave", function(self) RowLeave(self:GetParent()) end)
     row.trash:SetScript("OnClick", function(self)
         local r = self:GetParent()
-        ADDON.DB:RemoveItem(r._itemID)
-        ADDON.Log:Emit("remove", r._itemID, { name = r._itemLink })
+        ADDON.DB:RemoveItem(r._itemID, MF:View())
+        ADDON.Log:Emit("remove", r._itemID, { name = r._itemLink, list = MF:View() })
         MF:Refresh()
     end)
 
@@ -647,10 +665,10 @@ local function BuildRow(row)
             local gold = tonumber(text)
             local copper = (gold and gold > 0) and gold * 10000 or nil
             if copper == r._maxPrice then return false end
-            ADDON.DB:SetItemMaxPrice(r._itemID, copper)
+            ADDON.DB:SetItemMaxPrice(r._itemID, copper, MF:View())
             MF:SetStatus(copper and ("Cap for %s set to %dg"):format(r.name:GetText(), gold)
                 or ("Cap cleared for %s"):format(r.name:GetText()))
-            ADDON.Log:Emit("cap_change", r._itemID, { fromCopper = r._maxPrice, toCopper = copper })
+            ADDON.Log:Emit("cap_change", r._itemID, { fromCopper = r._maxPrice, toCopper = copper, list = MF:View() })
             r._maxPrice = copper
             return true
         end,
@@ -661,14 +679,14 @@ local function BuildRow(row)
         cell = "needCell", label = "need", edit = "needEdit",
         prefill = function(r) return tostring(r._need) end,
         tooltip = function(r)
-            GameTooltip:SetText(("Target: %d"):format(r._need), 1, 1, 1)
+            GameTooltip:SetText((MF:View() == "warband" and "Keep at least %d in the warband bank" or "Target: %d"):format(r._need), 1, 1, 1)
             GameTooltip:AddLine("Click to change", 0.7, 0.7, 0.7)
         end,
         commit = function(r, text)
             local need = tonumber(text)
             if not (need and need > 0 and need ~= r._need) then return false end
-            ADDON.DB:SetItem(r._itemID, need)
-            ADDON.Log:Emit("target_change", r._itemID, { from = r._need, to = need })
+            ADDON.DB:SetItem(r._itemID, need, nil, MF:View())
+            ADDON.Log:Emit("target_change", r._itemID, { from = r._need, to = need, list = MF:View() })
             r._need = need
             return true
         end,
@@ -715,23 +733,26 @@ local function InitializeRow(row, data)
         end)
     end
 
-    -- Have: red when short, mint when stocked; the (+N) stash stays grey.
+    -- Have: red when short, mint when stocked; the (+N) stays grey.
     local bd = ADDON.Inventory:GetBreakdown(itemID)
-    local stashed, short = bd.bank + bd.warband, data.need - bd.bags
+    local have, stashed, short = MF:Counts(itemID, data.need)
     row._breakdown = bd
-    row.have:SetText((short > 0 and "|cffe5624a%d|r" or "|cff98FF98%d|r"):format(bd.bags)
+    row.have:SetText((short > 0 and "|cffe5624a%d|r" or "|cff98FF98%d|r"):format(have)
         .. (stashed > 0 and ("  |cff888888(+%d)|r"):format(stashed) or ""))
     row.accent:SetColorTexture(unpack(short > 0 and { 0xe5 / 255, 0x62 / 255, 0x4a / 255 } or { 0x4a / 255, 0xde / 255, 0x80 / 255 }))
     row.need:SetText(("|cffCCCCCC%d|r"):format(data.need))
 
-    -- Restock mark in the grip's place; the current item gets a mint wash.
+    -- Restock mark in the grip's place; the current item gets an accent wash.
+    -- Deposit marks are warband blue whatever the view.
     local mark = MF.marks[itemID]
     local style = mark and MARK_STYLES[mark.kind]
+    local accent = mark and mark.blue and WARBAND or Palette.brand
     row.gripGlyph:SetShown(not style)
     for shape, g in pairs(row.markGlyphs) do g:SetShown(style and style[1] == shape) end
-    if style then row.markGlyphs[style[1]].tint(style[2]) end
+    if style then row.markGlyphs[style[1]].tint(style[2] == Palette.brand and accent or style[2]) end
     row._current:SetShown(mark and mark.kind == "current" or false)
-    if mark and mark.kind == "current" then row.accent:SetColorTexture(unpack(Palette.brand)) end
+    row._current:SetColorTexture(accent[1], accent[2], accent[3], 0.08)
+    if mark and mark.kind == "current" then row.accent:SetColorTexture(unpack(accent)) end
 
     -- Cap: mint "Ng"; red when last seen is above it (a buy would be refused);
     -- a dash when unset (buys at market; checkout warns "No cap set").
@@ -752,10 +773,10 @@ local function InitializeRow(row, data)
 
     if ADDON.debug then  -- trace only when this row's numbers change
         MF._traced = MF._traced or {}
-        local sig = ("%d/%d/%d"):format(bd.bags, stashed, data.need)
+        local sig = ("%d/%d/%d"):format(have, stashed, data.need)
         if MF._traced[itemID] ~= sig then
             MF._traced[itemID] = sig
-            ADDON.Debug("Row", ("id=%d bags=%d stashed=%d need=%d"):format(itemID, bd.bags, stashed, data.need))
+            ADDON.Debug("Row", ("%s id=%d have=%d stashed=%d need=%d"):format(MF:View(), itemID, have, stashed, data.need))
         end
     end
 end
@@ -843,8 +864,38 @@ function MF:Build()
 
     local closeX = HeaderIcon(header, CLOSE_GLYPH, "Close", function() MF:Hide() end)
     closeX:SetPoint("RIGHT", -4, 0)
-    HeaderIcon(header, { { 14, 2, 4 }, { 14, 2, 0 }, { 14, 2, -4 } }, "Settings & Activity",
-        function() ADDON.Sidecar:Toggle() end):SetPoint("RIGHT", closeX, "LEFT", -2, 0)
+    local menu = HeaderIcon(header, { { 14, 2, 4 }, { 14, 2, 0 }, { 14, 2, -4 } }, "Settings & Activity",
+        function() ADDON.Sidecar:Toggle() end)
+    menu:SetPoint("RIGHT", closeX, "LEFT", -2, 0)
+
+    -- List switch "Mine · Warband 3": the lit word is the list on screen; the
+    -- other shows how many of its items are short. Locked during a run.
+    local VIEW_TIPS = {
+        mine    = { "Your list", "What this character keeps in its bags." },
+        warband = { "Warband list", "Keep at least this many in your warband bank, shared by all your characters. Anything above your own targets is deposited there at the bank." },
+    }
+    local function ViewTab(view)
+        local b = CreateFrame("Button", nil, header)
+        b:SetHeight(20)
+        b.fs = b:CreateFontString(nil, "OVERLAY", "StockClerkFont")
+        b.fs:SetPoint("LEFT")
+        b:SetScript("OnClick", function() if not MF:Busy() then MF:SetView(view) end end)
+        b:SetScript("OnEnter", function(self)
+            GameTooltip:SetOwner(self, "ANCHOR_BOTTOM")
+            GameTooltip:SetText(VIEW_TIPS[view][1], 1, 1, 1)
+            GameTooltip:AddLine(VIEW_TIPS[view][2], 0.8, 0.8, 0.8, true)
+            if MF:Busy() then GameTooltip:AddLine("Finish or stop the restock first.", Palette.short[1], Palette.short[2], Palette.short[3], true) end
+            GameTooltip:Show()
+        end)
+        b:SetScript("OnLeave", GameTooltip_Hide)
+        return b
+    end
+    self.viewTabs = { mine = ViewTab("mine"), warband = ViewTab("warband") }
+    self.viewTabs.warband:SetPoint("RIGHT", menu, "LEFT", -6, 0)
+    local dot = header:CreateFontString(nil, "OVERLAY", "StockClerkFont")
+    dot:SetPoint("RIGHT", self.viewTabs.warband, "LEFT", -4, 0)
+    dot:SetText("|cff555555\194\183|r")
+    self.viewTabs.mine:SetPoint("RIGHT", dot, "LEFT", -4, 0)
 
     -- ---- Toolbar: Item ID, Target, bulk import ----------------------------
     local toolbar = CreateFrame("Frame", nil, f)
@@ -858,7 +909,10 @@ function MF:Build()
     -- Caps are set per row, after seeing AH prices. Item ID takes the width.
     local addEB, addBox = MakeEditBox(toolbar, "Item ID or drag an item, Enter to add", 8, "Item ID",
         "Type an item ID (or drag an item from your bags onto this box) and press Enter. Add a Target first if you want more than 1.")
-    local countEB, countBox = MakeEditBox(toolbar, "Target", 5, "Target", "How many to keep in your bags. Blank = 1.")
+    local countEB, countBox = MakeEditBox(toolbar, "Target", 5, "Target", function()
+        return MF:View() == "warband" and "How many to keep, at least, in the warband bank. Blank = 1."
+            or "How many to keep in your bags. Blank = 1."
+    end)
     countEB:SetWidth(60)
 
     -- Bulk import: a drawn "list +" icon.
@@ -890,11 +944,11 @@ function MF:Build()
         local need = tonumber(countBox:GetText()) or 1
         ADDON.ItemResolver:Resolve(itemID, function(resolvedID, name)
             if not resolvedID then return MF:SetStatus(("|cffff8888Unknown item ID: %d|r"):format(itemID)) end
-            ADDON.DB:SetItem(resolvedID, need)
-            ADDON.Log:Emit("add", resolvedID, { name = name, need = need })
+            ADDON.DB:SetItem(resolvedID, need, nil, MF:View())
+            ADDON.Log:Emit("add", resolvedID, { name = name, need = need, list = MF:View() })
             addBox:SetText("")
             countBox:SetText("")
-            MF:SetStatus(("Added %s (need %d)"):format(name, need))
+            MF:SetStatus((MF:View() == "warband" and "Added %s to the warband list (keep %d)" or "Added %s (need %d)"):format(name, need))
             MF:Refresh()
         end)
     end
@@ -927,6 +981,7 @@ function MF:Build()
     dropRing:SetPoint("BOTTOMRIGHT", 1, -1)
     AddBlackBorder(dropRing, Palette.brand)
     dropRing:Hide()
+    self._dropRing = dropRing
     local watcher = CreateFrame("Frame", nil, f)
     watcher:RegisterEvent("CURSOR_CHANGED")
     watcher:SetScript("OnEvent", function() dropRing:SetShown(CursorItemID() ~= nil) end)
@@ -941,15 +996,18 @@ function MF:Build()
     headers:SetPoint("TOPRIGHT", toolbar, "BOTTOMRIGHT")
     ApplyBand(headers, Palette.bandTint)
     AddRule(headers, "BOTTOM")
+    self.headerLabels = {}
     local function Header(text, x)
         local fs = headers:CreateFontString(nil, "OVERLAY", "StockClerkFontSmall")
         fs:SetTextColor(unpack(Palette.brand))
         fs:SetText(text)
         if x > 0 then fs:SetPoint("LEFT", x, 0) else fs:SetPoint("RIGHT", x - 22, 0) end
+        self.headerLabels[#self.headerLabels + 1] = fs
+        return fs
     end
     Header("Item", 36)
     Header("Have", -212)
-    Header("Need", -166)  -- Need/Cap: cell edge -6, over the digits
+    self.needHeader = Header("Need", -166)  -- Need/Cap: cell edge -6, over the digits; "Keep ≥" for the warband
     Header("Cap",  -106)
     Header("Seen", -30)
 
@@ -968,11 +1026,12 @@ function MF:Build()
         tintFilter(Palette.brand)
         GameTooltip:SetOwner(self, "ANCHOR_BOTTOM")
         GameTooltip:SetText((ADDON.DB:GetStuckOnly() and "|cff98FF98Filter ON|r  " or "") .. "Show only: items you're short on", 1, 1, 1)
-        GameTooltip:AddLine("Hide items you already have enough of in your bags.", 0.7, 0.7, 0.7, true)
+        GameTooltip:AddLine("Hide items that are fully stocked.", 0.7, 0.7, 0.7, true)
         GameTooltip:Show()
     end)
     filterBtn:SetScript("OnLeave", function() paintFilter(); GameTooltip:Hide() end)
     paintFilter()
+    self._paintFilter = paintFilter
 
     -- ---- Footer: last action on the left, Restock on the right ------------
     local footer = CreateFrame("Frame", nil, f)
@@ -992,10 +1051,12 @@ function MF:Build()
     restockBtn:SetMotionScriptsWhileDisabled(true)  -- a disabled button still explains itself
     restockBtn:SetScript("OnClick", function()
         local loop, br = ADDON.RestockLoop, ADDON.BankRestock
+        local action = MF:RestockState().action
         if loop:IsActive() then loop:Fire()
         elseif br:IsActive() then return
+        elseif action == "deposit" then br:Start(false, "deposit")
         elseif ADDON.bankOpen then br:Start()
-        else loop:Start() end
+        else loop:Start(false, action) end  -- "mine" or "warband"
     end)
     restockBtn:HookScript("OnEnter", function(self)
         local state = MF:RestockState()
@@ -1097,7 +1158,55 @@ function MF:Build()
     self.emptyText:SetSpacing(3)
 
     self.frame = f
+    self:SetView(self:View())
     return f
+end
+
+-- ---------------------------------------------------------------------------
+-- Views: which list the window shows. The accent follows it (Palette.brand
+-- is recoloured in place, so every hover, mark and header picks it up).
+-- ---------------------------------------------------------------------------
+function MF:View()
+    return ADDON.DB.char.ui.view == "warband" and "warband" or "mine"
+end
+
+function MF:SetView(view)
+    ADDON.DB.char.ui.view = view
+    local c = view == "warband" and WARBAND or MINT
+    for i = 1, 4 do Palette.brand[i] = c[i] end
+    if not self.frame then return end
+    for _, fs in ipairs(self.headerLabels) do fs:SetTextColor(unpack(Palette.brand)) end
+    self.needHeader:SetText(view == "warband" and "Keep \226\137\165" or "Need")
+    SetBorderColor(self._dropRing, Palette.brand)
+    self._paintFilter()
+    self:Refresh()
+end
+
+-- Have, the dim (+N) beside it, and how many short, for the list on screen.
+-- Mine: bags, (+bank and warband). Warband: warband bank, (+on the way:
+-- this character's surplus and other characters' undeposited buys).
+function MF:Counts(itemID, need)
+    local bd = ADDON.Inventory:GetBreakdown(itemID)
+    if self:View() == "warband" then
+        local total = ADDON.RestockLoop:WarbandHave(itemID)
+        return bd.warband, total - bd.warband, need - total
+    end
+    return bd.bags, bd.bank + bd.warband, need - bd.bags
+end
+
+-- "Mine · Warband 3": lit word = the view; the other shows its short count.
+function MF:_PaintSwitch()
+    local view = self:View()
+    for v, b in pairs(self.viewTabs) do
+        local label = v == "mine" and "Mine" or "Warband"
+        if v == view then
+            b.fs:SetText(("|cff%s%s|r"):format(v == "warband" and MF.WARBAND_HEX or "98FF98", label))
+        else
+            local n = ADDON.RestockLoop:PreviewShortfallCount(v)
+            b.fs:SetText("|cff8C8C8C" .. label .. (n > 0 and (" |cffe5624a%d|r"):format(n) or "") .. "|r")
+        end
+        b:SetWidth(b.fs:GetStringWidth() + 2)
+    end
 end
 
 -- ---------------------------------------------------------------------------
@@ -1116,11 +1225,11 @@ end
 
 function MF:_RefreshNow()
     if not self.frame then return end
-    local stuckOnly = ADDON.DB:GetStuckOnly()
+    local stuckOnly, view = ADDON.DB:GetStuckOnly(), self:View()
     local provider = CreateDataProvider()
-    for i, it in ipairs(ADDON.DB:GetSortedItems()) do
-        -- Filter on: only items short in the bags.
-        if not stuckOnly or ADDON.Inventory:GetBreakdown(it.itemID).bags < it.need then
+    for i, it in ipairs(ADDON.DB:GetSortedItems(view)) do
+        -- Filter on: only short items.
+        if not stuckOnly or select(3, self:Counts(it.itemID, it.need)) > 0 then
             it.index = i
             provider:Insert(it)
         end
@@ -1136,8 +1245,10 @@ function MF:_RefreshNow()
     self.emptyText:SetShown(empty)
     if empty then
         -- skipLog: repaint state, not an event.
-        self.emptyText:SetText(stuckOnly and "|cff888888Nothing is short. Click the filter icon to see the full list.|r" or EMPTY_LIST)
+        self.emptyText:SetText(stuckOnly and "|cff888888Nothing is short. Click the filter icon to see the full list.|r"
+            or view == "warband" and EMPTY_WARBAND or EMPTY_LIST)
     end
+    self:_PaintSwitch()
     self:RefreshRestockBtn()
 end
 
@@ -1145,9 +1256,13 @@ end
 -- title and lines, and why it's disabled (nil when it isn't).
 function MF:RestockState()
     local loop, br = ADDON.RestockLoop, ADDON.BankRestock
+    local BLUE = "|cff" .. MF.WARBAND_HEX
     if br:IsActive() then
-        return { label = "Pulling...", enabled = false, tip = "Restock from Bank",
-                 lines = { "Moving what you're short into your bags. Press Escape or the x to stop." } }
+        local deposit = br.dir == "deposit"
+        return { label = deposit and "Depositing..." or "Pulling...", enabled = false,
+                 tip = deposit and "Deposit to the warband bank" or "Restock from Bank",
+                 lines = { (deposit and "Moving your surplus into the warband bank." or "Moving what you're short into your bags.")
+                           .. " Press Escape or the x to stop." } }
     elseif loop:IsActive() then
         local wait, plan = loop:BuyWait(), loop.state.armedPlan
         local st = { label = "Buy", enabled = wait == 0, tip = "Buy",
@@ -1157,18 +1272,38 @@ function MF:RestockState()
             st.tip = ("Buy %d %s for %s"):format(plan.planQuantity, plan.name, MoneyText(plan.plannedSpend))
             for _, w in ipairs(plan.warnings) do st.lines[#st.lines + 1] = "|cffffa866" .. w .. "|r" end
         end
+        if loop.state.lane == "warband" and st.enabled then st.label = BLUE .. st.label .. "|r" end
         return st
     elseif ADDON.bankOpen then
         local n = br:PullableCount()
+        local d = n == 0 and br:DepositableCount() or 0
+        if d > 0 then  -- nothing to pull: offer the deposit
+            return { label = BLUE .. ("Deposit (%d)"):format(d) .. "|r", enabled = true, action = "deposit",
+                     tip = "Deposit to the warband bank",
+                     lines = { "Moves everything above your own targets from your bags into the warband bank, where all your characters can restock from it.",
+                               "Items only on the warband list go in whole." } }
+        end
         return { label = n > 0 and ("Restock from Bank (%d)"):format(n) or "Restock from Bank", enabled = n > 0,
-                 tip = "Restock from Bank",
+                 tip = "Restock from Bank", action = "pull",
                  lines = { "Moves exactly what you're short from your bank, then your warband bank, into your bags." },
                  reason = n == 0 and "Nothing you're short on is in your bank or warband bank." or nil }
     end
     local n = loop:PreviewShortfallCount()
     local ahOpen = AuctionHouseFrame and AuctionHouseFrame:IsShown()
+    if n == 0 and loop:WarbandOffered() then  -- your own list is done: the warband pass
+        local w, cost = loop:PreviewShortfallCount("warband"), 0
+        for _, it in ipairs(ADDON.DB:GetSortedItems("warband")) do
+            local short = loop:Short("warband", it.itemID, it.need)
+            if short > 0 and it.lastPrice then cost = cost + short * it.lastPrice.copper end
+        end
+        local lines = { "Buys what the warband list is short, at the warband caps. You click Buy for each item." }
+        if cost > 0 then lines[2] = "About " .. MoneyText(cost, "gold") .. " at last seen prices." end
+        return { label = ahOpen and (BLUE .. ("Restock warband (%d)"):format(w) .. "|r") or ("Restock warband (%d)"):format(w),
+                 enabled = ahOpen, tip = "Restock the warband", action = "warband", lines = lines,
+                 reason = not ahOpen and "Auction House isn't open." or nil }
+    end
     return { label = n > 0 and ("Restock at AH (%d)"):format(n) or "Restock at AH", enabled = ahOpen and n > 0,
-             tip = "Restock at AH",
+             tip = "Restock at AH", action = "mine",
              lines = { "Goes down your list in order; you click Buy for each item.", "Items above your cap are marked and passed over." },
              reason = not ahOpen and "Auction House isn't open."
                    or n == 0 and "Nothing to restock -- every row is at or above its need." or nil }
@@ -1196,8 +1331,9 @@ function MF.StopRun(reason)
 end
 
 -- Row mark for itemID (kind = nil removes it); "current" scrolls it into view.
-function MF:Mark(itemID, kind, tip)
-    self.marks[itemID] = kind and { kind = kind, tip = tip } or nil
+-- blue: warband blue whatever the view (deposits).
+function MF:Mark(itemID, kind, tip, blue)
+    self.marks[itemID] = kind and { kind = kind, tip = tip, blue = blue } or nil
     if kind == "current" then self._scrollTo = itemID end
     self:Refresh()
 end
@@ -1309,7 +1445,7 @@ function MF:EndRowDrag(cancel)
     end
     if not from or from == target then return end
     table.insert(order, math.max(1, math.min(#order + 1, target > from and target - 1 or target)), movedID)
-    ADDON.DB:ReorderItems(order)
+    ADDON.DB:ReorderItems(order, self:View())
     self:Refresh()
 end
 

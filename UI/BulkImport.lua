@@ -105,8 +105,9 @@ local function CommitBatch(entries)
     local added, skipped, errored = 0, 0, 0
     for _, e in ipairs(entries) do
         if e.ok then
-            local existed = ADDON.DB:GetItems()[e.itemID] ~= nil
-            ADDON.DB:SetItem(e.itemID, e.need, e.maxPriceCopper)
+            local list = ADDON.MainFrame:View()  -- into the list on screen
+            local existed = ADDON.DB:GetItems(list)[e.itemID] ~= nil
+            ADDON.DB:SetItem(e.itemID, e.need, e.maxPriceCopper, list)
             if existed then
                 skipped = skipped + 1
             else
@@ -249,7 +250,7 @@ local function BuildFrame()
         else
             edit:SetText("")
             status:SetText("")
-            MF:SetStatus("|cff98ff98Bulk import: " .. msg .. ".|r")
+            MF:SetStatus("|cff98ff98Bulk import: " .. msg .. (MF:View() == "warband" and " on the warband list" or "") .. ".|r")
             f:Hide()
         end
     end)

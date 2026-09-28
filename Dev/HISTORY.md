@@ -10,6 +10,40 @@ or, where it had no entry, from that version's GitHub release notes.
 > There is no v1.1.2 stable: the v1.1.2 alphas are the start of v1.2.0
 > (efficiency pass). v1.2.0 plan: `Dev/ROADMAP.md`.
 
+## v1.3.0-beta1 (2026-09-28)
+
+Warband list: shared stock in the warband bank (design in `Dev/ROADMAP.md`).
+Went straight to beta (design settled up front; no alpha).
+
+- Two lists, same entry shape: "mine" (`StockClerkCharDB.items`) and
+  "warband" (`StockClerkDB.global.warband`, account-wide). Every `DB` list
+  call takes the list name last (nil = mine). Caps are per list.
+- Header switch `Mine · Warband N` (inactive side shows its short count;
+  locked during a run). The view sets what the list shows and where adds go
+  (add box, drag, bulk import, Add common consumables); `Palette.brand` is
+  recoloured in place (mint / #5AA9FF); Need header reads "Keep ≥" and Have
+  shows the warband bank (+ on the way) in the Warband view.
+- AH: `RestockLoop` lanes. After the personal run, the Restock button
+  offers "Restock warband (N)" (tooltip: estimate at last seen prices)
+  unless `char.shopWarband` is off. Warband have = warband bank + this
+  character's surplus (bags + mail above its own target) + other
+  characters' `global.transit` (warband buys not yet deposited, clamped to
+  the buyer's surplus by `Loop:Sweep` on every inventory change). The
+  "N in your warband bank" warning is off on the warband pass.
+- Bank: `BankRestock` runs pull or deposit through the same planner and
+  executor. Deposit = bag stacks above the personal target (all of it for
+  warband-only items) into warband tabs: existing stacks first, then free
+  slots in tab order. Refused items (`C_Bank.IsItemAllowedInBankType`) get a
+  red mark and a log line; full bank → "Warband bank is full". Receipt
+  counts surplus still in the mail. Deposit marks are blue in either view.
+- Last Seen moved to `StockClerkDB.global.prices` (folded from each
+  character's items on load, newest wins).
+- Log: `bank_deposit` ("Deposited 20 [X] to the warband bank (tab 2)"),
+  `deposit_skip`, list/lane wording on add/remove/target/cap/buy/run lines;
+  `/clerk log` report lists the warband list.
+- Side panel: "Shop for the warband on this character" (per character).
+- `Dev/BankProbe.lua` is now the deposit spike (`/clerk bankprobe <id>`).
+
 ## v1.2.0 (2026-09-27)
 
 Stable release of everything since v1.1.1: the v1.1.2 efficiency alphas,

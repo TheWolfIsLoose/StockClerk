@@ -80,7 +80,7 @@ IsLoggedIn = function() return false end
 print = function(...) end
 UISpecialFrames = {}
 SlashCmdList = {}
-Enum = { PlayerInteractionType = { Auctioneer = 21, Banker = 8 } }
+Enum = { PlayerInteractionType = { Auctioneer = 21, Banker = 8 }, BankType = { Character = 0, Account = 2 } }
 
 local ADDON_NAME = "StockClerk"
 local function load(rel)
@@ -99,7 +99,7 @@ end
 -- SavedVariables in the pre-1.1.2 (AceDB) layout, to prove they carry over.
 StockClerkDB = { global = { settings = { autoOpenAtAH = false }, log = { { ts = 1, kind = "status" } } },
                  profileKeys = { ["Tester - Realm"] = "Default" } }
-StockClerkCharDB = { items = { [111] = { need = 5, sortOrder = 10 } } }
+StockClerkCharDB = { items = { [111] = { need = 5, sortOrder = 10, lastPrice = { copper = 5, seenAt = 100 } } } }
 for line in io.lines(root .. "/StockClerk.toc") do
   line = line:gsub("\r", "")
   if not line:match("^#") and line:match("%S") then
@@ -121,6 +121,8 @@ assert(st.autoOpenAtAH == false, "saved setting lost")
 assert(st.autoRestock == false and st.lastPriceTTL == 86400, "defaults not filled")
 assert(#ADDON.DB.global.log == 2 and ADDON.DB.global.log[2].kind == "version", "saved log lost / no version entry")
 assert(ADDON.DB.char.items[111].need == 5, "saved data lost")
+assert(ADDON.DB.global.prices[111].copper == 5 and ADDON.DB.char.items[111].lastPrice == nil, "Last Seen not moved to the shared table")
+assert(ADDON.DB.char.shopWarband == true and ADDON.DB.char.ui.view == "mine", "warband defaults")
 assert(ADDON.DB.char.pendingBuys and ADDON.DB.char.ui, "char defaults not filled")
 do -- "Add common consumables": adds the rest at target 1, never touches tracked items
   local items, list = ADDON.DB.char.items, ADDON.CommonConsumables
@@ -270,6 +272,7 @@ local realBreakdown = ADDON.Inventory.GetBreakdown
 ADDON.Inventory.GetBreakdown = function() return { bags = 5, bank = 0, reagent = 0, warband = 0, total = 5 } end
 assert(capturedInit, "row initializer not captured")
 local calls = {}
+local realSetItem, realSetMax = ADDON.DB.SetItem, ADDON.DB.SetItemMaxPrice
 ADDON.DB.SetItemMaxPrice = function(_, id, c, src) calls[#calls + 1] = { "cap", id, c, src } end
 ADDON.DB.SetItem = function(_, id, n) calls[#calls + 1] = { "need", id, n } end
 local emits = {}
@@ -321,6 +324,7 @@ assert(#calls == 3, "switching editors must not commit the sibling")
 row.needCell.scripts.OnClick(row.needCell); row.needEdit._text = "0"; row.needEdit.scripts.OnEnterPressed(row.needEdit)
 assert(#calls == 3, "zero need must be ignored")
 io.stdout:write("row editors OK\n")
+ADDON.DB.SetItem, ADDON.DB.SetItemMaxPrice = realSetItem, realSetMax
 
 -- Inventory: bags 3, bank 4, legacy reagent 1 (folds into bank), warband 2
 C_Item = C_Item ~= Stub and C_Item or {}
@@ -382,11 +386,11 @@ do -- Checkout: search -> arm -> Buy (risk lock, debounce, double click buys onc
   L:Stop("user_stop")
 
   -- Price well above last seen warns; over cap marks the row and moves on.
-  ADDON.DB.char.items[42].lastPrice = { copper = 50, seenAt = 0 }
+  ADDON.DB.global.prices[42] = { copper = 50, seenAt = 0 }
   L:Start(); search.cb(true, plan())
   assert(L.state.armedPlan.warnings[1] == "100% above last seen", "price jump warning")
   L:Stop("user_stop")
-  ADDON.DB.char.items[42].lastPrice = nil
+  ADDON.DB.global.prices[42] = nil
   L:Start(); mark = #timers
   search.cb(false, "cheapest is above your cap", 5000)
   assert(mf.marks[42].kind == "over" and mf.marks[42].tip:find("50s"), "over-cap mark")
@@ -490,3 +494,82 @@ do -- Restock from Bank planner: exact amounts, char bank first, top up stacks, 
   assert(#m == 0 and still == 1, "item not in bank must plan nothing")
 end
 io.stdout:write("perf/inventory OK\n")
+
+do -- v1.3 warband list: counts, transit, sweep, lanes, surplus, deposit plan, button states
+  local DB, L, BR, mf = ADDON.DB, ADDON.RestockLoop, ADDON.BankRestock, ADDON.MainFrame
+  local gb = ADDON.Inventory.GetBreakdown
+  local inv = { [1] = { bags = 30, bank = 0, warband = 50 }, [2] = { bags = 4, bank = 0, warband = 0 } }
+  ADDON.Inventory.GetBreakdown = function(_, id) return inv[id] or { bags = 0, bank = 0, warband = 0 } end
+  for id in pairs(DB.char.items) do DB.char.items[id] = nil end
+  DB.char.pendingBuys, DB.global.transit = {}, {}
+  DB:SetItem(1, 20)                        -- mine: keep 20 flasks in bags
+  DB:SetItem(1, 200, 90000, "warband")     -- warband: keep at least 200, cheaper cap
+  DB:SetItem(2, 10, nil, "warband")        -- warband only
+  assert(DB:GetItems()[1].maxPrice == nil and DB:GetItems("warband")[1].maxPrice == 90000, "caps are per list")
+  -- Warband have = warband bank + this character's surplus (+ others' transit).
+  assert(L:Surplus(1) == 10 and L:WarbandHave(1) == 60, "warband have " .. L:WarbandHave(1))
+  assert(L:Surplus(2) == 4 and L:WarbandHave(2) == 4, "warband-only item counts all of it")
+  DB.global.transit["Other-Realm"] = { [1] = 40 }
+  DB.global.transit[DB:CharKey()] = { [1] = 999 }  -- own transit never counts (bags/mail already do)
+  assert(L:WarbandHave(1) == 100, "other characters' transit: " .. L:WarbandHave(1))
+  L:Sweep()
+  assert(DB.global.transit[DB:CharKey()][1] == 10, "sweep clamps own transit to surplus")
+  assert(L:Short("mine", 1, 20) == -10 and L:Short("warband", 1, 200) == 100, "lane shortfalls")
+  assert(L:PreviewShortfallCount() == 0 and L:PreviewShortfallCount("warband") == 2, "lane counts")
+  -- AH: own list done, so the button offers the warband pass; opting out hides it.
+  local ahf = AuctionHouseFrame
+  AuctionHouseFrame = { IsShown = function() return true end }
+  local st = mf:RestockState()
+  assert(st.action == "warband" and st.label:find("Restock warband (2)", 1, true), "warband offer: " .. st.label)
+  DB.char.shopWarband = false
+  assert(mf:RestockState().action == "mine", "opted-out character must not be offered the warband")
+  DB.char.shopWarband = true
+  -- The warband pass buys the warband shortfall at the warband cap, and records transit.
+  local AH, search, exec = ADDON.AH, nil, nil
+  local sb, se, gt = AH.BuyUpTo, AH.ExecutePurchase, GetTime
+  local now = 100; GetTime = function() return now end
+  AH.BuyUpTo = function(_, id, qty, cap, cb) search = { id = id, qty = qty, cap = cap, cb = cb } end
+  AH.ExecutePurchase = function(_, id, qty, spend, cb) exec = cb end
+  L:Start(false, "warband")
+  assert(mf:View() == "warband" and search.id == 1 and search.qty == 100 and search.cap == 90000, "warband pass search")
+  search.cb(true, { itemID = 1, planQuantity = 100, plannedSpend = 1000, worstUnitPrice = 10 })
+  assert(#L.state.armedPlan.warnings == 0, "warband stock must not warn on the warband pass")
+  now = 101; L:Fire(); exec(true)
+  assert(DB.global.transit[DB:CharKey()][1] == 110 and DB.char.pendingBuys[1].qty == 100, "warband buy: transit + mail")
+  L:Stop("user_stop")
+  assert(ADDON.Log:Format({ kind = "buy_success", itemID = 1, payload = { qty = 100, spentCopper = 1000, lane = "warband" } })
+         == "Bought 100 [item 1] for the warband for 10s", "warband buy wording")
+  AH.BuyUpTo, AH.ExecutePurchase, GetTime, AuctionHouseFrame = sb, se, gt, ahf
+  DB.char.pendingBuys = {}
+  -- Bank: surplus = bags above your own target; warband-only items go whole;
+  -- soulbound stacks are refused; nothing short means the button offers Deposit.
+  local cc, gic, bank, il = C_Container, C_Item.GetItemCount, C_Bank, ItemLocation
+  local bagSlots = { [0] = { { itemID = 1, stackCount = 30 }, { itemID = 2, stackCount = 4 }, { itemID = 3, stackCount = 9 } } }
+  C_Container = { GetContainerNumSlots = function(b) return bagSlots[b] and #bagSlots[b] or 0 end,
+                  GetContainerItemInfo = function(b, s) return bagSlots[b] and bagSlots[b][s] end }
+  C_Item.GetItemCount = function(id) return ({ 30, 4, 9 })[id] or 0 end
+  ItemLocation = { CreateFromBagAndSlot = function(_, b, s) return { b, s } end }
+  C_Bank = { IsItemAllowedInBankType = function(_, loc) return loc[2] ~= 2 end }  -- item 2 is soulbound
+  DB:SetItem(3, 20)  -- mine, below target: no surplus
+  local sur = BR:Surpluses()
+  assert(#sur == 2 and sur[1].itemID == 1 and sur[1].short == 10 and sur[2].itemID == 2 and sur[2].short == 4, "surpluses")
+  local list, sources, refused = BR:DepositPlan()
+  assert(#list == 1 and list[1].itemID == 1 and #sources == 1 and refused[1] == 2, "deposit plan / refused")
+  ADDON.bankOpen = true
+  BR.PullableCount = function() return 0 end
+  st = mf:RestockState()
+  assert(st.action == "deposit" and st.label:find("Deposit (1)", 1, true), "deposit offer: " .. st.label)
+  BR.PullableCount = nil; ADDON.bankOpen = false
+  C_Container, C_Item.GetItemCount, C_Bank, ItemLocation = cc, gic, bank, il
+  -- The view recolours the accent and relabels Need; logs name the list.
+  mf:SetView("warband")
+  assert(mf.Palette.brand[3] == 1 and mf.Palette.brand[1] < 0.4, "warband accent")
+  mf:SetView("mine")
+  assert(mf.Palette.brand[1] > 0.5 and mf.Palette.brand[2] == 1, "mint accent")
+  assert(ADDON.Log:Format({ kind = "bank_deposit", itemID = 1, payload = { qty = 20, tab = 2 } })
+         == "Deposited 20 [item 1] to the warband bank (tab 2)", "deposit wording")
+  assert(ADDON.Log:Format({ kind = "add", itemID = 1, payload = { need = 200, list = "warband" } })
+         == "Added [item 1] to the warband list (keep 200)", "warband add wording")
+  ADDON.Inventory.GetBreakdown = gb
+  io.stdout:write("warband OK\n")
+end
