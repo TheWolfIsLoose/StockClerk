@@ -2,7 +2,7 @@
 
 Forward plan, one section per release. Dev-only (`Dev/` never ships).
 Shipped work moves to `Dev/HISTORY.md`; the player-facing summary goes in
-`CHANGELOG.md` when a release is cut (see README → Releasing).
+`CHANGELOG.md` when a release is cut (see `Dev/RELEASING.md`).
 
 Status key: **Decided**, **Default** (recommended; change it if you
 disagree), **Open** (needs an answer before build).

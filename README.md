@@ -5,76 +5,41 @@
 <h1 align="center">Stock Clerk</h1>
 
 <p align="center">
+  A pocket-sized shopping list for your consumables.<br>
   <a href="https://www.curseforge.com/wow/addons/stock-clerk">CurseForge</a>
   ·
-  <a href="https://github.com/TheWolfIsLoose/StockClerk/releases">GitHub Releases</a>
+  <a href="https://github.com/TheWolfIsLoose/StockClerk/releases">Releases</a>
 </p>
 
-Keep your consumables stocked. Set a target count for every flask,
-potion and reagent you want on hand; Stock Clerk shows what you're short
-on and restocks it from your bank or the Auction House.
-
-Retail only (Midnight). No library dependencies.
-
-## Features
-
-- **Per-character shopping list.** Each character has its own items and
-  targets. Add items by typing an item ID, by dragging an item from your
-  bags onto the Item ID box, or paste a whole list at once with the **+**
-  button. **Add common consumables** in the side panel fills a fresh list
-  with this expansion's staples.
-- **Have / Need / Cap / Last Seen.** Have counts your bags; copies in
-  your bank or warband bank show as a dim `(+N)`. Hover it for the
-  breakdown.
-- **Price caps.** Give any item a max gold per unit and Stock Clerk
-  won't buy it above that. Items with no cap buy at the going price;
-  checkout flags them with an amber "No cap set".
-- **Restock from Bank.** At a banker, one click moves exactly what
-  you're short from your bank, then your warband bank, into your bags.
-  No gold spent, never more than you need.
-- **Auction House checkout.** At the AH, click a row to search for that
-  item, or press **Restock at AH** to go down every short item in list
-  order, like ticking off a shopping list. The footer shows the item and
-  price, and **Buy** appears right where Restock was, so it's one click
-  per item without moving the mouse (or **Skip**). Rows tick off as you
-  buy; items above your cap are marked and passed over.
-- **Second look when it matters.** If you already own copies in your
-  bank or warband bank, have no cap set, or the price is well above what
-  you last saw, checkout says so and Buy waits a moment.
-- **Mail-aware.** Purchases waiting in your mailbox count toward your
-  targets, so nothing gets bought twice.
-- **Short-items filter.** The funnel icon hides everything you already
-  have enough of.
-- **Activity log.** A side panel shows recent purchases, bank pulls and
-  cap changes; `/clerk log` opens the full history.
-- **Optional automation.** Open the window automatically at the AH or
-  the bank, and optionally start an AH restock pass as soon as you
-  arrive.
-
-Drag the grip on a row's left edge to reorder; list order is restock
-order.
-
-## Screenshots
+Set how many of each flask, potion and food you want on hand. Stock Clerk
+shows what you're short on and restocks it from your bank or the Auction
+House in a few clicks, so a trip between dungeons stays a quick one.
 
 <p align="center">
   <img src=".assets/screenshots/hero.png" alt="Stock Clerk after an Auction House checkout, with the side panel open" width="900">
-  <br>
-  <em>After a checkout at the Auction House: bought rows are ticked, skipped
-  and over-cap rows are marked, and the receipt stays in the footer.</em>
 </p>
+
+## Features
+
+- **A list per character.** Add items by ID, by dragging them from your
+  bags, or in bulk. One click adds this expansion's common consumables.
+- **Restock from Bank.** At the bank, one click moves exactly what you're
+  short from your bank and warband bank into your bags.
+- **Checkout at the Auction House.** Restock goes down your list and
+  **Buy** appears right where you clicked, so it's one click per item and
+  rows tick off as you go. Nothing is ever bought without your click.
+- **Price caps.** Set a max per unit and Stock Clerk won't pay more. It
+  also asks for a second look before you buy something you already have in
+  the bank, have no cap on, or that costs well above what you last saw.
+- **Never buys twice.** Purchases still in your mail count toward your
+  targets.
+- **A receipt for everything.** Purchases and bank pulls show in Recent
+  Activity; `/clerk log` has the full history.
+- **Hands-free if you like.** Open automatically at the AH or bank, and
+  start restocking as soon as you arrive.
 
 <p align="center">
   <img src=".assets/screenshots/bank-pull.png" alt="Stock Clerk after Restock from Bank, with settings and Recent Activity" width="900">
-  <br>
-  <em>Restock from Bank fills every row in one click; Recent Activity reads
-  like a receipt.</em>
-</p>
-
-<p align="center">
-  <img src=".assets/screenshots/list.png" alt="The Stock Clerk shopping list" width="480">
-  <br>
-  <em>The shopping list: have, target, price cap and the last AH price
-  you saw. Copies in your bank show as a dim (+N).</em>
 </p>
 
 ## Commands
@@ -83,50 +48,36 @@ order.
 | --- | --- |
 | `/clerk` (or `/sc`, `/stock`) | Open the window |
 | `/clerk <item ID or link>` | Add an item with a target of 1 |
-| `/clerk log` / `/clerk log clear` | Open or clear the activity log |
-| `/clerk pending` / `/clerk pending clear` | Show or reset purchases still in the mail |
-| `/clerk dump` | Print your list to chat |
+| `/clerk log` | Open the activity log (paste it into a bug report) |
+| `/clerk debug` | Record extra detail in the log until you `/reload` |
 | `/clerk reset` | Clear this character's list |
-| `/clerk debug` | Toggle diagnostic chat output |
 | `/clerk help` | List commands |
 
-## Installation
+## Install
 
-Install from [CurseForge](https://www.curseforge.com/wow/addons/stock-clerk)
-with the CurseForge app, or download a zip from
-[Releases](https://github.com/TheWolfIsLoose/StockClerk/releases) and
-unzip it into `Interface/AddOns/`.
+Retail (Midnight) only. No other addons required.
 
-## Releasing
-
-Releases are cut by CI from the `## vX.Y.Z` heading in
-[CHANGELOG.md](CHANGELOG.md), which holds only the release being cut
-(short, player-facing bullets). Detailed notes for every version,
-including this one, go in [Dev/HISTORY.md](Dev/HISTORY.md). Planned work lives in [Dev/ROADMAP.md](Dev/ROADMAP.md).
-
-- Push to `dev` with a new `-alphaN` / `-betaN` version heading to
-  publish a prerelease (CurseForge Alpha/Beta).
-- Merge to `main` with a new stable `vX.Y.Z` heading to publish a release.
-
-The workflow tags the commit, packages it and creates the GitHub
-release, which CurseForge picks up. Don't create releases by hand.
-Testers can track a branch with `Dev/update.bat` (`update.bat dev` for
-alphas). Before pushing, run the smoke test: `lua5.1 Dev/smoke.lua .`
+Install from [CurseForge](https://www.curseforge.com/wow/addons/stock-clerk),
+or unzip a [release](https://github.com/TheWolfIsLoose/StockClerk/releases)
+into `Interface/AddOns/`. Found a bug? Open an
+[issue](https://github.com/TheWolfIsLoose/StockClerk/issues) with your
+`/clerk log`.
 
 ## Credits
 
-- **[atrocityEssentials](https://www.curseforge.com/wow/addons/atrocityessentials)**
-  and **[NorskenUI](https://github.com/Nrsken/NorskenUI)** inspired the
-  flat, dark look.
-- **[plusmouse](https://github.com/plusmouse)**'s addons set the bar:
-  [Auctionator](https://www.curseforge.com/wow/addons/auctionator) for
-  the list pattern and a well-behaved AH addon,
-  [Baganator](https://www.curseforge.com/wow/addons/baganator) and
-  [Syndicator](https://www.curseforge.com/wow/addons/syndicator) for
-  counting items across every storage location. No code is copied.
+The flat, dark look comes from
+[atrocityEssentials](https://www.curseforge.com/wow/addons/atrocityessentials)
+and [NorskenUI](https://github.com/Nrsken/NorskenUI).
+[plusmouse](https://github.com/plusmouse)'s
+[Auctionator](https://www.curseforge.com/wow/addons/auctionator),
+[Baganator](https://www.curseforge.com/wow/addons/baganator) and
+[Syndicator](https://www.curseforge.com/wow/addons/syndicator) set the bar
+for a well-behaved AH addon and for counting items everywhere they live. No
+code is copied.
 
-Built with heavy AI assistance; every change was reviewed and tested
-in-game before release.
+Built with heavy AI assistance; every change is reviewed and tested in-game
+before release. Developers: see [Dev/](Dev/) for the roadmap, history and
+release process.
 
 ## License
 
