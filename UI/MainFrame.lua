@@ -1293,7 +1293,7 @@ function MF:RestockState()
     end
     local n = loop:PreviewShortfallCount()
     local ahOpen = AuctionHouseFrame and AuctionHouseFrame:IsShown()
-    if n == 0 and loop:WarbandOffered() then  -- your own list is done: the warband pass
+    if loop:NextLane() == "warband" then  -- after your own run (or nothing of yours short)
         local w, cost = loop:PreviewShortfallCount("warband"), 0
         for _, it in ipairs(ADDON.DB:GetSortedItems("warband")) do
             local short = loop:Short("warband", it.itemID, it.need)

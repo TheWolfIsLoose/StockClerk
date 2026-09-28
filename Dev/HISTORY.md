@@ -43,6 +43,16 @@ Went straight to beta (design settled up front; no alpha).
   `/clerk log` report lists the warband list.
 - Side panel: "Shop for the warband on this character" (per character).
 - `Dev/BankProbe.lua` is now the deposit spike (`/clerk bankprobe <id>`).
+- In-game fixes (same day): bulk import title follows the accent; side
+  panel ticks stay mint; Warband empty copy matches the Mine list's shape;
+  "Keep" header (WoW fonts lack "≥"); shorter warband feed lines.
+- AH lanes alternate per visit (`Loop:NextLane`): your own list first, then
+  the warband, then yours again; a skipped/over-cap item no longer blocks
+  the warband pass. AH close resets.
+- Deposit "landed" = the warband slot shows the new count and is unlocked
+  (was: bag count dropped, which is true before the server confirms, so the
+  next move hit a locked stack and timed out). Locked slots are never
+  targets.
 
 ## v1.2.0 (2026-09-27)
 

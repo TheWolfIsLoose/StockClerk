@@ -158,6 +158,7 @@ end
 function ADDON:OnAuctionHouseClosed()
     self.AH:OnAuctionHouseClosed()
     self.RestockLoop:Stop("AH closed")
+    self.RestockLoop.lastLane = nil  -- the next visit starts with your own list
     local mf = self.MainFrame
     mf:ClearMarks()  -- a restock's row marks last until you leave the AH
     mf:RefreshRestockBtn()

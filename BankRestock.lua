@@ -158,7 +158,9 @@ local function slotsOf(bagIDs)
     for _, bagID in ipairs(bagIDs) do
         for slot = 1, C_Container.GetContainerNumSlots(bagID) do
             local i = C_Container.GetContainerItemInfo(bagID, slot)
-            out[#out + 1] = { bag = bagID, slot = slot, itemID = i and i.itemID, count = i and i.stackCount or 0 }
+            if not (i and i.isLocked) then  -- a slot mid-move can't take a drop
+                out[#out + 1] = { bag = bagID, slot = slot, itemID = i and i.itemID, count = i and i.stackCount or 0 }
+            end
         end
     end
     return out
@@ -308,8 +310,12 @@ function BR:_Step(run)
     mf:SetCheckout((deposit and "Depositing %d \195\151 %s" or "Pulling %d \195\151 %s"):format(m.count, name),
         ("|cff999999%s %s so far|r"):format(plural(done, "item"), deposit and "deposited" or "pulled"))
 
-    -- Pulls land when bag counts rise; deposits when they fall.
+    -- A pull has landed when the bag count rises (only on the server's
+    -- confirmation). A deposit's bag count drops the moment the client drops
+    -- the stack, so it waits for the warband slot itself: new count, unlocked.
     local before = C_Item.GetItemCount(m.itemID)
+    local target = C_Container.GetContainerItemInfo(m.toBag, m.toSlot)
+    local targetWant = (target and target.stackCount or 0) + m.count
     if m.whole then
         C_Container.PickupContainerItem(m.fromBag, m.fromSlot)
     else
@@ -320,8 +326,14 @@ function BR:_Step(run)
     local t0 = GetTime()
     local function wait()
         if not self.active or run ~= self.run then return end
-        local now = C_Item.GetItemCount(m.itemID)
-        if (deposit and now <= before - m.count or not deposit and now >= before + m.count) and not GetCursorInfo() then
+        local landed
+        if deposit then
+            local t = C_Container.GetContainerItemInfo(m.toBag, m.toSlot)
+            landed = t and t.stackCount >= targetWant and not t.isLocked
+        else
+            landed = C_Item.GetItemCount(m.itemID) >= before + m.count
+        end
+        if landed and not GetCursorInfo() then
             self.moved[m.itemID] = (self.moved[m.itemID] or 0) + m.count
             if deposit then  -- "tab 2": its place among the warband tabs
                 for i, id in ipairs(warbandTabs()) do if id == m.toBag then self.tabs[m.itemID] = i end end

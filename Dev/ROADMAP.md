@@ -687,6 +687,25 @@ flag), so AH checkout knows warband stock without a bank visit.
   warband AH pass switches to Warband.
 - Warband shopping is a second pass, not a combined buy (per-list caps).
 
+**Built 2026-09-28 (`Loop:NextLane`):** at the AH the button offers
+whichever list hasn't run yet this visit, yours first. Today the warband
+pass is only offered when your own list has nothing short, so an over-cap,
+skipped or failed item blocks it for the whole visit. New flow: open AH →
+"Restock at AH (N)"; after that run ends (even with leftovers) → "Restock
+warband (N)"; after the warband pass, back to "Restock at AH (N)" if still
+short (a cap may have been raised); AH close resets.
+
+**Bug (found in the 2026-09-28 AH + bank log; fixed the same day):** deposit
+"a move didn't finish" (Phoenix Oil, twice; a third press finished). The
+deposit "landed" check is "bag count dropped and cursor empty", which is
+true the instant the client places the stack, before the server confirms.
+The next move is planned at once and targets the same warband stack while
+it's still locked; the drop fails and times out (the stalled stacks did
+land later: Phoenix Oil reached 100, the log counted 20 short). (Pulls don't hit this:
+their bag count only rises on server confirmation.) Fix, as the design
+said: landed = target slot shows the new count, unlocked, cursor empty;
+and never pick a locked warband slot as a target.
+
 **In-game checklist (beta1)**
 - Header at 420px: `StockClerk <version>  Mine · Warband N  ≡ ×` fits.
   (2026-09-28: fits. "≥" doesn't render in WoW's fonts: header is "Keep".)

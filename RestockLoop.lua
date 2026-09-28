@@ -152,6 +152,16 @@ function Loop:WarbandOffered()
     return ADDON.DB.char.shopWarband and self:PreviewShortfallCount("warband") > 0
 end
 
+-- The lane the Restock button offers at the AH: whichever has something short
+-- and didn't run last this visit, your own first. So a skipped or over-cap
+-- item never blocks the warband pass, and after it your own list comes back
+-- (a cap may have been raised). nil: nothing short. The AH closing resets it.
+function Loop:NextLane()
+    local mine, warband = self:PreviewShortfallCount() > 0, self:WarbandOffered()
+    if mine and warband then return self.lastLane == "mine" and "warband" or "mine" end
+    return mine and "mine" or warband and "warband" or nil
+end
+
 -- "2 of 4 · spent 2,420g"
 function Loop:_Progress()
     local s = self.state
@@ -318,6 +328,7 @@ function Loop:Stop(reason)
     if not s.active then return end
     s.active = false  -- pending AH callbacks hold this table; they must see the stop
     self.state = NewState()
+    self.lastLane = reason ~= "AH closed" and s.lane or nil  -- a new AH visit starts with your own list
     ADDON.Log:Emit("loop_stop", nil, { reason = reason, spentCopper = s.spentCopper, touched = s.touched,
                                         stillShort = s.stillShort, skippedCapped = s.skippedCapped, lane = s.lane })
     -- Items the run never reached lose their marks; results stay until the AH closes.
@@ -334,7 +345,7 @@ function Loop:Stop(reason)
     if s.skippedCapped > 0 then parts[#parts + 1] = s.skippedCapped .. " over cap" end
     if s.stillShort > 0 then parts[#parts + 1] = s.stillShort .. " not bought" end
     -- After your own shopping, point at the warband pass (the button offers it).
-    if reason == "done" and s.lane == "mine" and self:WarbandOffered() then
+    if reason ~= "AH closed" and s.lane == "mine" and self:WarbandOffered() then
         parts[#parts + 1] = ("|cff5AA9FFwarband: %d short|r"):format(self:PreviewShortfallCount("warband"))
     end
     Status(head .. ": " .. table.concat(parts, " \194\183 "))

@@ -524,6 +524,13 @@ do -- v1.3 warband list: counts, transit, sweep, lanes, surplus, deposit plan, b
   DB.char.shopWarband = false
   assert(mf:RestockState().action == "mine", "opted-out character must not be offered the warband")
   DB.char.shopWarband = true
+  -- Lanes alternate within an AH visit, your own first: a leftover of yours
+  -- (skipped, over cap) never blocks the warband pass.
+  DB:SetItem(9, 5)  -- mine, short (0 in bags)
+  L.lastLane = nil;       assert(L:NextLane() == "mine", "own list first")
+  L.lastLane = "mine";    assert(L:NextLane() == "warband" and mf:RestockState().action == "warband", "warband after your run")
+  L.lastLane = "warband"; assert(L:NextLane() == "mine", "back to your list after the warband pass")
+  L.lastLane = nil; DB:RemoveItem(9)
   -- The warband pass buys the warband shortfall at the warband cap, and records transit.
   local AH, search, exec = ADDON.AH, nil, nil
   local sb, se, gt = AH.BuyUpTo, AH.ExecutePurchase, GetTime
