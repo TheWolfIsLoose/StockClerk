@@ -536,7 +536,7 @@ local function BuildRow(row)
         GameTooltip:AddLine(MoneyText(lp.copper) .. " per unit", 1, 1, 1)
         GameTooltip:AddLine(agoText .. how, 0.74, 0.74, 0.74)
         if ago > ADDON.DB:Settings().lastPriceTTL then
-            GameTooltip:AddLine("Price is stale -- re-search to refresh", 1, 0.72, 0.3)
+            GameTooltip:AddLine("Price is stale: search again to refresh", 1, 0.72, 0.3)
         end
         GameTooltip:Show()
     end)
@@ -1027,7 +1027,7 @@ function MF:Build()
     filterBtn:SetScript("OnEnter", function(self)
         tintFilter(Palette.brand)
         GameTooltip:SetOwner(self, "ANCHOR_BOTTOM")
-        GameTooltip:SetText((ADDON.DB:GetStuckOnly() and "|cff98FF98Filter ON|r  " or "") .. "Show only: items you're short on", 1, 1, 1)
+        GameTooltip:SetText((ADDON.DB:GetStuckOnly() and "|cff98ff98Filter on|r  " or "") .. "Show only: items you're short on", 1, 1, 1)
         GameTooltip:AddLine("Hide items that are fully stocked.", 0.74, 0.74, 0.74, true)
         GameTooltip:Show()
     end)
@@ -1043,7 +1043,7 @@ function MF:Build()
     ApplyBand(footer, Palette.bandTint)
     AddRule(footer, "TOP")
 
-    -- Restock: "Restock at AH (N)", or "Restock from Bank (N)" at a banker.
+    -- Restock: "Restock at AH (N)", or "Restock from bank (N)" at a banker.
     -- During an AH restock the same button is Buy (right edge fixed, so the
     -- cursor never moves); RestockLoop debounces it against a double click.
     local restockBtn = CreateFrame("Button", nil, footer)
@@ -1263,7 +1263,7 @@ function MF:RestockState()
     if br:IsActive() then
         local deposit = br.dir == "deposit"
         return { label = deposit and "Depositing..." or "Pulling...", enabled = false,
-                 tip = deposit and "Deposit to the warband bank" or "Restock from Bank",
+                 tip = deposit and "Deposit to the warband bank" or "Restock from bank",
                  lines = { (deposit and "Moving your surplus into the warband bank." or "Moving what you're short into your bags.")
                            .. " Press Escape or the x to stop." } }
     elseif loop:IsActive() then
@@ -1286,8 +1286,8 @@ function MF:RestockState()
                      lines = { "Moves everything above your own targets from your bags into the warband bank, where all your characters can restock from it.",
                                "Items only on the warband list go in whole." } }
         end
-        return { label = n > 0 and ("Restock from Bank (%d)"):format(n) or "Restock from Bank", enabled = n > 0,
-                 tip = "Restock from Bank", action = "pull",
+        return { label = n > 0 and ("Restock from bank (%d)"):format(n) or "Restock from bank", enabled = n > 0,
+                 tip = "Restock from bank", action = "pull",
                  lines = { "Moves exactly what you're short from your bank, then your warband bank, into your bags." },
                  reason = n == 0 and "Nothing you're short on is in your bank or warband bank." or nil }
     end
@@ -1309,7 +1309,7 @@ function MF:RestockState()
              tip = "Restock at AH", action = "mine",
              lines = { "Goes down your list in order; you click Buy for each item.", "Items above your cap are marked and passed over." },
              reason = not ahOpen and "Auction House isn't open."
-                   or n == 0 and "Nothing to restock -- every row is at or above its need." or nil }
+                   or n == 0 and "Nothing to restock: every row is at or above its need." or nil }
 end
 
 function MF:RefreshRestockBtn()

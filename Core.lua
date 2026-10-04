@@ -33,7 +33,7 @@ function ADDON.VersionText()
 end
 
 function ADDON:Print(msg)
-    print("|cff98ff98StockClerk|r: " .. tostring(msg))
+    print("|cff98ff98Stock Clerk|r: " .. tostring(msg))
 end
 
 -- ---------------------------------------------------------------------------
@@ -143,7 +143,7 @@ function ADDON:OnAuctionHouseShow()
     elseif mf.frame and mf.frame:IsShown() then
         mf:DockToAHIfOpen()
     end
-    -- Express-Restock: start buying once the AH frame settles, if anything is short.
+    -- Express restock: start buying once the AH frame settles, if anything is short.
     if settings.autoRestock then
         C_Timer.After(0.3, function()
             local loop = self.RestockLoop
@@ -179,7 +179,7 @@ function ADDON:OnBankShow()
     mf:RefreshRestockBtn()
     local n = self.BankRestock:PullableCount()
     if n > 0 and self.DB:Settings().autoRestockBank then
-        -- Express-Restock at Bank, once the bank frame settles; the pull reports itself.
+        -- Express restock at Bank, once the bank frame settles; the pull reports itself.
         C_Timer.After(0.3, function()
             if self.bankOpen then self.BankRestock:Start(true) end
         end)
@@ -243,16 +243,16 @@ function ADDON:OnSlashCommand(msg)
         self.debug = not self.debug
         if self.debug then
             self.Debug("debug", "detailed recording started")
-            self:Print("Detailed recording |cff98FF98ON|r until you /reload. Repeat the problem, then type /clerk log.")
+            self:Print("Detailed recording |cff98ff98on|r until you /reload. Repeat the problem, then type /clerk log.")
         else
-            self:Print("Detailed recording OFF.")
+            self:Print("Detailed recording off.")
         end
     else
         -- Anything else is an item to add.
         self.ItemResolver:Resolve(msg, function(itemID, name)
             if not itemID then return self:Print("Couldn't add that: " .. tostring(name)) end
             self.DB:SetItem(itemID, 1)
-            self:Print(("Added %s (id %d) with target 1. Edit in the UI to change."):format(name, itemID))
+            self:Print(("Added %s (id %d) with target 1. Change it in the window."):format(name, itemID))
             self.MainFrame:Refresh()
         end)
     end

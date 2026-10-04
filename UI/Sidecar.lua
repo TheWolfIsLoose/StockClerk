@@ -1,7 +1,7 @@
 --[[
     Stock Clerk - UI/Sidecar.lua
     Side panel (the header's hamburger): settings, "Add common consumables",
-    and Recent Activity (activity-level log entries, newest first).
+    and Recent activity (activity-level log entries, newest first).
 --]]
 
 local addonName = ...
@@ -63,13 +63,13 @@ local function Build()
         c.key, c.store = key, store
         return c
     end
-    -- "autoRestock" predates the Express-Restock name; kept for saved settings.
+    -- "autoRestock" predates the Express restock name; kept for saved settings.
     f.checks = {
         Check(-30, "Auto-open at Auction House", "autoOpenAtAH"),
-        Check(-52, "Auto-open at Bank", "autoOpenAtBank"),
-        Check(-74, "Express-Restock at Auction House", "autoRestock",
+        Check(-52, "Auto-open at bank", "autoOpenAtBank"),
+        Check(-74, "Express restock at Auction House", "autoRestock",
             "When you open the AH and something is short, start buying right away. You still confirm each purchase."),
-        Check(-96, "Express-Restock at Bank", "autoRestockBank",
+        Check(-96, "Express restock at bank", "autoRestockBank",
             "When you open your bank and something is short, pull it from your bank and warband bank right away."),
         -- Per character. Label width: the panel must not get wider (check in-game).
         Check(-118, "Shop for the warband on this character", "shopWarband",
@@ -101,15 +101,15 @@ local function Build()
     divider:SetPoint("TOPLEFT", 8, -180)
     divider:SetPoint("TOPRIGHT", -8, -180)
 
-    -- Recent Activity. Hovering the title (or the "/clerk log" link, which
+    -- Recent activity. Hovering the title (or the "/clerk log" link, which
     -- opens the log) explains how to send a bug report.
     local feedTitle = f:CreateFontString(nil, "OVERLAY", "StockClerkFont")
     feedTitle:SetPoint("TOPLEFT", 12, -188)
-    feedTitle:SetText("|cff98FF98Recent Activity|r")
+    feedTitle:SetText("|cff98FF98Recent activity|r")
     local function FeedHelp(owner)
         GameTooltip:SetOwner(owner, "ANCHOR_RIGHT")
-        GameTooltip:SetText("Recent Activity", 1, 1, 1)
-        GameTooltip:AddLine("What StockClerk did, newest first.", 0.74, 0.74, 0.74, true)
+        GameTooltip:SetText("Recent activity", 1, 1, 1)
+        GameTooltip:AddLine("What Stock Clerk did, newest first.", 0.74, 0.74, 0.74, true)
         GameTooltip:AddLine(" ")
         GameTooltip:AddLine("Something not working?", 1, 1, 1)
         GameTooltip:AddLine("1. Type /clerk log (or click the link) and press Ctrl+C.", 0.74, 0.74, 0.74, true)

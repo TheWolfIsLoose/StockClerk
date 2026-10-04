@@ -30,7 +30,7 @@ shared stock in your warband bank too, and every character restocks from it.
 - **Deposit at the bank.** Anything above your own targets goes into the
   warband bank, where every character can restock from it. Always a
   button, never automatic.
-- **Restock from Bank.** At the bank, one click moves exactly what you're
+- **Restock from bank.** At the bank, one click moves exactly what you're
   short from your bank and warband bank into your bags.
 - **Checkout at the Auction House.** Restock goes down your list and
   **Buy** appears right where you clicked, so it's one click per item and
@@ -41,7 +41,7 @@ shared stock in your warband bank too, and every character restocks from it.
 - **Never buys twice.** Purchases still in your mail, and warband buys
   your other characters haven't deposited yet, count toward your targets.
 - **A receipt for everything.** Purchases, bank pulls and deposits show in Recent
-  Activity; `/clerk log` has the full history.
+  activity; `/clerk log` has the full history.
 - **Hands-free if you like.** Open automatically at the AH or bank, and
   start restocking as soon as you arrive.
 

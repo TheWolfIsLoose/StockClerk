@@ -137,7 +137,7 @@ function Loop:Short(lane, itemID, need)
 end
 
 -- How many items a Restock of `lane` would try right now. The one shortfall
--- answer for the button, Express-Restock and the footer, so they can't disagree.
+-- answer for the button, Express restock and the footer, so they can't disagree.
 function Loop:PreviewShortfallCount(lane)
     local n = 0
     for itemID, entry in pairs(ADDON.DB:GetItems(lane)) do
@@ -183,7 +183,7 @@ function Loop:Start(express, lane)
     end
     if #queue == 0 then
         -- The button is greyed when nothing is short, so this is a race.
-        return Status("|cff8c8c8cNothing to restock -- every row is at or above its need.|r")
+        return Status("|cff8c8c8cNothing to restock: every row is at or above its need.|r")
     end
     self.state = NewState()
     self.state.active, self.state.queue, self.state.clickAt, self.state.lane = true, queue, GetTime(), lane

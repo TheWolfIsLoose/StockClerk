@@ -136,7 +136,7 @@ do -- "Add common consumables": adds the rest at target 1, never touches tracked
 end
 do local out = {}; local op = print; print = function(m) out[#out + 1] = m end
    SlashCmdList.STOCKCLERK("help"); print = op
-   assert(out[1] and out[1]:find("StockClerk", 1, true), "slash /clerk help did not print") end
+   assert(out[1] and out[1]:find("Stock Clerk", 1, true), "slash /clerk help did not print") end
 local origInv = ADDON.Inventory.OnInventoryChanged
 do
 assert(ADDON.MainFrame.Palette and ADDON.MainFrame.Palette.panelBg, "palette not published")
