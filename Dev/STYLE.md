@@ -1,8 +1,8 @@
 # StockClerk — UI style rules
 
 Suite-wide rules (colour tokens, controls, accessibility, words, chat) live in
-the "Suite style guide" doc in the WoW Addons project; this file holds Stock
-Clerk's specifics and wins only where it names an exception.
+the "Suite style guide" doc in the WoW Addons project; this file holds StockClerk
+'s specifics and wins only where it names an exception.
 
 StockClerk should feel like a real shopping list: pocket-sized, efficient,
 minimal without being brutalist. Every pixel and every control earns its

@@ -25,8 +25,8 @@ shared stock in your warband bank too, and every character restocks from it.
 - **A list per character.** Add items by ID, by dragging them from your
   bags, or in bulk. One click adds this expansion's common consumables.
 - **A warband list.** Keep at least a set number of anything in your
-  warband bank for all your characters. After your own shopping, Stock
-  Clerk offers to top it up, with its own price caps.
+  warband bank for all your characters. After your own shopping, StockClerk
+   offers to top it up, with its own price caps.
 - **Deposit at the bank.** Anything above your own targets goes into the
   warband bank, where every character can restock from it. Always a
   button, never automatic.

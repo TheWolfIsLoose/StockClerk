@@ -1,6 +1,6 @@
 ## Interface: 120100
 ## Title: StockClerk
-## Notes: Per-character consumable restock lists with keyboard-first entry, confirmed-buy AH automation, and a sidecar activity log.
+## Notes: A pocket-sized shopping list for your consumables: set what you want on hand and restock it from your bank or the Auction House in a few clicks.
 ## Author: Jakerator
 ## Version: @project-version@
 ## IconTexture: Interface\AddOns\StockClerk\icon.png
