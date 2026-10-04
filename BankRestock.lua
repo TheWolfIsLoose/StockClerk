@@ -308,7 +308,7 @@ function BR:_Step(run)
     mf:Mark(m.itemID, "current", deposit and "Moving to your warband bank" or "Moving from your bank", deposit)
     local done = count(self.moved)
     mf:SetCheckout((deposit and "Depositing %d \195\151 %s" or "Pulling %d \195\151 %s"):format(m.count, name),
-        ("|cff999999%s %s so far|r"):format(plural(done, "item"), deposit and "deposited" or "pulled"))
+        ("|cff8c8c8c%s %s so far|r"):format(plural(done, "item"), deposit and "deposited" or "pulled"))
 
     -- A pull has landed when the bag count rises (only on the server's
     -- confirmation). A deposit's bag count drops the moment the client drops

@@ -127,7 +127,7 @@ end
 local BUY_LOCK  = 1.5  -- seconds Buy waits when an item looks risky
 local DEBOUNCE  = 0.5  -- no Buy within this long of the player's last click
 local PRICEY    = 1.25 -- "well above Last Seen": average unit price over 125% of it
-local AMBER, GREY = "|cffffa866", "|cff999999"
+local AMBER, GREY = "|cffffb84d", "|cff8c8c8c"
 
 local function MF() return ADDON.MainFrame end
 
@@ -183,7 +183,7 @@ function Loop:Start(express, lane)
     end
     if #queue == 0 then
         -- The button is greyed when nothing is short, so this is a race.
-        return Status("|cfff87171Nothing to restock -- every row is at or above its need.|r")
+        return Status("|cff8c8c8cNothing to restock -- every row is at or above its need.|r")
     end
     self.state = NewState()
     self.state.active, self.state.queue, self.state.clickAt, self.state.lane = true, queue, GetTime(), lane

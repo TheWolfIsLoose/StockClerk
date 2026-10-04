@@ -145,7 +145,7 @@ local function BuildFrame()
     instr:SetPoint("RIGHT", -PAD, 0)
     instr:SetJustifyH("LEFT")
     instr:SetText("Drop items here, or paste one per line: |cffffffffID|r, |cffffffffID target|r or |cffffffffID target cap|r (cap in gold).")
-    instr:SetTextColor(0.8, 0.8, 0.8, 1)
+    instr:SetTextColor(0.74, 0.74, 0.74, 1)
 
     -- Paste area fills the panel between the instructions and the status line.
     local well = CreateFrame("Frame", nil, f)

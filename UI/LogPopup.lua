@@ -35,7 +35,7 @@ local function Build()
     title:SetText("|cff98FF98Stock|rClerk log")
     local hint = f:CreateFontString(nil, "OVERLAY", "StockClerkFontSmall")
     hint:SetPoint("TOPLEFT", 12, -28)
-    hint:SetText("|cff888888Everything is selected: press Ctrl+C and paste it into your bug report.|r")
+    hint:SetText("|cff8c8c8cEverything is selected: press Ctrl+C and paste it into your bug report.|r")
     MF.HeaderIcon(f, MF.CLOSE_GLYPH, "Close", function() f:Hide() end):SetPoint("TOPRIGHT", -4, -4)
 
     local bg = f:CreateTexture(nil, "BACKGROUND")

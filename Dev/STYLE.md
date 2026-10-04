@@ -1,5 +1,9 @@
 # Stock Clerk — UI style rules
 
+Suite-wide rules (colour tokens, controls, accessibility, words, chat) live in
+the "Suite style guide" doc in the WoW Addons project; this file holds Stock
+Clerk's specifics and wins only where it names an exception.
+
 Stock Clerk should feel like a real shopping list: pocket-sized, efficient,
 minimal without being brutalist. Every pixel and every control earns its
 place. New UI follows these rules; the helpers named here already exist in
@@ -15,6 +19,8 @@ place. New UI follows these rules; the helpers named here already exist in
 ## Look
 - One window fill (`Palette.bgDark`); regions are separated by 1px black
   borders and the faint `bandTint` strip, never by extra shades.
+- Text and status colours: the suite tokens only (white, soft 0.74, muted
+  `8C8C8C`, faint `666666` for decoration, amber `FFB84D`, red `FF8888`).
 - Accent (`Palette.brand`): hover, focus, "on", marks. Mint `#98FF98` in the
   Mine view, warband blue `#5AA9FF` in the Warband view (`MF:SetView`
   recolours the table in place). Deposit marks are blue in either view. The
