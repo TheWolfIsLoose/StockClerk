@@ -76,7 +76,7 @@ On("ADDON_LOADED", function(name)
 
     SLASH_STOCKCLERK1, SLASH_STOCKCLERK2, SLASH_STOCKCLERK3 = "/clerk", "/sc", "/stock"
     SlashCmdList.STOCKCLERK = function(msg) ADDON:OnSlashCommand(msg) end
-    ADDON:Print("Stock Clerk loaded. Type |cffffff00/clerk|r to open.")
+    ADDON:Print((version:match("^%d") and "v" or "") .. version .. " loaded. Type |cffffff00/clerk|r to open.")
 end)
 
 On("PLAYER_LOGIN", function()

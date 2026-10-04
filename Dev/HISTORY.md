@@ -10,6 +10,10 @@ or, where it had no entry, from that version's GitHub release notes.
 > There is no v1.1.2 stable: the v1.1.2 alphas are the start of v1.2.0
 > (efficiency pass). v1.2.0 plan: `Dev/ROADMAP.md`.
 
+## Unreleased (dev)
+
+- Load line in chat carries the version: "StockClerk: v1.3.0 loaded. Type /clerk to open." ("dev <commit>" on an update.bat checkout), matching PickupGroup (player, 2026-10-04).
+
 ## v1.3.0 (2026-09-28)
 
 Stable release of v1.3.0-beta1 (below), fixes included. README: warband
