@@ -46,7 +46,7 @@ shared stock in your warband bank too, and every character restocks from it.
   start restocking as soon as you arrive.
 
 <p align="center">
-  <img src=".assets/screenshots/bank-pull.png" alt="Stock Clerk after Restock from Bank, with settings and Recent Activity" width="900">
+  <img src=".assets/screenshots/bank-pull.png" alt="Stock Clerk after Restock from bank, with settings and Recent activity" width="900">
 </p>
 
 <p align="center">
