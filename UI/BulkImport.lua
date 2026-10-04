@@ -152,7 +152,7 @@ local function BuildFrame()
     well:SetPoint("TOPLEFT", PAD, -72)
     well:SetPoint("BOTTOMRIGHT", -PAD, 72)
     MF.ApplyFill(well, PALETTE.fieldFill)
-    local wellEdges = MF.AddBlackBorder(well)
+    local wellEdges = MF.AddBlackBorder(well, PALETTE.ringRest)
 
     local scroll = CreateFrame("ScrollFrame", "StockClerkBulkImportScroll", well, "UIPanelScrollFrameTemplate")
     scroll:SetPoint("TOPLEFT", 2, -2)
@@ -200,7 +200,7 @@ local function BuildFrame()
 
     -- Mint border while the cursor holds an item: "you can drop here".
     local function PaintDropZone()
-        local c = MF.CursorItemID() and PALETTE.brand or PALETTE.border
+        local c = MF.CursorItemID() and PALETTE.brand or PALETTE.ringRest
         for _, t in ipairs(wellEdges) do t:SetColorTexture(c[1], c[2], c[3], 1) end
     end
     well:RegisterEvent("CURSOR_CHANGED")
@@ -211,7 +211,7 @@ local function BuildFrame()
     ghost:SetPoint("TOPLEFT", 6, -4)
     ghost:SetJustifyH("LEFT")
     ghost:SetText("For example:\n212283\n212283 20\n212283 20 500")
-    ghost:SetTextColor(0.5, 0.5, 0.5, 0.8)
+    ghost:SetTextColor(0.55, 0.55, 0.55, 1)
     local function RefreshGhost()
         ghost:SetShown(edit:GetText() == "" and not edit:HasFocus())
     end

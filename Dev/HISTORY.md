@@ -10,8 +10,15 @@ or, where it had no entry, from that version's GitHub release notes.
 > There is no v1.1.2 stable: the v1.1.2 alphas are the start of v1.2.0
 > (efficiency pass). v1.2.0 plan: `Dev/ROADMAP.md`.
 
-## Unreleased (dev)
+## v1.3.1 (2026-10-04)
 
+Accessibility + style-guide session (suite guide in the WoW Addons project):
+
+- Controls: gray rest ring `Palette.ringRest` (0.4, 3.3:1) on buttons, checkboxes, text boxes, Need / Cap cells and the bulk-import well (was black, or none on cells); `ringHover` 0.7 on hover; mint while typing / editing. Wells are light (`fieldFill` white 8%, was black 55%); button face white 7% (was 4.5%). `AttachBorderAnimator(frame, rest)` starts from the given ring.
+- Mine / Warband switch: 2px bar under the list on screen (1.4.1, 3.2.4).
+- Targets (2.5.8): sidecar checkboxes 24px tall and 24px apart (panel content moved down 8); filter, bulk-import and log-link hit rects to 24px; resize grip 18px.
+- Disabled text and the bulk-import example at muted 0.55.
+- No dead code found (the 1.2 efficiency pass already trimmed it).
 - Suite icon (2026-10-04 branding pass): style-guide tile with the addon's mark in its color and the 2px on bar; `icon.png` 64 px via TOC IconTexture, `.assets/logo-256.png` (README), `.assets/logo.png` 400 px (CurseForge logo). Replaces the illustrated potion medallion.
 - Copy pass (2026-10-04, suite style guide): the name is "StockClerk" everywhere a player reads it, TOC title and README included (player, 2026-10-04; was "Stock Clerk" in places); sentence case for labels and buttons (Restock from bank, Express restock, Auto-open at bank, Recent activity, Filter on, recording on/off); no `--` in sentences; "Edit in the UI" and "not yet cached" reworded. Setting keys unchanged.
 - Colours onto the suite tokens (2026-10-04 UI/UX sweep): one amber `FFB84D` (was four), one red `FF8888` (was five; `Palette.short` too), muted grey `8C8C8C` (888888 / 999999), tooltip bodies 0.74, placeholders and the log link 0.55 (the link's 0.42 failed 4.5:1), em-dash / dot decorations `666666`; chat name mint `98FF98` (was 33FF99), `/clerk` in mint (was yellow), help heading mint (was light blue). "Nothing to restock" is muted, not red.

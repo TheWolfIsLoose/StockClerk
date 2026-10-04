@@ -29,16 +29,16 @@ local function Build()
     settingsTitle:SetPoint("TOPLEFT", 12, -10)
     settingsTitle:SetText("|cff98FF98Settings|r")
 
-    -- Flat checkbox (sunken well, mint square when on) whose label is part of
-    -- the click area. Tooltip only where the label needs more.
+    -- Flat checkbox (light well, gray ring, mint square when on) whose label is
+    -- part of the click area, 24px tall (WCAG 2.5.8). Tooltip only where the label needs more.
     -- store: the table the setting lives in (account settings unless given).
     local function Check(y, label, key, tip, store)
         local c = CreateFrame("CheckButton", nil, f)
         c:SetPoint("TOPLEFT", 14, y - 3)
         c:SetSize(16, 16)
-        c:SetHitRectInsets(0, -220, 0, 0)
+        c:SetHitRectInsets(0, -220, -4, -4)
         MF.ApplyFill(c, Palette.fieldFill)
-        MF.AddBlackBorder(c)
+        MF.AddBlackBorder(c, Palette.ringRest)
         local tick = c:CreateTexture(nil, "OVERLAY")
         tick:SetColorTexture(0.596, 1, 0.596)  -- mint: settings aren't tied to a list view
         tick:SetSize(8, 8)
@@ -66,19 +66,19 @@ local function Build()
     -- "autoRestock" predates the Express restock name; kept for saved settings.
     f.checks = {
         Check(-30, "Auto-open at Auction House", "autoOpenAtAH"),
-        Check(-52, "Auto-open at bank", "autoOpenAtBank"),
-        Check(-74, "Express restock at Auction House", "autoRestock",
+        Check(-54, "Auto-open at bank", "autoOpenAtBank"),
+        Check(-78, "Express restock at Auction House", "autoRestock",
             "When you open the AH and something is short, start buying right away. You still confirm each purchase."),
-        Check(-96, "Express restock at bank", "autoRestockBank",
+        Check(-102, "Express restock at bank", "autoRestockBank",
             "When you open your bank and something is short, pull it from your bank and warband bank right away."),
         -- Per character. Label width: the panel must not get wider (check in-game).
-        Check(-118, "Shop for the warband on this character", "shopWarband",
+        Check(-126, "Shop for the warband on this character", "shopWarband",
             "Offer to restock the warband list after your own shopping at the Auction House. Surplus is always deposited at the bank.",
             ADDON.DB.char),
     }
 
     local add = CreateFrame("Button", nil, f)
-    add:SetPoint("TOPLEFT", 12, -148)
+    add:SetPoint("TOPLEFT", 12, -156)
     add:SetPoint("RIGHT", -12, 0)
     add:SetHeight(22)
     MF.StyleButton(add)
@@ -98,13 +98,13 @@ local function Build()
     local divider = f:CreateTexture(nil, "OVERLAY")
     divider:SetColorTexture(0, 0, 0, 1)
     divider:SetHeight(1)
-    divider:SetPoint("TOPLEFT", 8, -180)
-    divider:SetPoint("TOPRIGHT", -8, -180)
+    divider:SetPoint("TOPLEFT", 8, -188)
+    divider:SetPoint("TOPRIGHT", -8, -188)
 
     -- Recent activity. Hovering the title (or the "/clerk log" link, which
     -- opens the log) explains how to send a bug report.
     local feedTitle = f:CreateFontString(nil, "OVERLAY", "StockClerkFont")
-    feedTitle:SetPoint("TOPLEFT", 12, -188)
+    feedTitle:SetPoint("TOPLEFT", 12, -196)
     feedTitle:SetText("|cff98FF98Recent activity|r")
     local function FeedHelp(owner)
         GameTooltip:SetOwner(owner, "ANCHOR_RIGHT")
@@ -125,8 +125,9 @@ local function Build()
     help:SetScript("OnLeave", GameTooltip_Hide)
 
     local link = CreateFrame("Button", nil, f)
-    link:SetPoint("TOPRIGHT", -12, -190)
+    link:SetPoint("TOPRIGHT", -12, -198)
     link:SetSize(60, 14)
+    link:SetHitRectInsets(0, 0, -5, -5)  -- 24px target
     local linkText = link:CreateFontString(nil, "OVERLAY", "StockClerkFontSmall")
     linkText:SetPoint("RIGHT")
     linkText:SetText("/clerk log")
@@ -137,10 +138,10 @@ local function Build()
 
     local feedBg = f:CreateTexture(nil, "BACKGROUND")
     feedBg:SetColorTexture(Palette.bgDark[1], Palette.bgDark[2], Palette.bgDark[3], 0.6)
-    feedBg:SetPoint("TOPLEFT", 8, -210)
+    feedBg:SetPoint("TOPLEFT", 8, -218)
     feedBg:SetPoint("BOTTOMRIGHT", -8, 8)
     local scroll = CreateFrame("ScrollFrame", "StockClerkSidecarScroll", f, "UIPanelScrollFrameTemplate")
-    scroll:SetPoint("TOPLEFT", 10, -212)
+    scroll:SetPoint("TOPLEFT", 10, -220)
     scroll:SetPoint("BOTTOMRIGHT", -28, 10)  -- room for the scroll bar
     f.feed = CreateFrame("Frame", nil, scroll)
     f.feed:SetSize(220, 1)

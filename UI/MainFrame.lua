@@ -37,7 +37,7 @@ local EMPTY_WARBAND = "No warband items yet.\n\nFor each item on this list, Stoc
 local FONT_FALLBACK = "Interface\\AddOns\\StockClerk\\Media\\BarlowSemiCondensed-Medium.ttf"
 local FONTS = {
     StockClerkFontSmall = { 10, 1 }, StockClerkFont = { 12, 1 }, StockClerkFontLarge = { 16, 1 },
-    StockClerkFontDisabled = { 12, 0.5 },
+    StockClerkFontDisabled = { 12, 0.55 },
 }
 for name, spec in pairs(FONTS) do
     local fo = CreateFont(name)
@@ -66,8 +66,10 @@ local Palette = {
     bgMedium     = { 0.055, 0.055, 0.055, 0.95 }, -- buttons, hovered cells
     panelBg      = { 0.060, 0.060, 0.060, 0.98 }, -- side panels, log window
     bandTint     = { 1, 1, 1, 0.035 },            -- faint strip: header, toolbar, headers, footer
-    fieldFill    = { 0, 0, 0, 0.55 },             -- sunken well for editable spots
-    btnRest      = { 1, 1, 1, 0.045 },            -- button at rest
+    fieldFill    = { 1, 1, 1, 0.08 },             -- well for editable spots: visibly "fill me" (suite guide)
+    btnRest      = { 1, 1, 1, 0.07 },             -- button at rest
+    ringRest     = { 0.4, 0.4, 0.4, 1 },          -- controls at rest: 3.3:1 on the panel (WCAG 1.4.11)
+    ringHover    = { 0.7, 0.7, 0.7, 1 },          -- control under the mouse
     hoverWash    = { 0.851, 0.851, 0.851, 0.15 }, -- "the mouse is here"
     pressFill    = { 0.851, 0.851, 0.851, 0.22 },
     border       = { 0, 0, 0, 1 },
@@ -142,10 +144,11 @@ local function SetBorderColor(frame, c)
 end
 
 -- Fade a widget's border to a target colour (mint on hover/focus, back on leave).
-local function AttachBorderAnimator(frame)
+local function AttachBorderAnimator(frame, rest)
     local group = frame:CreateAnimationGroup()
     group:CreateAnimation("Animation"):SetDuration(0.15)
-    local from, to, cur = { 0, 0, 0, 1 }, { 0, 0, 0, 1 }, { 0, 0, 0, 1 }
+    rest = rest or Palette.border
+    local from, to, cur = { unpack(rest) }, { unpack(rest) }, { unpack(rest) }
     group:SetScript("OnUpdate", function(g)
         local p = g:GetProgress() or 0
         for i = 1, 4 do cur[i] = from[i] + (to[i] - from[i]) * p end
@@ -165,18 +168,18 @@ local function AttachBorderAnimator(frame)
 end
 
 -- Flat button: opaque base + light band, hover wash (ARTWORK 7, not HIGHLIGHT,
--- which would wash out the label), press flash, black ring. Scripts are
+-- which would wash out the label), press flash, gray ring (lighter on hover). Scripts are
 -- hooked, so callers must HookScript too or the wash dies.
 local function StyleButton(btn)
     ApplyFill(btn, Palette.bgMedium)
     ApplyBand(btn, Palette.btnRest)
-    AddBlackBorder(btn)
+    AddBlackBorder(btn, Palette.ringRest)
     local wash = Solid(btn, "ARTWORK", 7, Palette.hoverWash)
     wash:SetPoint("TOPLEFT", 1, -1)
     wash:SetPoint("BOTTOMRIGHT", -1, 1)
     wash:Hide()
-    btn:HookScript("OnEnter", function() wash:Show() end)
-    btn:HookScript("OnLeave", function() wash:Hide() end)
+    btn:HookScript("OnEnter", function() wash:Show(); SetBorderColor(btn, Palette.ringHover) end)
+    btn:HookScript("OnLeave", function() wash:Hide(); SetBorderColor(btn, Palette.ringRest) end)
     btn:HookScript("OnMouseDown", function(self) if self:IsEnabled() then ApplyBand(self, Palette.pressFill) end end)
     btn:HookScript("OnMouseUp", function(self) ApplyBand(self, Palette.btnRest) end)
     btn:SetNormalFontObject("StockClerkFont")
@@ -266,8 +269,8 @@ local function MakeEditBox(parent, placeholder, maxLetters, tipTitle, tipBody)
     box:SetHeight(22)
     box:EnableMouse(true)
     ApplyFill(box, Palette.fieldFill)
-    AddBlackBorder(box)
-    AttachBorderAnimator(box)
+    AddBlackBorder(box, Palette.ringRest)
+    AttachBorderAnimator(box, Palette.ringRest)
 
     local eb = CreateFrame("EditBox", nil, box)
     eb:SetPoint("TOPLEFT", 6, -3)
@@ -290,7 +293,7 @@ local function MakeEditBox(parent, placeholder, maxLetters, tipTitle, tipBody)
 
     local function over() return box:IsMouseOver() or eb:IsMouseOver() end
     local function enter()
-        box._borderAnim.AnimateTo(Palette.brand)
+        box._borderAnim.AnimateTo(eb:HasFocus() and Palette.brand or Palette.ringHover)
         -- 4px above the box: ANCHOR_TOP overlaps it and flickers.
         GameTooltip:SetOwner(box, "ANCHOR_NONE")
         GameTooltip:ClearAllPoints()
@@ -302,7 +305,7 @@ local function MakeEditBox(parent, placeholder, maxLetters, tipTitle, tipBody)
     local function leave()
         if over() then return end
         GameTooltip:Hide()
-        if not eb:HasFocus() then box._borderAnim.AnimateTo(Palette.border) end
+        if not eb:HasFocus() then box._borderAnim.AnimateTo(Palette.ringRest) end
     end
     box:SetScript("OnEnter", enter)
     box:SetScript("OnLeave", leave)
@@ -311,7 +314,7 @@ local function MakeEditBox(parent, placeholder, maxLetters, tipTitle, tipBody)
     eb:HookScript("OnEditFocusGained", function() refresh(); box._borderAnim.AnimateTo(Palette.brand) end)
     eb:HookScript("OnEditFocusLost", function()
         refresh()
-        if not over() then box._borderAnim.AnimateTo(Palette.border) end
+        box._borderAnim.AnimateTo(over() and Palette.ringHover or Palette.ringRest)
     end)
     eb:HookScript("OnTextChanged", refresh)
     refresh()
@@ -323,9 +326,9 @@ end
 -- them. StockClerk never paints item tooltips (WoW's and the player's
 -- tooltip addon's job); its tooltips describe its own controls.
 -- ---------------------------------------------------------------------------
-local CELL_FILL_IDLE   = { 0, 0, 0, 0.35 }
+local CELL_FILL_IDLE   = Palette.fieldFill
 local CELL_FILL_HOVER  = { Palette.bgMedium[1], Palette.bgMedium[2], Palette.bgMedium[3], 1 }
-local CELL_BORDER_IDLE = { Palette.brand[1], Palette.brand[2], Palette.brand[3], 0 }
+local CELL_BORDER_IDLE = Palette.ringRest  -- editable at rest, not only on hover (WCAG 1.4.11)
 
 -- Restock marks: kind -> { shape, colour }. Shapes are drawn bars.
 MF.marks = {}  -- itemID -> { kind, tip }
@@ -491,7 +494,7 @@ local function BuildRow(row)
         cell:SetFrameLevel(row:GetFrameLevel() + 2)
         ApplyFill(cell, CELL_FILL_IDLE)
         AddBlackBorder(cell, CELL_BORDER_IDLE)
-        AttachBorderAnimator(cell)
+        AttachBorderAnimator(cell, CELL_BORDER_IDLE)
         local text = cell:CreateFontString(nil, "OVERLAY", "StockClerkFontSmall")  -- on the cell: draws over its fill
         text:SetPoint("RIGHT", -6, 0)
         local edit = CreateFrame("EditBox", nil, row)
@@ -621,10 +624,11 @@ local function BuildRow(row)
             edit:SetFocus()
             edit:HighlightText()
             cell.editing = true
+            cell._borderAnim.AnimateTo(Palette.brand)
         end)
         cell:SetScript("OnEnter", function(self)
             OnChildEnter(self)
-            self._borderAnim.AnimateTo(Palette.brand)
+            if not self.editing then self._borderAnim.AnimateTo(Palette.ringHover) end
             self._bg:SetVertexColor(unpack(CELL_FILL_HOVER))
             GameTooltip:SetOwner(self, "ANCHOR_TOP")
             e.tooltip(row)
@@ -881,6 +885,11 @@ function MF:Build()
         b:SetHeight(20)
         b.fs = b:CreateFontString(nil, "OVERLAY", "StockClerkFont")
         b.fs:SetPoint("LEFT")
+        -- The list on screen also gets a 2px bar, like an "on" toggle (colour is never the only cue).
+        b.bar = b:CreateTexture(nil, "OVERLAY")
+        b.bar:SetHeight(2)
+        b.bar:SetPoint("BOTTOMLEFT", 0, 0)
+        b.bar:SetPoint("BOTTOMRIGHT", -2, 0)
         b:SetScript("OnClick", function() if not MF:Busy() then MF:SetView(view) end end)
         b:SetScript("OnEnter", function(self)
             GameTooltip:SetOwner(self, "ANCHOR_BOTTOM")
@@ -920,6 +929,7 @@ function MF:Build()
     -- Bulk import: a drawn "list +" icon.
     local bulkBtn = CreateFrame("Button", nil, toolbar)
     bulkBtn:SetSize(22, 22)
+    bulkBtn:SetHitRectInsets(-1, -1, -1, -1)  -- 24px target
     bulkBtn:SetPoint("RIGHT", -12, 0)
     countEB:SetPoint("RIGHT", bulkBtn, "LEFT", -8, 0)
     addEB:SetPoint("LEFT", 12, 0)
@@ -1016,6 +1026,7 @@ function MF:Build()
     -- "Short items only" filter: drawn funnel, dim mint off, bright mint on.
     local filterBtn = CreateFrame("Button", nil, headers)
     filterBtn:SetSize(18, 16)
+    filterBtn:SetHitRectInsets(-3, -3, -4, -4)  -- 24px target (WCAG 2.5.8)
     filterBtn:SetPoint("LEFT", 62, 0)
     local tintFilter = DrawGlyph(filterBtn, { { 12, 2, 4 }, { 8, 2, 0 }, { 4, 2, -4 } })
     local function paintFilter() tintFilter(Palette.brand, ADDON.DB:GetStuckOnly() and 1 or 0.55) end
@@ -1115,6 +1126,7 @@ function MF:Build()
     -- (unrotated, so crisp at any UI scale), clear of the footer buttons ----
     local grip = CreateFrame("Button", nil, f)
     grip:SetSize(12, 12)
+    grip:SetHitRectInsets(-6, 0, -6, 0)  -- 18px to grab; the corner bounds the rest
     grip:SetPoint("BOTTOMRIGHT", -2, 2)
     grip:SetFrameLevel(f:GetFrameLevel() + 5)
     local GRIP_DOTS = {}
@@ -1202,8 +1214,11 @@ function MF:_PaintSwitch()
     local view = self:View()
     for v, b in pairs(self.viewTabs) do
         local label = v == "mine" and "Mine" or "Warband"
+        b.bar:SetShown(v == view)
         if v == view then
             b.fs:SetText(("|cff%s%s|r"):format(v == "warband" and MF.WARBAND_HEX or "98FF98", label))
+            local c = v == "warband" and WARBAND or MINT
+            b.bar:SetColorTexture(c[1], c[2], c[3], 1)
         else
             local n = ADDON.RestockLoop:PreviewShortfallCount(v)
             b.fs:SetText("|cff8c8c8c" .. label .. (n > 0 and (" |cffff8888%d|r"):format(n) or "") .. "|r")
