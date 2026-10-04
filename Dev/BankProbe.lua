@@ -1,5 +1,5 @@
 --[[
-    Stock Clerk - Dev/BankProbe.lua   [DEV ONLY, never ships: #@debug@ in TOC]
+    StockClerk - Dev/BankProbe.lua   [DEV ONLY, never ships: #@debug@ in TOC]
 
     v1.3 spike: can addon code deposit bag stacks into the warband bank,
     do tab deposit filters block it, and how fast can deposits chain?

@@ -1,8 +1,8 @@
 <p align="center">
-  <img src=".assets/logo-256.png" alt="Stock Clerk" width="180" height="180">
+  <img src=".assets/logo-256.png" alt="StockClerk" width="180" height="180">
 </p>
 
-<h1 align="center">Stock Clerk</h1>
+<h1 align="center">StockClerk</h1>
 
 <p align="center">
   A pocket-sized shopping list for your consumables.<br>
@@ -11,13 +11,13 @@
   <a href="https://github.com/TheWolfIsLoose/StockClerk/releases">Releases</a>
 </p>
 
-Set how many of each flask, potion and food you want on hand. Stock Clerk
+Set how many of each flask, potion and food you want on hand. StockClerk
 shows what you're short on and restocks it from your bank or the Auction
 House in a few clicks, so a trip between dungeons stays a quick one. Keep a
 shared stock in your warband bank too, and every character restocks from it.
 
 <p align="center">
-  <img src=".assets/screenshots/hero.png" alt="Stock Clerk after an Auction House checkout, with the side panel open" width="900">
+  <img src=".assets/screenshots/hero.png" alt="StockClerk after an Auction House checkout, with the side panel open" width="900">
 </p>
 
 ## Features
@@ -35,7 +35,7 @@ shared stock in your warband bank too, and every character restocks from it.
 - **Checkout at the Auction House.** Restock goes down your list and
   **Buy** appears right where you clicked, so it's one click per item and
   rows tick off as you go. Nothing is ever bought without your click.
-- **Price caps.** Set a max per unit and Stock Clerk won't pay more. It
+- **Price caps.** Set a max per unit and StockClerk won't pay more. It
   also asks for a second look before you buy something you already have in
   the bank, have no cap on, or that costs well above what you last saw.
 - **Never buys twice.** Purchases still in your mail, and warband buys
@@ -46,7 +46,7 @@ shared stock in your warband bank too, and every character restocks from it.
   start restocking as soon as you arrive.
 
 <p align="center">
-  <img src=".assets/screenshots/bank-pull.png" alt="Stock Clerk after Restock from bank, with settings and Recent activity" width="900">
+  <img src=".assets/screenshots/bank-pull.png" alt="StockClerk after Restock from bank, with settings and Recent activity" width="900">
 </p>
 
 <p align="center">

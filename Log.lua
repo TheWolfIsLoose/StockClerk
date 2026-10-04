@@ -1,5 +1,5 @@
 --[[
-    Stock Clerk - Log.lua
+    StockClerk - Log.lua
     Account-wide activity log: what happened, in plain words, for players
     (side panel feed) and for support (/clerk log, copied into a report).
 

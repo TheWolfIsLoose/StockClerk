@@ -1,5 +1,5 @@
 --[[
-    Stock Clerk - DB.lua
+    StockClerk - DB.lua
     SavedVariables and the per-character list.
 
     Two lists with the same entry shape, { need, maxPrice?, sortOrder }:

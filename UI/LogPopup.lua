@@ -1,5 +1,5 @@
 --[[
-    Stock Clerk - UI/LogPopup.lua
+    StockClerk - UI/LogPopup.lua
     `/clerk log`: the support report (Log:Report) in a copyable text box,
     pre-selected so Ctrl+C works at once. A snapshot taken on open; it
     doesn't refresh live, so a selection survives while copying.

@@ -1,5 +1,5 @@
 --[[
-    Stock Clerk - UI/MainFrame.lua
+    StockClerk - UI/MainFrame.lua
     The shopping-list window: header (title, side panel, close), toolbar
     (Item ID, Target, bulk import), the list (ScrollBox of rows), and a
     footer (last action + Restock button; the checkout bar during a
@@ -27,7 +27,7 @@ local ROW_HEIGHT = 24
 local MoneyText  = ADDON.MoneyText
 local ADD_STEPS = "Add items by:\n |cffffffff1.|r Typing an item ID into the Item ID box and pressing Enter\n |cffffffff2.|r Dragging an item from your bags onto the Item ID box\n |cffffffff3.|r Opening bulk import (the button right of Target) to drop or paste many at once"
 local EMPTY_LIST = "No items yet.\n\n" .. ADD_STEPS
-local EMPTY_WARBAND = "No warband items yet.\n\nFor each item on this list, Stock Clerk keeps at least the number you set in your warband bank, so all your characters can restock from it.\n\n" .. ADD_STEPS
+local EMPTY_WARBAND = "No warband items yet.\n\nFor each item on this list, StockClerk keeps at least the number you set in your warband bank, so all your characters can restock from it.\n\n" .. ADD_STEPS
 
 -- ---------------------------------------------------------------------------
 -- Fonts: three sizes in white, plus grey for disabled buttons. Face is Expressway when LibSharedMedia has it

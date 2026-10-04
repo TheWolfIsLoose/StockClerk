@@ -1,5 +1,5 @@
 --[[
-    Stock Clerk - UI/Sidecar.lua
+    StockClerk - UI/Sidecar.lua
     Side panel (the header's hamburger): settings, "Add common consumables",
     and Recent activity (activity-level log entries, newest first).
 --]]
@@ -109,7 +109,7 @@ local function Build()
     local function FeedHelp(owner)
         GameTooltip:SetOwner(owner, "ANCHOR_RIGHT")
         GameTooltip:SetText("Recent activity", 1, 1, 1)
-        GameTooltip:AddLine("What Stock Clerk did, newest first.", 0.74, 0.74, 0.74, true)
+        GameTooltip:AddLine("What StockClerk did, newest first.", 0.74, 0.74, 0.74, true)
         GameTooltip:AddLine(" ")
         GameTooltip:AddLine("Something not working?", 1, 1, 1)
         GameTooltip:AddLine("1. Type /clerk log (or click the link) and press Ctrl+C.", 0.74, 0.74, 0.74, true)

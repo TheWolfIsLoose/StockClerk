@@ -1,5 +1,5 @@
 --[[
-    Stock Clerk - RestockLoop.lua
+    StockClerk - RestockLoop.lua
     "Restock at AH" (checkout): walks the short items in list order. For
     each it searches the AH, then marks it over cap and moves on, or shows
     it in the footer with Buy in place of the Restock button. Buying needs

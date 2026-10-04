@@ -1,10 +1,10 @@
-# Stock Clerk — UI style rules
+# StockClerk — UI style rules
 
 Suite-wide rules (colour tokens, controls, accessibility, words, chat) live in
 the "Suite style guide" doc in the WoW Addons project; this file holds Stock
 Clerk's specifics and wins only where it names an exception.
 
-Stock Clerk should feel like a real shopping list: pocket-sized, efficient,
+StockClerk should feel like a real shopping list: pocket-sized, efficient,
 minimal without being brutalist. Every pixel and every control earns its
 place. New UI follows these rules; the helpers named here already exist in
 `UI/MainFrame.lua` (exported on `ADDON.MainFrame` where other files need them).

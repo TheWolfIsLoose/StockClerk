@@ -1,5 +1,5 @@
 --[[
-    Stock Clerk - UI/BulkImport.lua
+    StockClerk - UI/BulkImport.lua
 
     Bulk import panel: paste many item IDs at once. Opened by the square
     button on the toolbar; docks to the main window's right edge like the

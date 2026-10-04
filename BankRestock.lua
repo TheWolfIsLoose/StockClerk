@@ -1,5 +1,5 @@
 --[[
-    Stock Clerk - BankRestock.lua
+    StockClerk - BankRestock.lua
     At a banker, two runs over the same planner and executor:
       pull     "Restock from bank": exactly enough of each short item from
                the character bank, then the warband bank, into bags.

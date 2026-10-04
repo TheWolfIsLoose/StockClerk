@@ -1,4 +1,4 @@
-# Stock Clerk — Releasing
+# StockClerk — Releasing
 
 Dev-only (`Dev/` never ships).
 

@@ -1,5 +1,5 @@
 ## Interface: 120100
-## Title: Stock Clerk
+## Title: StockClerk
 ## Notes: Per-character consumable restock lists with keyboard-first entry, confirmed-buy AH automation, and a sidecar activity log.
 ## Author: Jakerator
 ## Version: @project-version@

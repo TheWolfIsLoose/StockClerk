@@ -1,5 +1,5 @@
 --[[
-    Stock Clerk - Core.lua
+    StockClerk - Core.lua
     Entry point: one event frame routes game events to the modules, plus the
     /clerk slash command. Modules attach to ADDON.<Name>; no libraries.
 --]]
@@ -33,7 +33,7 @@ function ADDON.VersionText()
 end
 
 function ADDON:Print(msg)
-    print("|cff98ff98Stock Clerk|r: " .. tostring(msg))
+    print("|cff98ff98StockClerk|r: " .. tostring(msg))
 end
 
 -- ---------------------------------------------------------------------------
@@ -207,7 +207,7 @@ end
 -- /clerk
 -- ---------------------------------------------------------------------------
 local HELP = {
-    "|cff98ff98Stock Clerk|r commands:",
+    "|cff98ff98StockClerk|r commands:",
     "  /clerk  |cff8c8c8c— open the main window (also /sc, /stock)|r",
     "  /clerk <item ID or link> |cff8c8c8c— add an item with target 1|r",
     "  /clerk log [clear] |cff8c8c8c— open the log to copy into a bug report, or clear it|r",

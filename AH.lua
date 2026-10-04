@@ -1,5 +1,5 @@
 --[[
-    Stock Clerk - AH.lua
+    StockClerk - AH.lua
     Commodity search and buyout on C_AuctionHouse. One operation at a time;
     a new one supersedes the old. Never spends gold on its own: a buy is
     StartCommoditiesPurchase (after the player's Buy click) and is confirmed

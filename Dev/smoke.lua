@@ -1,4 +1,4 @@
--- Stock Clerk smoke test (dev only; Dev/ never ships).
+-- StockClerk smoke test (dev only; Dev/ never ships).
 -- Loads the addon in TOC order against stubbed WoW APIs, then checks the
 -- lifecycle, saved-data carry-over, event routing, inventory math, the row
 -- editors and the refresh guards. Needs a Lua 5.1 interpreter:
@@ -136,7 +136,7 @@ do -- "Add common consumables": adds the rest at target 1, never touches tracked
 end
 do local out = {}; local op = print; print = function(m) out[#out + 1] = m end
    SlashCmdList.STOCKCLERK("help"); print = op
-   assert(out[1] and out[1]:find("Stock Clerk", 1, true), "slash /clerk help did not print") end
+   assert(out[1] and out[1]:find("StockClerk", 1, true), "slash /clerk help did not print") end
 local origInv = ADDON.Inventory.OnInventoryChanged
 do
 assert(ADDON.MainFrame.Palette and ADDON.MainFrame.Palette.panelBg, "palette not published")

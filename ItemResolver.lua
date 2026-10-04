@@ -1,5 +1,5 @@
 --[[
-    Stock Clerk - ItemResolver.lua
+    StockClerk - ItemResolver.lua
     Turns user input (item ID, link, or the name of an item seen this
     session) into an itemID, waiting for the item cache when needed.
 
