@@ -1,5 +1,5 @@
 --[[
-    Stock Clerk - Data/Consumables.lua
+    StockClerk - Data/Consumables.lua
     "Add common consumables" list (Sidecar button, v1.2). Edit freely:
     one line per item, itemID first. Every entry is added with a target
     of 1; items already on the player's list are left untouched.

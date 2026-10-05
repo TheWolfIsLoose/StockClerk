@@ -1,5 +1,5 @@
 --[[
-    Stock Clerk - DB.lua
+    StockClerk - DB.lua
     SavedVariables and the per-character list.
 
     Two lists with the same entry shape, { need, maxPrice?, sortOrder }:
@@ -45,8 +45,8 @@ DB.defaults = {
         settings = {
             autoOpenAtAH    = true,
             autoOpenAtBank  = true,
-            autoRestock     = false,      -- Express-Restock at AH: opt-in, it starts a buying flow
-            autoRestockBank = false,      -- Express-Restock at Bank: opt-in
+            autoRestock     = false,      -- Express restock at AH: opt-in, it starts a buying flow
+            autoRestockBank = false,      -- Express restock at Bank: opt-in
             lastPriceTTL    = 24 * 3600,  -- Last Seen dims after 24h
         },
     },

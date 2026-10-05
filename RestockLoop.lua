@@ -1,5 +1,5 @@
 --[[
-    Stock Clerk - RestockLoop.lua
+    StockClerk - RestockLoop.lua
     "Restock at AH" (checkout): walks the short items in list order. For
     each it searches the AH, then marks it over cap and moves on, or shows
     it in the footer with Buy in place of the Restock button. Buying needs
@@ -127,7 +127,7 @@ end
 local BUY_LOCK  = 1.5  -- seconds Buy waits when an item looks risky
 local DEBOUNCE  = 0.5  -- no Buy within this long of the player's last click
 local PRICEY    = 1.25 -- "well above Last Seen": average unit price over 125% of it
-local AMBER, GREY = "|cffffa866", "|cff999999"
+local AMBER, GREY = "|cffffb84d", "|cff8c8c8c"
 
 local function MF() return ADDON.MainFrame end
 
@@ -137,7 +137,7 @@ function Loop:Short(lane, itemID, need)
 end
 
 -- How many items a Restock of `lane` would try right now. The one shortfall
--- answer for the button, Express-Restock and the footer, so they can't disagree.
+-- answer for the button, Express restock and the footer, so they can't disagree.
 function Loop:PreviewShortfallCount(lane)
     local n = 0
     for itemID, entry in pairs(ADDON.DB:GetItems(lane)) do
@@ -183,7 +183,7 @@ function Loop:Start(express, lane)
     end
     if #queue == 0 then
         -- The button is greyed when nothing is short, so this is a race.
-        return Status("|cfff87171Nothing to restock -- every row is at or above its need.|r")
+        return Status("|cff8c8c8cNothing to restock: every row is at or above its need.|r")
     end
     self.state = NewState()
     self.state.active, self.state.queue, self.state.clickAt, self.state.lane = true, queue, GetTime(), lane

@@ -1,5 +1,5 @@
 --[[
-    Stock Clerk - UI/MainFrame.lua
+    StockClerk - UI/MainFrame.lua
     The shopping-list window: header (title, side panel, close), toolbar
     (Item ID, Target, bulk import), the list (ScrollBox of rows), and a
     footer (last action + Restock button; the checkout bar during a
@@ -27,7 +27,7 @@ local ROW_HEIGHT = 24
 local MoneyText  = ADDON.MoneyText
 local ADD_STEPS = "Add items by:\n |cffffffff1.|r Typing an item ID into the Item ID box and pressing Enter\n |cffffffff2.|r Dragging an item from your bags onto the Item ID box\n |cffffffff3.|r Opening bulk import (the button right of Target) to drop or paste many at once"
 local EMPTY_LIST = "No items yet.\n\n" .. ADD_STEPS
-local EMPTY_WARBAND = "No warband items yet.\n\nFor each item on this list, Stock Clerk keeps at least the number you set in your warband bank, so all your characters can restock from it.\n\n" .. ADD_STEPS
+local EMPTY_WARBAND = "No warband items yet.\n\nFor each item on this list, StockClerk keeps at least the number you set in your warband bank, so all your characters can restock from it.\n\n" .. ADD_STEPS
 
 -- ---------------------------------------------------------------------------
 -- Fonts: three sizes in white, plus grey for disabled buttons. Face is Expressway when LibSharedMedia has it
@@ -37,7 +37,7 @@ local EMPTY_WARBAND = "No warband items yet.\n\nFor each item on this list, Stoc
 local FONT_FALLBACK = "Interface\\AddOns\\StockClerk\\Media\\BarlowSemiCondensed-Medium.ttf"
 local FONTS = {
     StockClerkFontSmall = { 10, 1 }, StockClerkFont = { 12, 1 }, StockClerkFontLarge = { 16, 1 },
-    StockClerkFontDisabled = { 12, 0.5 },
+    StockClerkFontDisabled = { 12, 0.55 },
 }
 for name, spec in pairs(FONTS) do
     local fo = CreateFont(name)
@@ -66,13 +66,15 @@ local Palette = {
     bgMedium     = { 0.055, 0.055, 0.055, 0.95 }, -- buttons, hovered cells
     panelBg      = { 0.060, 0.060, 0.060, 0.98 }, -- side panels, log window
     bandTint     = { 1, 1, 1, 0.035 },            -- faint strip: header, toolbar, headers, footer
-    fieldFill    = { 0, 0, 0, 0.55 },             -- sunken well for editable spots
-    btnRest      = { 1, 1, 1, 0.045 },            -- button at rest
+    fieldFill    = { 1, 1, 1, 0.08 },             -- well for editable spots: visibly "fill me" (suite guide)
+    btnRest      = { 1, 1, 1, 0.07 },             -- button at rest
+    ringRest     = { 0.4, 0.4, 0.4, 1 },          -- controls at rest: 3.3:1 on the panel (WCAG 1.4.11)
+    ringHover    = { 0.7, 0.7, 0.7, 1 },          -- control under the mouse
     hoverWash    = { 0.851, 0.851, 0.851, 0.15 }, -- "the mouse is here"
     pressFill    = { 0.851, 0.851, 0.851, 0.22 },
     border       = { 0, 0, 0, 1 },
     brand        = { 0.596, 1, 0.596, 1 },        -- accent: mint, or warband blue in the Warband view (SetView)
-    short        = { 0.90, 0.30, 0.30, 1 },
+    short        = { 1, 0.533, 0.533, 1 },     -- bad: red FF8888 (suite token)
     rowSeparator = { 0.15, 0.15, 0.15, 1 },
 }
 MF.Palette = Palette
@@ -142,10 +144,11 @@ local function SetBorderColor(frame, c)
 end
 
 -- Fade a widget's border to a target colour (mint on hover/focus, back on leave).
-local function AttachBorderAnimator(frame)
+local function AttachBorderAnimator(frame, rest)
     local group = frame:CreateAnimationGroup()
     group:CreateAnimation("Animation"):SetDuration(0.15)
-    local from, to, cur = { 0, 0, 0, 1 }, { 0, 0, 0, 1 }, { 0, 0, 0, 1 }
+    rest = rest or Palette.border
+    local from, to, cur = { unpack(rest) }, { unpack(rest) }, { unpack(rest) }
     group:SetScript("OnUpdate", function(g)
         local p = g:GetProgress() or 0
         for i = 1, 4 do cur[i] = from[i] + (to[i] - from[i]) * p end
@@ -165,18 +168,18 @@ local function AttachBorderAnimator(frame)
 end
 
 -- Flat button: opaque base + light band, hover wash (ARTWORK 7, not HIGHLIGHT,
--- which would wash out the label), press flash, black ring. Scripts are
+-- which would wash out the label), press flash, gray ring (lighter on hover). Scripts are
 -- hooked, so callers must HookScript too or the wash dies.
 local function StyleButton(btn)
     ApplyFill(btn, Palette.bgMedium)
     ApplyBand(btn, Palette.btnRest)
-    AddBlackBorder(btn)
+    AddBlackBorder(btn, Palette.ringRest)
     local wash = Solid(btn, "ARTWORK", 7, Palette.hoverWash)
     wash:SetPoint("TOPLEFT", 1, -1)
     wash:SetPoint("BOTTOMRIGHT", -1, 1)
     wash:Hide()
-    btn:HookScript("OnEnter", function() wash:Show() end)
-    btn:HookScript("OnLeave", function() wash:Hide() end)
+    btn:HookScript("OnEnter", function() wash:Show(); SetBorderColor(btn, Palette.ringHover) end)
+    btn:HookScript("OnLeave", function() wash:Hide(); SetBorderColor(btn, Palette.ringRest) end)
     btn:HookScript("OnMouseDown", function(self) if self:IsEnabled() then ApplyBand(self, Palette.pressFill) end end)
     btn:HookScript("OnMouseUp", function(self) ApplyBand(self, Palette.btnRest) end)
     btn:SetNormalFontObject("StockClerkFont")
@@ -266,8 +269,8 @@ local function MakeEditBox(parent, placeholder, maxLetters, tipTitle, tipBody)
     box:SetHeight(22)
     box:EnableMouse(true)
     ApplyFill(box, Palette.fieldFill)
-    AddBlackBorder(box)
-    AttachBorderAnimator(box)
+    AddBlackBorder(box, Palette.ringRest)
+    AttachBorderAnimator(box, Palette.ringRest)
 
     local eb = CreateFrame("EditBox", nil, box)
     eb:SetPoint("TOPLEFT", 6, -3)
@@ -285,24 +288,24 @@ local function MakeEditBox(parent, placeholder, maxLetters, tipTitle, tipBody)
     ph:SetPoint("RIGHT", eb)
     ph:SetJustifyH("LEFT")
     ph:SetText(placeholder)
-    ph:SetTextColor(0.62, 0.62, 0.62, 1)
+    ph:SetTextColor(0.55, 0.55, 0.55, 1)
     local function refresh() ph:SetShown(eb:GetText() == "" and not eb:HasFocus()) end
 
     local function over() return box:IsMouseOver() or eb:IsMouseOver() end
     local function enter()
-        box._borderAnim.AnimateTo(Palette.brand)
+        box._borderAnim.AnimateTo(eb:HasFocus() and Palette.brand or Palette.ringHover)
         -- 4px above the box: ANCHOR_TOP overlaps it and flickers.
         GameTooltip:SetOwner(box, "ANCHOR_NONE")
         GameTooltip:ClearAllPoints()
         GameTooltip:SetPoint("BOTTOM", box, "TOP", 0, 4)
         GameTooltip:SetText(tipTitle, 1, 1, 1)
-        GameTooltip:AddLine(type(tipBody) == "function" and tipBody() or tipBody, 0.8, 0.8, 0.8, true)
+        GameTooltip:AddLine(type(tipBody) == "function" and tipBody() or tipBody, 0.74, 0.74, 0.74, true)
         GameTooltip:Show()
     end
     local function leave()
         if over() then return end
         GameTooltip:Hide()
-        if not eb:HasFocus() then box._borderAnim.AnimateTo(Palette.border) end
+        if not eb:HasFocus() then box._borderAnim.AnimateTo(Palette.ringRest) end
     end
     box:SetScript("OnEnter", enter)
     box:SetScript("OnLeave", leave)
@@ -311,7 +314,7 @@ local function MakeEditBox(parent, placeholder, maxLetters, tipTitle, tipBody)
     eb:HookScript("OnEditFocusGained", function() refresh(); box._borderAnim.AnimateTo(Palette.brand) end)
     eb:HookScript("OnEditFocusLost", function()
         refresh()
-        if not over() then box._borderAnim.AnimateTo(Palette.border) end
+        box._borderAnim.AnimateTo(over() and Palette.ringHover or Palette.ringRest)
     end)
     eb:HookScript("OnTextChanged", refresh)
     refresh()
@@ -323,9 +326,9 @@ end
 -- them. StockClerk never paints item tooltips (WoW's and the player's
 -- tooltip addon's job); its tooltips describe its own controls.
 -- ---------------------------------------------------------------------------
-local CELL_FILL_IDLE   = { 0, 0, 0, 0.35 }
+local CELL_FILL_IDLE   = Palette.fieldFill
 local CELL_FILL_HOVER  = { Palette.bgMedium[1], Palette.bgMedium[2], Palette.bgMedium[3], 1 }
-local CELL_BORDER_IDLE = { Palette.brand[1], Palette.brand[2], Palette.brand[3], 0 }
+local CELL_BORDER_IDLE = Palette.ringRest  -- editable at rest, not only on hover (WCAG 1.4.11)
 
 -- Restock marks: kind -> { shape, colour }. Shapes are drawn bars.
 MF.marks = {}  -- itemID -> { kind, tip }
@@ -335,7 +338,7 @@ local MARK_SHAPES = {
     dot     = { { 3, 3, 0 } },
     dash    = { { 8, 2, 0 } },
 }
-local MARK_GREY, MARK_AMBER = { 0.55, 0.55, 0.55 }, { 1.0, 0.66, 0.4 }
+local MARK_GREY, MARK_AMBER = { 0.55, 0.55, 0.55 }, { 1, 0.72, 0.3 }
 local MARK_STYLES = {
     queued  = { "dot", MARK_GREY },       current = { "chevron", Palette.brand },
     done    = { "check", Palette.brand }, skipped = { "dash", MARK_GREY },
@@ -420,11 +423,11 @@ local function BuildRow(row)
         if MF:Busy() then return GameTooltip:Show() end
         if mark then GameTooltip:AddLine(" ") end
         GameTooltip[mark and "AddLine" or "SetText"](GameTooltip, "Drag to reorder", 1, 1, 1)
-        GameTooltip:AddLine("List order sets restock priority.", 0.7, 0.7, 0.7, true)
+        GameTooltip:AddLine("List order sets restock priority.", 0.74, 0.74, 0.74, true)
         GameTooltip:AddLine(" ")
-        GameTooltip:AddLine("Shift+click a row to link it in chat.", 0.7, 0.7, 0.7, true)
-        GameTooltip:AddLine("Click Need or Cap to edit it.", 0.7, 0.7, 0.7, true)
-        GameTooltip:AddLine("With the AH open, click a row to search for it.", 0.7, 0.7, 0.7, true)
+        GameTooltip:AddLine("Shift+click a row to link it in chat.", 0.74, 0.74, 0.74, true)
+        GameTooltip:AddLine("Click Need or Cap to edit it.", 0.74, 0.74, 0.74, true)
+        GameTooltip:AddLine("With the AH open, click a row to search for it.", 0.74, 0.74, 0.74, true)
         GameTooltip:Show()
     end)
     row.grip:SetScript("OnLeave", function(self) tintGrip(GRIP_REST, 0.85); OnChildLeave(self) end)
@@ -461,12 +464,12 @@ local function BuildRow(row)
             local mine = ADDON.RestockLoop:Surplus(r._itemID)
             local others = ADDON.RestockLoop:WarbandHave(r._itemID) - bd.warband - mine
             GameTooltip:SetText(("Have: %d in the warband bank"):format(bd.warband), 1, 1, 1)
-            if mine > 0 then GameTooltip:AddLine(("+%d from this character (above your own target, deposited at the bank)"):format(mine), 0.78, 0.78, 0.78, true) end
-            if others > 0 then GameTooltip:AddLine(("+%d bought by your other characters, not yet deposited"):format(others), 0.78, 0.78, 0.78, true) end
+            if mine > 0 then GameTooltip:AddLine(("+%d from this character (above your own target, deposited at the bank)"):format(mine), 0.74, 0.74, 0.74, true) end
+            if others > 0 then GameTooltip:AddLine(("+%d bought by your other characters, not yet deposited"):format(others), 0.74, 0.74, 0.74, true) end
         else
             GameTooltip:SetText(("Have: %d in bags"):format(bd.bags), 1, 1, 1)
-            if bd.bank > 0 then GameTooltip:AddLine(("+%d in bank (this character)"):format(bd.bank), 0.78, 0.78, 0.78) end
-            if bd.warband > 0 then GameTooltip:AddLine(("+%d in warband bank (account-wide)"):format(bd.warband), 0.78, 0.78, 0.78) end
+            if bd.bank > 0 then GameTooltip:AddLine(("+%d in bank (this character)"):format(bd.bank), 0.74, 0.74, 0.74) end
+            if bd.warband > 0 then GameTooltip:AddLine(("+%d in warband bank (account-wide)"):format(bd.warband), 0.74, 0.74, 0.74) end
         end
         GameTooltip:Show()
     end)
@@ -491,7 +494,7 @@ local function BuildRow(row)
         cell:SetFrameLevel(row:GetFrameLevel() + 2)
         ApplyFill(cell, CELL_FILL_IDLE)
         AddBlackBorder(cell, CELL_BORDER_IDLE)
-        AttachBorderAnimator(cell)
+        AttachBorderAnimator(cell, CELL_BORDER_IDLE)
         local text = cell:CreateFontString(nil, "OVERLAY", "StockClerkFontSmall")  -- on the cell: draws over its fill
         text:SetPoint("RIGHT", -6, 0)
         local edit = CreateFrame("EditBox", nil, row)
@@ -534,9 +537,9 @@ local function BuildRow(row)
         GameTooltip:SetOwner(self, "ANCHOR_TOP")
         GameTooltip:SetText("Last seen at AH")
         GameTooltip:AddLine(MoneyText(lp.copper) .. " per unit", 1, 1, 1)
-        GameTooltip:AddLine(agoText .. how, 0.7, 0.7, 0.7)
+        GameTooltip:AddLine(agoText .. how, 0.74, 0.74, 0.74)
         if ago > ADDON.DB:Settings().lastPriceTTL then
-            GameTooltip:AddLine("Price is stale -- re-search to refresh", 0.9, 0.6, 0.2)
+            GameTooltip:AddLine("Price is stale: search again to refresh", 1, 0.72, 0.3)
         end
         GameTooltip:Show()
     end)
@@ -621,10 +624,11 @@ local function BuildRow(row)
             edit:SetFocus()
             edit:HighlightText()
             cell.editing = true
+            cell._borderAnim.AnimateTo(Palette.brand)
         end)
         cell:SetScript("OnEnter", function(self)
             OnChildEnter(self)
-            self._borderAnim.AnimateTo(Palette.brand)
+            if not self.editing then self._borderAnim.AnimateTo(Palette.ringHover) end
             self._bg:SetVertexColor(unpack(CELL_FILL_HOVER))
             GameTooltip:SetOwner(self, "ANCHOR_TOP")
             e.tooltip(row)
@@ -656,10 +660,10 @@ local function BuildRow(row)
         tooltip = function(r)
             if r._maxPrice then
                 GameTooltip:SetText(("Max %dg / unit"):format(math.floor(r._maxPrice / 10000)), 1, 1, 1)
-                GameTooltip:AddLine("Click to change  \194\183  blank = no cap", 0.7, 0.7, 0.7)
+                GameTooltip:AddLine("Click to change  \194\183  blank = no cap", 0.74, 0.74, 0.74)
             else
                 GameTooltip:SetText("No price cap set", 1, 1, 1)
-                GameTooltip:AddLine("Click to set a max gold/unit", 0.7, 0.7, 0.7)
+                GameTooltip:AddLine("Click to set a max gold/unit", 0.74, 0.74, 0.74)
             end
         end,
         commit = function(r, text)
@@ -681,7 +685,7 @@ local function BuildRow(row)
         prefill = function(r) return tostring(r._need) end,
         tooltip = function(r)
             GameTooltip:SetText((MF:View() == "warband" and "Keep at least %d in the warband bank" or "Target: %d"):format(r._need), 1, 1, 1)
-            GameTooltip:AddLine("Click to change", 0.7, 0.7, 0.7)
+            GameTooltip:AddLine("Click to change", 0.74, 0.74, 0.74)
         end,
         commit = function(r, text)
             local need = tonumber(text)
@@ -738,8 +742,8 @@ local function InitializeRow(row, data)
     local bd = ADDON.Inventory:GetBreakdown(itemID)
     local have, stashed, short = MF:Counts(itemID, data.need)
     row._breakdown = bd
-    row.have:SetText((short > 0 and "|cffe5624a%d|r" or "|cff98FF98%d|r"):format(have)
-        .. (stashed > 0 and ("  |cff888888(+%d)|r"):format(stashed) or ""))
+    row.have:SetText((short > 0 and "|cffff8888%d|r" or "|cff98FF98%d|r"):format(have)
+        .. (stashed > 0 and ("  |cff8c8c8c(+%d)|r"):format(stashed) or ""))
     row.accent:SetColorTexture(unpack(short > 0 and { 0xe5 / 255, 0x62 / 255, 0x4a / 255 } or { 0x4a / 255, 0xde / 255, 0x80 / 255 }))
     row.need:SetText(("|cffCCCCCC%d|r"):format(data.need))
 
@@ -762,14 +766,14 @@ local function InitializeRow(row, data)
         local over = lp and lp.copper > data.maxPrice
         row.cap:SetText(("|cff%s%dg|r"):format(over and "ff8888" or "98FF98", math.floor(data.maxPrice / 10000)))
     else
-        row.cap:SetText("|cff555555\226\128\148|r")
+        row.cap:SetText("|cff666666\226\128\148|r")
     end
     -- Last Seen: gold and silver (the tooltip has copper); greyer once stale.
     if lp then
         local stale = time() - lp.seenAt > ADDON.DB:Settings().lastPriceTTL
         row.lastSeen:SetText(("|cff%s%s|r"):format(stale and "777777" or "CCCCCC", MoneyText(lp.copper, "silver")))
     else
-        row.lastSeen:SetText("|cff555555\226\128\148|r")
+        row.lastSeen:SetText("|cff666666\226\128\148|r")
     end
 
     if ADDON.debug then  -- trace only when this row's numbers change
@@ -862,7 +866,7 @@ function MF:Build()
     local version = ADDON.VersionText()
     local versionLabel = header:CreateFontString(nil, "OVERLAY", "StockClerkFontSmall")
     versionLabel:SetPoint("LEFT", title, "RIGHT", 6, -1)
-    versionLabel:SetText(((version:match("%-alpha") or version:match("%-beta")) and "|cffFFAA00" or "|cff888888") .. version .. "|r")
+    versionLabel:SetText(((version:match("%-alpha") or version:match("%-beta")) and "|cffffb84d" or "|cff8c8c8c") .. version .. "|r")
 
     local closeX = HeaderIcon(header, CLOSE_GLYPH, "Close", function() MF:Hide() end)
     closeX:SetPoint("RIGHT", -4, 0)
@@ -881,11 +885,16 @@ function MF:Build()
         b:SetHeight(20)
         b.fs = b:CreateFontString(nil, "OVERLAY", "StockClerkFont")
         b.fs:SetPoint("LEFT")
+        -- The list on screen also gets a 2px bar, like an "on" toggle (colour is never the only cue).
+        b.bar = b:CreateTexture(nil, "OVERLAY")
+        b.bar:SetHeight(2)
+        b.bar:SetPoint("BOTTOMLEFT", 0, 0)
+        b.bar:SetPoint("BOTTOMRIGHT", -2, 0)
         b:SetScript("OnClick", function() if not MF:Busy() then MF:SetView(view) end end)
         b:SetScript("OnEnter", function(self)
             GameTooltip:SetOwner(self, "ANCHOR_BOTTOM")
             GameTooltip:SetText(VIEW_TIPS[view][1], 1, 1, 1)
-            GameTooltip:AddLine(VIEW_TIPS[view][2], 0.8, 0.8, 0.8, true)
+            GameTooltip:AddLine(VIEW_TIPS[view][2], 0.74, 0.74, 0.74, true)
             if MF:Busy() then GameTooltip:AddLine("Finish or stop the restock first.", Palette.short[1], Palette.short[2], Palette.short[3], true) end
             GameTooltip:Show()
         end)
@@ -896,7 +905,7 @@ function MF:Build()
     self.viewTabs.warband:SetPoint("RIGHT", menu, "LEFT", -6, 0)
     local dot = header:CreateFontString(nil, "OVERLAY", "StockClerkFont")
     dot:SetPoint("RIGHT", self.viewTabs.warband, "LEFT", -4, 0)
-    dot:SetText("|cff555555\194\183|r")
+    dot:SetText("|cff666666\194\183|r")
     self.viewTabs.mine:SetPoint("RIGHT", dot, "LEFT", -4, 0)
 
     -- ---- Toolbar: Item ID, Target, bulk import ----------------------------
@@ -920,6 +929,7 @@ function MF:Build()
     -- Bulk import: a drawn "list +" icon.
     local bulkBtn = CreateFrame("Button", nil, toolbar)
     bulkBtn:SetSize(22, 22)
+    bulkBtn:SetHitRectInsets(-1, -1, -1, -1)  -- 24px target
     bulkBtn:SetPoint("RIGHT", -12, 0)
     countEB:SetPoint("RIGHT", bulkBtn, "LEFT", -8, 0)
     addEB:SetPoint("LEFT", 12, 0)
@@ -933,7 +943,7 @@ function MF:Build()
         tintBulk(Palette.brand)
         GameTooltip:SetOwner(self, "ANCHOR_TOP")
         GameTooltip:SetText("Bulk import", 1, 1, 1)
-        GameTooltip:AddLine("Paste a list of item IDs, one per line, to add them all at once.", 0.8, 0.8, 0.8, true)
+        GameTooltip:AddLine("Paste a list of item IDs, one per line, to add them all at once.", 0.74, 0.74, 0.74, true)
         GameTooltip:Show()
     end)
     bulkBtn:HookScript("OnLeave", function() GameTooltip:Hide(); tintBulk(ICON_REST) end)
@@ -1016,6 +1026,7 @@ function MF:Build()
     -- "Short items only" filter: drawn funnel, dim mint off, bright mint on.
     local filterBtn = CreateFrame("Button", nil, headers)
     filterBtn:SetSize(18, 16)
+    filterBtn:SetHitRectInsets(-3, -3, -4, -4)  -- 24px target (WCAG 2.5.8)
     filterBtn:SetPoint("LEFT", 62, 0)
     local tintFilter = DrawGlyph(filterBtn, { { 12, 2, 4 }, { 8, 2, 0 }, { 4, 2, -4 } })
     local function paintFilter() tintFilter(Palette.brand, ADDON.DB:GetStuckOnly() and 1 or 0.55) end
@@ -1027,8 +1038,8 @@ function MF:Build()
     filterBtn:SetScript("OnEnter", function(self)
         tintFilter(Palette.brand)
         GameTooltip:SetOwner(self, "ANCHOR_BOTTOM")
-        GameTooltip:SetText((ADDON.DB:GetStuckOnly() and "|cff98FF98Filter ON|r  " or "") .. "Show only: items you're short on", 1, 1, 1)
-        GameTooltip:AddLine("Hide items that are fully stocked.", 0.7, 0.7, 0.7, true)
+        GameTooltip:SetText((ADDON.DB:GetStuckOnly() and "|cff98ff98Filter on|r  " or "") .. "Show only: items you're short on", 1, 1, 1)
+        GameTooltip:AddLine("Hide items that are fully stocked.", 0.74, 0.74, 0.74, true)
         GameTooltip:Show()
     end)
     filterBtn:SetScript("OnLeave", function() paintFilter(); GameTooltip:Hide() end)
@@ -1043,7 +1054,7 @@ function MF:Build()
     ApplyBand(footer, Palette.bandTint)
     AddRule(footer, "TOP")
 
-    -- Restock: "Restock at AH (N)", or "Restock from Bank (N)" at a banker.
+    -- Restock: "Restock at AH (N)", or "Restock from bank (N)" at a banker.
     -- During an AH restock the same button is Buy (right edge fixed, so the
     -- cursor never moves); RestockLoop debounces it against a double click.
     local restockBtn = CreateFrame("Button", nil, footer)
@@ -1064,7 +1075,7 @@ function MF:Build()
         local state = MF:RestockState()
         GameTooltip:SetOwner(self, "ANCHOR_TOP")
         GameTooltip:SetText(state.tip, 1, 1, 1)
-        for _, line in ipairs(state.lines) do GameTooltip:AddLine(line, 0.7, 0.7, 0.7, true) end
+        for _, line in ipairs(state.lines) do GameTooltip:AddLine(line, 0.74, 0.74, 0.74, true) end
         if state.reason then
             GameTooltip:AddLine(" ")
             GameTooltip:AddLine("Unavailable: " .. state.reason, Palette.short[1], Palette.short[2], Palette.short[3], true)
@@ -1115,6 +1126,7 @@ function MF:Build()
     -- (unrotated, so crisp at any UI scale), clear of the footer buttons ----
     local grip = CreateFrame("Button", nil, f)
     grip:SetSize(12, 12)
+    grip:SetHitRectInsets(-6, 0, -6, 0)  -- 18px to grab; the corner bounds the rest
     grip:SetPoint("BOTTOMRIGHT", -2, 2)
     grip:SetFrameLevel(f:GetFrameLevel() + 5)
     local GRIP_DOTS = {}
@@ -1202,11 +1214,14 @@ function MF:_PaintSwitch()
     local view = self:View()
     for v, b in pairs(self.viewTabs) do
         local label = v == "mine" and "Mine" or "Warband"
+        b.bar:SetShown(v == view)
         if v == view then
             b.fs:SetText(("|cff%s%s|r"):format(v == "warband" and MF.WARBAND_HEX or "98FF98", label))
+            local c = v == "warband" and WARBAND or MINT
+            b.bar:SetColorTexture(c[1], c[2], c[3], 1)
         else
             local n = ADDON.RestockLoop:PreviewShortfallCount(v)
-            b.fs:SetText("|cff8C8C8C" .. label .. (n > 0 and (" |cffe5624a%d|r"):format(n) or "") .. "|r")
+            b.fs:SetText("|cff8c8c8c" .. label .. (n > 0 and (" |cffff8888%d|r"):format(n) or "") .. "|r")
         end
         b:SetWidth(b.fs:GetStringWidth() + 2)
     end
@@ -1248,7 +1263,7 @@ function MF:_RefreshNow()
     self.emptyText:SetShown(empty)
     if empty then
         -- skipLog: repaint state, not an event.
-        self.emptyText:SetText(stuckOnly and "|cff888888Nothing is short. Click the filter icon to see the full list.|r"
+        self.emptyText:SetText(stuckOnly and "|cff8c8c8cNothing is short. Click the filter icon to see the full list.|r"
             or view == "warband" and EMPTY_WARBAND or EMPTY_LIST)
     end
     self:_PaintSwitch()
@@ -1263,7 +1278,7 @@ function MF:RestockState()
     if br:IsActive() then
         local deposit = br.dir == "deposit"
         return { label = deposit and "Depositing..." or "Pulling...", enabled = false,
-                 tip = deposit and "Deposit to the warband bank" or "Restock from Bank",
+                 tip = deposit and "Deposit to the warband bank" or "Restock from bank",
                  lines = { (deposit and "Moving your surplus into the warband bank." or "Moving what you're short into your bags.")
                            .. " Press Escape or the x to stop." } }
     elseif loop:IsActive() then
@@ -1273,7 +1288,7 @@ function MF:RestockState()
         if wait then  -- armed: say what, and why Buy may be waiting
             if wait > 0 and #plan.warnings > 0 then st.label = ("Buy (%d)"):format(math.ceil(wait)) end
             st.tip = ("Buy %d %s for %s"):format(plan.planQuantity, plan.name, MoneyText(plan.plannedSpend))
-            for _, w in ipairs(plan.warnings) do st.lines[#st.lines + 1] = "|cffffa866" .. w .. "|r" end
+            for _, w in ipairs(plan.warnings) do st.lines[#st.lines + 1] = "|cffffb84d" .. w .. "|r" end
         end
         if loop.state.lane == "warband" and st.enabled then st.label = BLUE .. st.label .. "|r" end
         return st
@@ -1286,8 +1301,8 @@ function MF:RestockState()
                      lines = { "Moves everything above your own targets from your bags into the warband bank, where all your characters can restock from it.",
                                "Items only on the warband list go in whole." } }
         end
-        return { label = n > 0 and ("Restock from Bank (%d)"):format(n) or "Restock from Bank", enabled = n > 0,
-                 tip = "Restock from Bank", action = "pull",
+        return { label = n > 0 and ("Restock from bank (%d)"):format(n) or "Restock from bank", enabled = n > 0,
+                 tip = "Restock from bank", action = "pull",
                  lines = { "Moves exactly what you're short from your bank, then your warband bank, into your bags." },
                  reason = n == 0 and "Nothing you're short on is in your bank or warband bank." or nil }
     end
@@ -1309,7 +1324,7 @@ function MF:RestockState()
              tip = "Restock at AH", action = "mine",
              lines = { "Goes down your list in order; you click Buy for each item.", "Items above your cap are marked and passed over." },
              reason = not ahOpen and "Auction House isn't open."
-                   or n == 0 and "Nothing to restock -- every row is at or above its need." or nil }
+                   or n == 0 and "Nothing to restock: every row is at or above its need." or nil }
 end
 
 function MF:RefreshRestockBtn()

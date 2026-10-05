@@ -1,5 +1,5 @@
 --[[
-    Stock Clerk - Log.lua
+    StockClerk - Log.lua
     Account-wide activity log: what happened, in plain words, for players
     (side panel feed) and for support (/clerk log, copied into a report).
 
@@ -96,8 +96,8 @@ local function Plain(text)
 end
 
 local SETTING_LABELS = {
-    autoOpenAtAH = "Auto-open at Auction House", autoOpenAtBank = "Auto-open at Bank",
-    autoRestock = "Express-Restock at Auction House", autoRestockBank = "Express-Restock at Bank",
+    autoOpenAtAH = "Auto-open at Auction House", autoOpenAtBank = "Auto-open at bank",
+    autoRestock = "Express restock at Auction House", autoRestockBank = "Express restock at bank",
     shopWarband = "Shop for the warband on this character",
 }
 
@@ -132,7 +132,7 @@ local FORMAT = {
         if p.reason == "user skipped" then return ("Skipped %s (you chose Skip)"):format(item) end
         return ("Skipped %s: %s"):format(item, Plain(p.reason or "?"))
     end,
-    auto_refuse   = function(p) return "Express-Restock didn't start: " .. Plain(p.reason or "?") end,
+    auto_refuse   = function(p) return "Express restock didn't start: " .. Plain(p.reason or "?") end,
     bank_pull     = function(p, item) return ("Pulled %s %s from your bank"):format(p.qty or "?", item) end,
     bank_deposit  = function(p, item)
         return ("Deposited %s %s to the warband bank%s"):format(p.qty or "?", item, p.tab and (" (tab %d)"):format(p.tab) or "")

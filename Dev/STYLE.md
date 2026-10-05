@@ -1,6 +1,10 @@
-# Stock Clerk — UI style rules
+# StockClerk — UI style rules
 
-Stock Clerk should feel like a real shopping list: pocket-sized, efficient,
+Suite-wide rules (colour tokens, controls, accessibility, words, chat) live in
+the "Suite style guide" doc in the WoW Addons project; this file holds StockClerk
+'s specifics and wins only where it names an exception.
+
+StockClerk should feel like a real shopping list: pocket-sized, efficient,
 minimal without being brutalist. Every pixel and every control earns its
 place. New UI follows these rules; the helpers named here already exist in
 `UI/MainFrame.lua` (exported on `ADDON.MainFrame` where other files need them).
@@ -15,22 +19,28 @@ place. New UI follows these rules; the helpers named here already exist in
 ## Look
 - One window fill (`Palette.bgDark`); regions are separated by 1px black
   borders and the faint `bandTint` strip, never by extra shades.
+- Text and status colours: the suite tokens only (white, soft 0.74, muted
+  `8C8C8C`, faint `666666` for decoration, amber `FFB84D`, red `FF8888`).
 - Accent (`Palette.brand`): hover, focus, "on", marks. Mint `#98FF98` in the
   Mine view, warband blue `#5AA9FF` in the Warband view (`MF:SetView`
   recolours the table in place). Deposit marks are blue in either view. The
   mint "Stock" in the title never changes. Colour is never the only cue.
-- Buttons: `StyleButton` only (flat fill, band, hover wash, press flash, black
-  ring; label via `SetText`, grey when disabled). No Blizzard button or
+- Buttons: `StyleButton` only (flat fill, band, hover wash, press flash, gray
+  ring `Palette.ringRest`, lighter on hover; label via `SetText`, muted when
+  disabled). No Blizzard button or
   checkbox templates.
 - Lines: `AddRule` (one edge) and `AddBlackBorder` (ring); never hand-built.
 - Side panels: `MF.DockedPanel(name)` + `MF:ShowPanel(panel)` (right edge,
   window height, one at a time).
 - Icons: drawn bars via `DrawGlyph`, never font glyphs. Header icons via
-  `HeaderIcon` (grey at rest, mint on hover, one-line tooltip).
-- Checkboxes: 16px flat well + black border, mint square when on, label is
-  part of the click area.
-- Editable spots show a faint sunken well (`Palette.fieldFill`); the border
-  fades to mint on hover/focus (`AttachBorderAnimator`).
+  `HeaderIcon` (gray at rest, mint on hover, one-line tooltip).
+- Checkboxes: 16px light well + gray ring, mint square when on; the label is
+  part of the click area, 24px tall; rows 24px apart.
+- Editable spots (text boxes, Need / Cap cells, the bulk-import well) show a
+  light well (`Palette.fieldFill`) and a gray ring at rest; the ring fades
+  lighter on hover and to mint while typing (`AttachBorderAnimator`).
+- The Mine / Warband switch marks the list on screen with its colour and a
+  2px bar, like every "on" toggle.
 - All fills use `SetColorTexture` (White8x8 + vertex colour renders
   transparent on retail).
 

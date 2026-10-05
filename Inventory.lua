@@ -1,5 +1,5 @@
 --[[
-    Stock Clerk - Inventory.lua
+    StockClerk - Inventory.lua
     How many of an item this character has: bags, bank, warband bank.
 
     The row count is bags only: moving items between bags and bank would

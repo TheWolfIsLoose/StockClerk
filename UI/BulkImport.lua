@@ -1,5 +1,5 @@
 --[[
-    Stock Clerk - UI/BulkImport.lua
+    StockClerk - UI/BulkImport.lua
 
     Bulk import panel: paste many item IDs at once. Opened by the square
     button on the toolbar; docks to the main window's right edge like the
@@ -145,14 +145,14 @@ local function BuildFrame()
     instr:SetPoint("RIGHT", -PAD, 0)
     instr:SetJustifyH("LEFT")
     instr:SetText("Drop items here, or paste one per line: |cffffffffID|r, |cffffffffID target|r or |cffffffffID target cap|r (cap in gold).")
-    instr:SetTextColor(0.8, 0.8, 0.8, 1)
+    instr:SetTextColor(0.74, 0.74, 0.74, 1)
 
     -- Paste area fills the panel between the instructions and the status line.
     local well = CreateFrame("Frame", nil, f)
     well:SetPoint("TOPLEFT", PAD, -72)
     well:SetPoint("BOTTOMRIGHT", -PAD, 72)
     MF.ApplyFill(well, PALETTE.fieldFill)
-    local wellEdges = MF.AddBlackBorder(well)
+    local wellEdges = MF.AddBlackBorder(well, PALETTE.ringRest)
 
     local scroll = CreateFrame("ScrollFrame", "StockClerkBulkImportScroll", well, "UIPanelScrollFrameTemplate")
     scroll:SetPoint("TOPLEFT", 2, -2)
@@ -200,7 +200,7 @@ local function BuildFrame()
 
     -- Mint border while the cursor holds an item: "you can drop here".
     local function PaintDropZone()
-        local c = MF.CursorItemID() and PALETTE.brand or PALETTE.border
+        local c = MF.CursorItemID() and PALETTE.brand or PALETTE.ringRest
         for _, t in ipairs(wellEdges) do t:SetColorTexture(c[1], c[2], c[3], 1) end
     end
     well:RegisterEvent("CURSOR_CHANGED")
@@ -211,7 +211,7 @@ local function BuildFrame()
     ghost:SetPoint("TOPLEFT", 6, -4)
     ghost:SetJustifyH("LEFT")
     ghost:SetText("For example:\n212283\n212283 20\n212283 20 500")
-    ghost:SetTextColor(0.5, 0.5, 0.5, 0.8)
+    ghost:SetTextColor(0.55, 0.55, 0.55, 1)
     local function RefreshGhost()
         ghost:SetShown(edit:GetText() == "" and not edit:HasFocus())
     end

@@ -1,4 +1,4 @@
--- Stock Clerk smoke test (dev only; Dev/ never ships).
+-- StockClerk smoke test (dev only; Dev/ never ships).
 -- Loads the addon in TOC order against stubbed WoW APIs, then checks the
 -- lifecycle, saved-data carry-over, event routing, inventory math, the row
 -- editors and the refresh guards. Needs a Lua 5.1 interpreter:

@@ -1,5 +1,5 @@
 --[[
-    Stock Clerk - ItemResolver.lua
+    StockClerk - ItemResolver.lua
     Turns user input (item ID, link, or the name of an item seen this
     session) into an itemID, waiting for the item cache when needed.
 
@@ -29,7 +29,7 @@ function IR:Resolve(input, callback)
     local name, link = C_Item.GetItemInfo(input)
     local id = link and tonumber(link:match("item:(%d+)"))
     if id then return callback(id, name, link) end
-    callback(nil, "Item not found or not yet cached. Hover it in game first, then add it again.")
+    callback(nil, "That item hasn't loaded yet. Hover it in game first, then add it again.")
 end
 
 function IR:OnItemInfoReceived(itemID, success)

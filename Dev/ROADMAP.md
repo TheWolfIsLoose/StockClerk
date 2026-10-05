@@ -1,4 +1,4 @@
-# Stock Clerk — Roadmap
+# StockClerk — Roadmap
 
 Forward plan, one section per release. Dev-only (`Dev/` never ships).
 Shipped work moves to `Dev/HISTORY.md`; the player-facing summary goes in
@@ -11,20 +11,27 @@ disagree), **Open** (needs an answer before build).
 
 ## Next session: start here
 
-**2026-09-28: stable v1.3.0 released** (`main` = `dev`). Warband list,
-warband AH pass, deposit. Open follow-ups:
+**2026-09-28 ~11:55 ET: parked after stable v1.3.0** (`main` = `dev`).
+The player is using the addon and collecting feedback; StockClerk is close
+to feature-complete. New release policy in `Dev/RELEASING.md`: commit to
+`dev`, test internally, no public prereleases except big features.
+Open follow-ups:
 1. Not yet covered in-game: buy on one character, switch before
    depositing (transit: not short there); a soulbound listed item at
    Deposit (red mark, footer); a full warband bank.
 2. Tab deposit-filter preference if the probe (`/clerk bankprobe
    <itemID>`) shows filters matter.
-3. Player: paste the updated copy into CurseForge (same wording as the
-   README intro and the two new feature bullets).
+3. **v1.4 (planned, see its section):** minimap icon
+   (setting to hide it) + cost estimate for your own list at the AH ("3
+   short, about 1,240g at last seen prices"; the warband button tooltip
+   already does this) + all screenshots retaken on that version.
+   Vendor restock (buy short items at a merchant, checkout pattern): the
+   player is still thinking about it. Mailbox pickup for listed items:
+   very low priority, scope creep (overlaps a mail addon the player uses).
 
-Pending on the player's side: paste the CurseForge description and the
-GitHub "About" line (drafted in the 2026-09-27 session: pitch "A
-pocket-sized shopping list for WoW consumables..."; README intro is the
-same copy).
+Pending on the player's side: paste the v1.3.0 CurseForge description
+(drafted 2026-09-28: README intro + features, commands as a list, no
+credits) and upload the warband screenshot to the CurseForge Images tab.
 
 State: `main` = `dev` = v1.2.0.
 
@@ -323,7 +330,7 @@ trim to what actually shipped:
   list with this expansion's staples; remove what you don't need.
 - Smoother at the Auction House, especially alongside scanning addons
   like Auctionator or TSM.
-- Smaller download: Stock Clerk no longer bundles any libraries.
+- Smaller download: StockClerk no longer bundles any libraries.
 - `/clerk help` now lists every command.
 
 Your list, caps and settings carry over unchanged.
@@ -377,7 +384,7 @@ Lua: ~5,650 → ~3,330 lines (-41%), one file fewer.
 ```
 ## v1.2.0-beta3
 
-- Under the hood: Stock Clerk's code was tightened throughout (about 40% smaller) with no change to how it works.
+- Under the hood: StockClerk's code was tightened throughout (about 40% smaller) with no change to how it works.
 - `/clerk log` now also lists your items and anything still waiting in the mail, so a bug report has everything in one paste. `/clerk dump` and `/clerk pending` are gone.
 
 Your list, caps and settings carry over unchanged.
@@ -463,10 +470,10 @@ keyboard navigation was already gone; `Dev/STYLE.md` written.
 ## v1.2.0-beta2
 
 - New look: a slimmer, tidier window. Smaller rows fit more items, item icons get a clean quality-coloured border, and help text moved into tooltips.
-- New: **Express-Restock at Bank.** Turn it on in the side panel and opening your bank pulls anything you're short on. If your bags are full, Stock Clerk tells you.
+- New: **Express-Restock at Bank.** Turn it on in the side panel and opening your bank pulls anything you're short on. If your bags are full, StockClerk tells you.
 - The add bar is just Item ID and Target: press Enter to add. Set a price cap on the row after checking the AH.
 - The button next to them opens bulk import: drag items from your bags into it one after another (or paste a list of item IDs), then add them all at once.
-- Stock Clerk uses Expressway when your UI provides it (ElvUI, EllesmereUI and others), and a similar built-in font otherwise.
+- StockClerk uses Expressway when your UI provides it (ElvUI, EllesmereUI and others), and a similar built-in font otherwise.
 - Recent Activity now reads like a receipt: "Bought 20 [Light's Potential] for 412g", with item names in their quality colour.
 - Something not working? Hover **Recent Activity**: `/clerk log` gives you a report to paste into a bug report, and `/clerk debug` records extra detail while you repeat the problem.
 
@@ -524,7 +531,7 @@ headers 20, footer 38), leaving ~8.7 rows of 30px.
 Goal: less code and more usable space before stable v1.2.0. No new
 features.
 
-**Design intent (Decided):** Stock Clerk should feel like a real-life
+**Design intent (Decided):** StockClerk should feel like a real-life
 shopping list: efficient, "pocket-sized", minimal without being
 brutalist. Every pixel and every control has to earn its place.
 
@@ -727,7 +734,7 @@ and never pick a locked warband slot as a target.
 ## v1.3.0-beta1
 
 - New: **Warband list.** Switch between **Mine** and **Warband** at the top of the window. The warband list says how many to keep, at least, in your warband bank for all your characters.
-- After your own shopping at the Auction House, Stock Clerk offers to restock the warband list, with its own price caps. Turn this off per character in the side panel ("Shop for the warband on this character").
+- After your own shopping at the Auction House, StockClerk offers to restock the warband list, with its own price caps. Turn this off per character in the side panel ("Shop for the warband on this character").
 - New: **Deposit** at the bank. Anything above your own targets goes into the warband bank, where every character can restock from it. Always a button, never automatic.
 - Purchases still in the mail, and warband buys your other characters haven't deposited yet, count as stock, so nothing gets bought twice.
 - Last Seen prices are now shared by all your characters.
@@ -742,6 +749,26 @@ hero shots of the Warband Bank stock.
 placing a bag stack into a warband tab slot from addon code; tab deposit
 filters vs addon placement; how fast deposits chain.
 
+## v1.4.0 — Feature-complete polish (Planned 2026-09-28, not built)
+
+Likely the feature-complete release. Scope (Decided):
+- **Minimap icon** to open StockClerk, with a side-panel setting to hide
+  it.
+- **Cost estimate for your own list at the AH**: e.g. "3 short, about
+  1,240g at last seen prices" on the Restock button tooltip or footer
+  (skip stale prices). The warband button already does this
+  (`MF:RestockState`); reuse it for the "mine" lane.
+- **All screenshots retaken** on that version (README hero, bank, warband;
+  CurseForge Images tab).
+
+Undecided: **vendor restock** (at a merchant, buy short items it sells,
+checkout pattern; the player is thinking about it).
+Very low priority: **mailbox pickup** for listed items (scope creep: the
+player uses a mail addon for this).
+
+Release: internal testing on `dev`, then a stable tag (no public beta
+unless the scope grows; see `Dev/RELEASING.md`).
+
 ## Later (unscheduled)
 
 Carried from the legacy backlog; not committed to a release.
@@ -752,7 +779,7 @@ Carried from the legacy backlog; not committed to a release.
 - Per-item "count bank toward Have" mode; warband shopper/quartermaster
   (cross-character restocking).
 - Gold/silver/copper cap input; "no cap" as an explicit checkbox.
-- Minimap icon to open Stock Clerk, with a settings option to hide it.
+- Minimap icon to open StockClerk, with a settings option to hide it.
 - **AH and bank open at the same time** (fringe cases may allow it,
   e.g. a mobile/portable banker next to an auctioneer). Today the footer
   button prefers the bank whenever `ADDON.bankOpen` is true and no AH walk
