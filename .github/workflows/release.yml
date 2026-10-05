@@ -148,7 +148,7 @@ jobs:
           # be read from the run summary without the (sign-in only) logs.
           if ! OUT=$(gh release create "$TAG" \
               "${ZIP_FILES[@]}" \
-              --title "Stock Clerk $TAG" \
+              --title "StockClerk $TAG" \
               --notes-file /tmp/release-notes.md \
               $PRERELEASE_FLAG 2>&1); then
             echo "::error title=gh release create::${OUT//$'\n'/%0A}"

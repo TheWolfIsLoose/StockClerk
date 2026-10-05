@@ -1,4 +1,4 @@
-# Stock Clerk - BigWigsMods packager config.
+# StockClerk - BigWigsMods packager config.
 # Used by .github/workflows/release.yml and by CurseForge's own packager.
 # Release process: see "Releasing" in README.md.
 
