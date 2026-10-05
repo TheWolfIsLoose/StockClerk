@@ -22,3 +22,20 @@ The workflow tags the commit, packages it and creates the GitHub
 release, which CurseForge picks up. Don't create releases by hand.
 Testers can track a branch with `Dev/update.bat` (`update.bat dev` for
 alphas). Before pushing, run the smoke test: `lua5.1 Dev/smoke.lua .`
+
+## Patch day: Retail TOC bump
+
+Every Retail patch, check the live interface number and bump `## Interface`
+in the TOC if it changed (keep older numbers in a comma list only where the
+addon still supports them; Tones also lists Classic flavors).
+
+Cross-reference at least two of:
+- Warcraft Wiki, Public client builds (Interface column):
+  https://warcraft.wiki.gg/wiki/Public_client_builds
+- Blizzard's UI source mirror, `live` branch (the latest commit message names
+  the patch, e.g. "12.1.0 (69933)" = 120100):
+  https://github.com/Gethe/wow-ui-source/tree/live
+- In game: `/dump select(4, GetBuildInfo())`
+
+A TOC-only bump is a patch release (vX.Y.Z+1) with a one-line CHANGELOG
+("Up to date for patch 12.x.y."). Last checked: 2026-10-05, 12.1.0 = 120100.
