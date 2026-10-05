@@ -17,7 +17,7 @@ House in a few clicks, so a trip between dungeons stays a quick one. Keep a
 shared stock in your warband bank too, and every character restocks from it.
 
 <p align="center">
-  <img src=".assets/screenshots/hero.png" alt="StockClerk after an Auction House checkout, with the side panel open" width="900">
+  <img src=".assets/screenshots/checkout.png" alt="StockClerk checking out at the Auction House: the current item, Skip and Buy, and a warning that you already have some in your warband bank" width="900">
 </p>
 
 ## Features
@@ -46,11 +46,12 @@ shared stock in your warband bank too, and every character restocks from it.
   start restocking as soon as you arrive.
 
 <p align="center">
-  <img src=".assets/screenshots/bank-pull.png" alt="StockClerk after Restock from bank, with settings and Recent activity" width="900">
+  <img src=".assets/screenshots/short-at-bank.png" alt="At the bank: three items short, with stock waiting in the bank, and Restock from bank" width="440">
+  <img src=".assets/screenshots/warband-at-ah.png" alt="The Warband list at the Auction House: stock kept in the warband bank for all your characters, each with a price cap" width="440">
 </p>
 
 <p align="center">
-  <img src=".assets/screenshots/warband.png" alt="The Warband list: stock kept in the warband bank for all your characters" width="640">
+  <img src=".assets/screenshots/settings-and-activity.png" alt="The side panel: settings, Add common consumables, and Recent activity" width="900">
 </p>
 
 ## Commands

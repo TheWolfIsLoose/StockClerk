@@ -1,6 +1,11 @@
-<!-- Paste below this line into the CurseForge description (Markdown). Dev-only. -->
+<!-- Paste below this line into the CurseForge description (Markdown). Dev-only.
+     Gallery (upload in this order, checkout first as the featured image):
+     .assets/screenshots/checkout.png, receipt.png, short-at-bank.png,
+     warband-at-ah.png, settings-and-activity.png -->
 
 **A pocket-sized shopping list for your consumables.**
+
+![StockClerk checking out at the Auction House](https://raw.githubusercontent.com/TheWolfIsLoose/StockClerk/main/.assets/screenshots/checkout.png)
 
 Set how many of each flask, potion and food you want on hand. StockClerk shows what you're short on and restocks it from your bank or the Auction House in a few clicks, so a trip between dungeons stays a quick one. Keep a shared stock in your warband bank too, and every character restocks from it.
 
@@ -15,6 +20,10 @@ Set how many of each flask, potion and food you want on hand. StockClerk shows w
 - **Never buys twice.** Purchases still in your mail, and warband buys your other characters haven't deposited yet, count toward your targets.
 - **A receipt for everything.** Purchases, bank pulls and deposits show in Recent activity; `/clerk log` has the full history.
 - **Hands-free if you like.** Open automatically at the AH or bank, and start restocking as soon as you arrive.
+
+![Short at the bank](https://raw.githubusercontent.com/TheWolfIsLoose/StockClerk/main/.assets/screenshots/short-at-bank.png) ![The Warband list at the Auction House](https://raw.githubusercontent.com/TheWolfIsLoose/StockClerk/main/.assets/screenshots/warband-at-ah.png)
+
+![Settings and Recent activity](https://raw.githubusercontent.com/TheWolfIsLoose/StockClerk/main/.assets/screenshots/settings-and-activity.png)
 
 ### Commands
 

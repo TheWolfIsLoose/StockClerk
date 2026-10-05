@@ -10,6 +10,10 @@ or, where it had no entry, from that version's GitHub release notes.
 > There is no v1.1.2 stable: the v1.1.2 alphas are the start of v1.2.0
 > (efficiency pass). v1.2.0 plan: `Dev/ROADMAP.md`.
 
+## Unreleased (dev)
+
+- New screenshots (player, 2026-10-04): checkout, receipt, short at the bank, warband list at the AH, settings + Recent activity (dev label painted out); README and `Dev/CURSEFORGE.md` use them; old hero / bank-pull / list / warband shots removed.
+
 ## v1.3.1 (2026-10-04)
 
 Accessibility + style-guide session (suite guide in the WoW Addons project):
