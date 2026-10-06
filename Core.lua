@@ -105,12 +105,15 @@ On("PLAYER_LOGIN", function()
 
     -- Every NPC window (AH, bank) opens and closes through the Player
     -- Interaction Manager; Auctionator uses the same events.
+    -- A banker opens as Banker; the Warband Bank Distance Inhibitor portal as
+    -- AccountBanker (warband bank only); CharacterBanker is the personal one.
     local Type = Enum.PlayerInteractionType
+    local BANK = { [Type.Banker] = true, [Type.CharacterBanker or -1] = true, [Type.AccountBanker or -1] = true }
     On("PLAYER_INTERACTION_MANAGER_FRAME_SHOW", function(t)
-        if t == Type.Auctioneer then ADDON:OnAuctionHouseShow() elseif t == Type.Banker then ADDON:OnBankShow() end
+        if t == Type.Auctioneer then ADDON:OnAuctionHouseShow() elseif BANK[t] then ADDON:OnBankShow() end
     end)
     On("PLAYER_INTERACTION_MANAGER_FRAME_HIDE", function(t)
-        if t == Type.Auctioneer then ADDON:OnAuctionHouseClosed() elseif t == Type.Banker then ADDON:OnBankClosed() end
+        if t == Type.Auctioneer then ADDON:OnAuctionHouseClosed() elseif BANK[t] then ADDON:OnBankClosed() end
     end)
 
     -- AH search and buy events go to AH.lua's method of the same name.
