@@ -90,12 +90,18 @@ function BR:Shortfalls()
     return out
 end
 
--- Short items with at least one copy in the bank or warband bank.
+-- Which banks this visit can reach: the warband bank portal opens only the
+-- warband bank. kind: "Character" or "Account".
+local function usable(kind)
+    return not C_Bank.CanUseBank or C_Bank.CanUseBank(Enum.BankType[kind])
+end
+
+-- Short items with at least one copy in a bank this visit can reach.
 function BR:PullableCount()
     local n = 0
     for _, s in ipairs(self:Shortfalls()) do
         local bd = ADDON.Inventory:GetBreakdown(s.itemID)
-        if bd.bank + bd.warband > 0 then n = n + 1 end
+        if (usable("Character") and bd.bank or 0) + (usable("Account") and bd.warband or 0) > 0 then n = n + 1 end
     end
     return n
 end
@@ -169,7 +175,7 @@ end
 local function scan()
     local sources, bags = {}, {}
     for _, kind in ipairs({ "Character", "Account" }) do
-        for _, bagID in ipairs(C_Bank.FetchPurchasedBankTabIDs(Enum.BankType[kind]) or {}) do
+        for _, bagID in ipairs(usable(kind) and C_Bank.FetchPurchasedBankTabIDs(Enum.BankType[kind]) or {}) do
             for slot = 1, C_Container.GetContainerNumSlots(bagID) do
                 local i = C_Container.GetContainerItemInfo(bagID, slot)
                 if i and i.itemID and not i.isLocked then
