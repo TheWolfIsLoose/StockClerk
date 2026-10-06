@@ -10,8 +10,10 @@ or, where it had no entry, from that version's GitHub release notes.
 > There is no v1.1.2 stable: the v1.1.2 alphas are the start of v1.2.0
 > (efficiency pass). v1.2.0 plan: `Dev/ROADMAP.md`.
 
-## Unreleased (dev)
+## v1.3.2 (2026-10-05)
 
+- Warband Bank Distance Inhibitor (spell 460905) opens as `PlayerInteractionType.AccountBanker` (68); StockClerk only handled `Banker` (8), so the portal was ignored. Core now treats Banker, CharacterBanker (67) and AccountBanker as a bank visit, as Blizzard's BankFrame registers all three.
+- BankRestock: `usable(kind)` = `C_Bank.CanUseBank`; `scan()` and `PullableCount()` only count banks this visit reaches (portal: warband bank only). Deposits already target the warband bank only.
 - New screenshots (player, 2026-10-04): checkout, receipt, short at the bank, warband list at the AH, settings + Recent activity (dev label painted out); README and `Dev/CURSEFORGE.md` use them; old hero / bank-pull / list / warband shots removed.
 
 ## v1.3.1 (2026-10-04)
