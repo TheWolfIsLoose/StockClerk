@@ -10,6 +10,19 @@ or, where it had no entry, from that version's GitHub release notes.
 > There is no v1.1.2 stable: the v1.1.2 alphas are the start of v1.2.0
 > (efficiency pass). v1.2.0 plan: `Dev/ROADMAP.md`.
 
+## v1.3.3 (on `dev`, release queued for 2026-10-13)
+
+Ponytail pass (review 2026-10-11) plus one fix:
+
+- Fix: dragging a row to reorder did nothing while "short items only" was on. `EndRowDrag` rebuilt the order from the visible rows, and `DB:ReorderItems` refuses an order missing any item. It now reorders the full list (`row._index` was already the full-list position). Smoke test covers it.
+- `ItemResolver` uses Blizzard's Item mixin (`Item:CreateFromItemID():ContinueOnItemLoad`, `C_Item.DoesItemExistByID`) instead of its own pending queue; Core no longer forwards `GET_ITEM_INFO_RECEIVED` to it. Rows no longer queue a resolver callback per repaint: the list's existing `GET_ITEM_INFO_RECEIVED` repaint fills names in.
+- Border fade (`AttachBorderAnimator`) removed: rings set their colour directly, as buttons and PickupGroup's controls do.
+- One money formatter: `Log`'s `Money` is `MoneyText` ("gold" from 100g, else "silver"); thousands grouping is the game's `BreakUpLargeNumbers`.
+- `ApplyFill` / `ApplyBand` share one `Layer` helper.
+- `BankRestock`: `slotsOf` is the one bag-slot walk (deposit plan and bank scan reuse it); dropped existence checks for `C_Bank.CanUseBank`, `IsItemAllowedInBankType` and the banker interaction types (always present on Retail 12.x).
+- Bulk import: parser down to one pattern plus a `Whole` check (same results and messages); unused layout constants and example list removed.
+- Removed unused `DB:LastPrice`, `DB:RemoveItem` (trash uses `SetItem(id, 0)`), `DB:Get/SetStuckOnly`, `LogPopup:Show`, `Log.Money` and the never-emitted `auto_toggle` log kind.
+
 ## v1.3.2 (2026-10-05)
 
 - Warband Bank Distance Inhibitor (spell 460905) opens as `PlayerInteractionType.AccountBanker` (68); StockClerk only handled `Banker` (8), so the portal was ignored. Core now treats Banker, CharacterBanker (67) and AccountBanker as a bank visit, as Blizzard's BankFrame registers all three.

@@ -93,7 +93,7 @@ end
 -- Which banks this visit can reach: the warband bank portal opens only the
 -- warband bank. kind: "Character" or "Account".
 local function usable(kind)
-    return not C_Bank.CanUseBank or C_Bank.CanUseBank(Enum.BankType[kind])
+    return C_Bank.CanUseBank(Enum.BankType[kind])
 end
 
 -- Short items with at least one copy in a bank this visit can reach.
@@ -123,10 +123,23 @@ end
 
 -- Bag stacks that can go in the warband bank (soulbound etc. can't).
 local function allowed(bag, slot)
-    if not (C_Bank.IsItemAllowedInBankType and ItemLocation) then return true end  -- the move itself will say no
     local ok, yes = pcall(C_Bank.IsItemAllowedInBankType, Enum.BankType.Account,
         ItemLocation:CreateFromBagAndSlot(bag, slot))
     return ok and yes
+end
+
+-- Every unlocked slot in these bags: { bag, slot, itemID?, count }.
+local function slotsOf(bagIDs)
+    local out = {}
+    for _, bagID in ipairs(bagIDs) do
+        for slot = 1, C_Container.GetContainerNumSlots(bagID) do
+            local i = C_Container.GetContainerItemInfo(bagID, slot)
+            if not (i and i.isLocked) then  -- a slot mid-move can't take a drop
+                out[#out + 1] = { bag = bagID, slot = slot, itemID = i and i.itemID, count = i and i.stackCount or 0 }
+            end
+        end
+    end
+    return out
 end
 
 -- Surplus items split into depositable and refused (nothing in bags the
@@ -135,14 +148,8 @@ function BR:DepositPlan()
     local want, refused = {}, {}
     for _, s in ipairs(self:Surpluses()) do want[s.itemID] = s end
     local sources, ok = {}, {}
-    for _, bagID in ipairs(DEPOSIT_BAGS) do
-        for slot = 1, C_Container.GetContainerNumSlots(bagID) do
-            local i = C_Container.GetContainerItemInfo(bagID, slot)
-            if i and want[i.itemID] and not i.isLocked and allowed(bagID, slot) then
-                sources[#sources + 1] = { bag = bagID, slot = slot, itemID = i.itemID, count = i.stackCount }
-                ok[i.itemID] = true
-            end
-        end
+    for _, b in ipairs(slotsOf(DEPOSIT_BAGS)) do
+        if want[b.itemID] and allowed(b.bag, b.slot) then sources[#sources + 1] = b; ok[b.itemID] = true end
     end
     local list = {}
     for _, s in ipairs(self:Surpluses()) do
@@ -159,29 +166,11 @@ local function warbandTabs()
     return C_Bank.FetchPurchasedBankTabIDs(Enum.BankType.Account) or {}
 end
 
-local function slotsOf(bagIDs)
-    local out = {}
-    for _, bagID in ipairs(bagIDs) do
-        for slot = 1, C_Container.GetContainerNumSlots(bagID) do
-            local i = C_Container.GetContainerItemInfo(bagID, slot)
-            if not (i and i.isLocked) then  -- a slot mid-move can't take a drop
-                out[#out + 1] = { bag = bagID, slot = slot, itemID = i and i.itemID, count = i and i.stackCount or 0 }
-            end
-        end
-    end
-    return out
-end
-
 local function scan()
     local sources, bags = {}, {}
     for _, kind in ipairs({ "Character", "Account" }) do
-        for _, bagID in ipairs(usable(kind) and C_Bank.FetchPurchasedBankTabIDs(Enum.BankType[kind]) or {}) do
-            for slot = 1, C_Container.GetContainerNumSlots(bagID) do
-                local i = C_Container.GetContainerItemInfo(bagID, slot)
-                if i and i.itemID and not i.isLocked then
-                    sources[#sources + 1] = { bag = bagID, slot = slot, itemID = i.itemID, count = i.stackCount }
-                end
-            end
+        for _, b in ipairs(usable(kind) and slotsOf(C_Bank.FetchPurchasedBankTabIDs(Enum.BankType[kind]) or {}) or {}) do
+            if b.itemID then sources[#sources + 1] = b end
         end
     end
     for _, bagID in ipairs(BAGS) do

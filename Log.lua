@@ -36,7 +36,7 @@ Log.LEVEL = {
     buy_success = "activity", buy_fail = "activity", buy_skip = "activity", auto_refuse = "activity",
     bank_pull = "activity", bank_deposit = "activity", deposit_skip = "activity", loop_stop = "activity", error = "activity",
     ah_search = "detail", buy_attempt = "detail", loop_start = "detail", status = "detail",
-    bank_run = "detail", setting = "detail", version = "detail", auto_toggle = "detail",
+    bank_run = "detail", setting = "detail", version = "detail",
     trace = "trace",
 }
 
@@ -80,16 +80,8 @@ end
 
 -- "4,255g" for 100g+, "12g 34s" below that (cheap items would read "0g").
 local function Money(copper)
-    copper = math.floor(copper or 0)
-    local g, s = math.floor(copper / 10000), math.floor(copper / 100) % 100
-    if g >= 100 then
-        local txt = tostring(g):reverse():gsub("(%d%d%d)", "%1,"):reverse():gsub("^,", "")
-        return txt .. "g"
-    end
-    if g > 0 then return s > 0 and ("%dg %ds"):format(g, s) or (g .. "g") end
-    return s .. "s"
+    return ADDON.MoneyText(copper, (copper or 0) >= 1000000 and "gold" or "silver")
 end
-Log.Money = Money
 
 local function Plain(text)
     return (tostring(text or ""):gsub("|c%x%x%x%x%x%x%x%x", ""):gsub("|r", ""))
@@ -175,7 +167,6 @@ local FORMAT = {
         if not p.from then return "StockClerk " .. tostring(p.to) .. " installed" end
         return ("StockClerk updated from %s to %s"):format(p.from, tostring(p.to))
     end,
-    auto_toggle   = function(p) return "Auto-restock " .. (p.on and "on" or "off") end,
     trace         = function(p) return ("[%s] %s"):format(p.tag or "?", Plain(p.text)) end,
 }
 

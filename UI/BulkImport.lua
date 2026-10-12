@@ -19,82 +19,35 @@ local BI = {}
 ADDON.BulkImport = BI
 
 -- ---------------------------------------------------------------------------
--- Layout constants
--- ---------------------------------------------------------------------------
-local DIALOG_W        = 420
-local DIALOG_H        = 340
-local PAD             = 14
-local EDIT_H          = 180   -- multi-line paste area height
-local BTN_H           = 24
-local GHOST_LINES = {
-    "212283",              -- id only, default target 1, no cap
-    "212283 20",           -- id + target
-    "212283 20 500",       -- id + target + cap (500g)
-    "212283 5",            -- id + target
-}
-
--- ---------------------------------------------------------------------------
 -- Parser
 -- ---------------------------------------------------------------------------
--- Returns a table of results, one entry per NON-EMPTY line:
+-- A whole number >= min, or nil.
+local function Whole(tok, min)
+    local n = tonumber(tok)
+    return n and n >= min and n % 1 == 0 and n or nil
+end
+
+-- One entry per non-empty, non-comment line:
 --   { line=1, raw="...", ok=true,  itemID=N, need=N, maxPriceCopper=N|nil }
 --   { line=2, raw="...", ok=false, err="..." }
--- Blank and comment lines produce no entry (silently skipped).
 local function ParseBulkText(text)
-    if type(text) ~= "string" or text == "" then return {} end
-    local out = {}
-    local lineNo = 0
-    for rawLine in (text .. "\n"):gmatch("([^\r\n]*)\r?\n") do
+    local out, lineNo = {}, 0
+    for raw in ((text or "") .. "\n"):gmatch("([^\r\n]*)\r?\n") do
         lineNo = lineNo + 1
-        local line = rawLine:match("^%s*(.-)%s*$")  -- trim
+        local line = raw:match("^%s*(.-)%s*$")
         if line ~= "" and not line:match("^#") and not line:match("^//") then
-            -- Tokenise on whitespace runs. Reject anything with more
-            -- than 3 tokens rather than silently ignoring extras so a
-            -- stray field surfaces as an obvious error.
-            local tokens = {}
-            for tok in line:gmatch("%S+") do tokens[#tokens + 1] = tok end
-            local entry = { line = lineNo, raw = rawLine }
-            if #tokens < 1 then
-                entry.ok = false; entry.err = "empty"
-            elseif #tokens > 3 then
-                entry.ok = false
-                entry.err = "too many numbers (ID, target, cap)"
-            else
-                local id = tonumber(tokens[1])
-                if not id or id <= 0 or math.floor(id) ~= id then
-                    entry.ok = false; entry.err = "not an item ID"
-                else
-                    entry.itemID = id
-                    local need = 1
-                    if tokens[2] then
-                        need = tonumber(tokens[2])
-                        if not need or need <= 0 or math.floor(need) ~= need then
-                            entry.ok = false
-                            entry.err = "target must be a whole number"
-                        end
-                    end
-                    if entry.ok == nil then
-                        entry.need = need
-                        if tokens[3] then
-                            local capGold = tonumber(tokens[3])
-                            if not capGold or capGold < 0 or math.floor(capGold) ~= capGold then
-                                entry.ok = false
-                                entry.err = "cap must be whole gold"
-                            elseif capGold > 0 then
-                                entry.maxPriceCopper = capGold * 10000
-                            end
-                        end
-                    end
-                    if entry.ok == nil then entry.ok = true end
-                end
-            end
-            out[#out + 1] = entry
+            local id, need, cap, extra = line:match("^(%S+)%s*(%S*)%s*(%S*)%s*(.-)$")
+            id, need, cap = Whole(id, 1), need == "" and 1 or Whole(need, 1), cap == "" and 0 or Whole(cap, 0)
+            local err = extra ~= "" and "too many numbers (ID, target, cap)" or not id and "not an item ID"
+                or not need and "target must be a whole number" or not cap and "cap must be whole gold" or nil
+            out[#out + 1] = { line = lineNo, raw = raw, ok = not err, err = err, itemID = id, need = need,
+                              maxPriceCopper = not err and cap > 0 and cap * 10000 or nil }
         end
     end
     return out
 end
 
--- Expose for future test surfaces (headless parser check)
+-- Dev/smoke.lua checks the parser.
 BI.ParseBulkText = ParseBulkText
 
 -- ---------------------------------------------------------------------------

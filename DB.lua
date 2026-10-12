@@ -118,21 +118,9 @@ function DB:Settings()
     return self.global.settings
 end
 
-function DB:GetStuckOnly()
-    return self.char.ui.stuckOnly == true
-end
-
-function DB:SetStuckOnly(on)
-    self.char.ui.stuckOnly = on and true or false
-end
-
 -- The raw items table of a list (read-only for callers).
 function DB:GetItems(list)
     return list == "warband" and self.global.warband or self.char.items
-end
-
-function DB:LastPrice(itemID)
-    return self.global.prices[itemID]
 end
 
 -- A list in the player's order. Restock order and priority follow it.
@@ -211,10 +199,6 @@ function DB:StampLastPrice(itemID, copperPerUnit, source)
     if copperPerUnit > 0 and (self.char.items[itemID] or self.global.warband[itemID]) then
         self.global.prices[itemID] = { copper = copperPerUnit, seenAt = time(), source = source or "unknown" }
     end
-end
-
-function DB:RemoveItem(itemID, list)
-    self:GetItems(list)[itemID] = nil
 end
 
 function DB:ClearAll()

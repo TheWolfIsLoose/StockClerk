@@ -43,6 +43,8 @@ local function Frame(parent)
     return function() return Stub end
   end })
 end
+-- The game's number grouping (enUS).
+BreakUpLargeNumbers = function(n) return (tostring(n):reverse():gsub("(%d%d%d)", "%1,"):reverse():gsub("^,", "")) end
 setmetatable(_G, { __index = function(_, k)
   if k == "LibStub" or k:match("^StockClerk") then return nil end
   if k:match("^[A-Z]") or k:match("^C_") then return Stub end
@@ -80,7 +82,7 @@ IsLoggedIn = function() return false end
 print = function(...) end
 UISpecialFrames = {}
 SlashCmdList = {}
-Enum = { PlayerInteractionType = { Auctioneer = 21, Banker = 8 }, BankType = { Character = 0, Account = 2 } }
+Enum = { PlayerInteractionType = { Auctioneer = 21, Banker = 8, CharacterBanker = 67, AccountBanker = 68 }, BankType = { Character = 0, Account = 2 } }
 
 local ADDON_NAME = "StockClerk"
 local function load(rel)
@@ -201,7 +203,8 @@ ADDON.debug = false
 do -- Plain-language wording, report header, error capture
   local Log = ADDON.Log
   local F = function(kind, p, id) return Log:Format({ kind = kind, payload = p, itemID = id }) end
-  assert(Log.Money(42550000) == "4,255g" and Log.Money(123400) == "12g 34s" and Log.Money(5000) == "50s", "money")
+  assert(F("cap_change", { toCopper = 42550000 }, 7):find("4,255g$") and F("cap_change", { toCopper = 123400 }, 7):find("12g 34s$")
+         and F("cap_change", { toCopper = 5000 }, 7):find("50s$"), "money")
   assert(F("buy_success", { qty = 20, spentCopper = 4120000 }, 7) == "Bought 20 [item 7] for 412g", F("buy_success", { qty = 20, spentCopper = 4120000 }, 7))
   assert(F("cap_change", { toCopper = 1500000 }, 7) == "[item 7]: cap set to 150g", "cap set")
   assert(F("cap_change", { fromCopper = 1500000 }, 7) == "[item 7]: cap removed", "cap removed")
@@ -247,7 +250,7 @@ local ok, err = pcall(function() MF:Build() end)
 io.stdout:write("MF:Build " .. (ok and "OK" or ("ERR " .. tostring(err))) .. "\n")
 ok, err = pcall(function() ADDON.Sidecar:Toggle(Stub) end)
 io.stdout:write("Sidecar " .. (ok and "OK" or ("ERR " .. tostring(err))) .. "\n")
-ok, err = pcall(function() ADDON.LogPopup:Show() end)
+ok, err = pcall(function() ADDON.LogPopup:Toggle() end)
 io.stdout:write("LogPopup " .. (ok and "OK" or ("ERR " .. tostring(err))) .. "\n")
 ok, err = pcall(function() ADDON.BulkImport:Open() end)
 io.stdout:write("BulkImport " .. (ok and "OK" or ("ERR " .. tostring(err))) .. "\n")
@@ -445,6 +448,13 @@ do -- Checkout bar, marks, drag and dock paths run without errors (layout itself
   AuctionHouseFrame = ahf
   local row = Frame(nil); row._itemID = 42
   mf:BeginRowDrag(row); mf:EndRowDrag(true)
+  -- A drop reorders the whole list, even with the short-only filter hiding rows.
+  local saved = ADDON.DB.char.items; ADDON.DB.char.items = { [1] = { need = 1, sortOrder = 10 }, [2] = { need = 1, sortOrder = 20 },
+                                               [3] = { need = 1, sortOrder = 30 } }
+  mf:BeginRowDrag({ _itemID = 3 }); mf._dropIndex = 1; mf:EndRowDrag()
+  local o = ADDON.DB:GetSortedItems()
+  assert(o[1].itemID == 3 and o[2].itemID == 1 and o[3].itemID == 2, "drag reorder")
+  ADDON.DB.char.items = saved
   assert(mf:RestockState().label, "restock state")
 end
 do -- Bank: auto-open when set, close only what we opened, track bankOpen
@@ -472,10 +482,10 @@ do -- Filter chip: shows only short items (items 111 need 5, 42 need 30; bags ho
   local origCDP = CreateDataProvider
   CreateDataProvider = function() local t = { n = {} }; function t:Insert(x) self.n[#self.n + 1] = x.itemID end; function t:GetSize() return #self.n end; return t end
   local gii = C_Item.GetItemInfo; C_Item.GetItemInfo = gii or function() end
-  ADDON.DB:SetStuckOnly(true); mf:_RefreshNow()
+  ADDON.DB.char.ui.stuckOnly = true; mf:_RefreshNow()
   C_Item.GetItemInfo = gii
   assert(shown and #shown.n == 1 and shown.n[1] == 42, "filter should show only the short item: " .. (shown and table.concat(shown.n, ",") or "nothing shown"))
-  ADDON.DB:SetStuckOnly(false); mf.scrollBox = sb; CreateDataProvider = origCDP
+  ADDON.DB.char.ui.stuckOnly = false; mf.scrollBox = sb; CreateDataProvider = origCDP
 end
 do -- Restock from Bank planner: exact amounts, char bank first, top up stacks, bag space
   local plan, max20 = ADDON.BankRestock.PlanPulls, function() return 20 end
@@ -530,7 +540,7 @@ do -- v1.3 warband list: counts, transit, sweep, lanes, surplus, deposit plan, b
   L.lastLane = nil;       assert(L:NextLane() == "mine", "own list first")
   L.lastLane = "mine";    assert(L:NextLane() == "warband" and mf:RestockState().action == "warband", "warband after your run")
   L.lastLane = "warband"; assert(L:NextLane() == "mine", "back to your list after the warband pass")
-  L.lastLane = nil; DB:RemoveItem(9)
+  L.lastLane = nil; DB:SetItem(9, 0)
   -- The warband pass buys the warband shortfall at the warband cap, and records transit.
   local AH, search, exec = ADDON.AH, nil, nil
   local sb, se, gt = AH.BuyUpTo, AH.ExecutePurchase, GetTime

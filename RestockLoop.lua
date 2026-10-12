@@ -214,7 +214,7 @@ function Loop:Advance()
     MF():Mark(item.itemID, "current", "Checking the AH")
     MF():SetCheckout(GREY .. "Checking " .. item.name .. "...|r", GREY .. self:_Progress() .. "|r")
     -- The search re-stamps Last Seen, so read the previous price first.
-    local seen = ADDON.DB:LastPrice(item.itemID)
+    local seen = ADDON.DB.global.prices[item.itemID]
 
     ADDON.AH:BuyUpTo(item.itemID, short, item.maxPrice, function(ok, plan, overCap)
         if not s.active then return end  -- stopped meanwhile

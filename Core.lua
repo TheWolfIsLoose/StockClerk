@@ -9,12 +9,12 @@ local ADDON     = _G[addonName]
 
 -- Copper as "12g 34s 56c" (letters, not coin icons, so reskinned coin art
 -- doesn't matter). precision "silver" drops copper; "gold" is whole gold with
--- thousands commas ("7,424g") from 1g up. Zero is "0g".
+-- the game's thousands grouping ("7,424g") from 1g up. Zero is "0g".
 function ADDON.MoneyText(copper, precision)
     copper = tonumber(copper) or 0
     if copper <= 0 then return "0g" end
     if precision == "gold" and copper >= 10000 then
-        return (tostring(math.floor(copper / 10000)):reverse():gsub("(%d%d%d)", "%1,"):reverse():gsub("^,", "")) .. "g"
+        return BreakUpLargeNumbers(math.floor(copper / 10000)) .. "g"
     end
     local g, s, c = math.floor(copper / 10000), math.floor(copper / 100) % 100, copper % 100
     local parts = {}
@@ -80,8 +80,7 @@ On("ADDON_LOADED", function(name)
 end)
 
 On("PLAYER_LOGIN", function()
-    On("GET_ITEM_INFO_RECEIVED", function(itemID, success)
-        ADDON.ItemResolver:OnItemInfoReceived(itemID, success)
+    On("GET_ITEM_INFO_RECEIVED", function(itemID)
         -- Fires for every item any addon asks about (thousands in an AH scan):
         -- repaint only for ours, and only while the window shows.
         local mf = ADDON.MainFrame
@@ -108,7 +107,7 @@ On("PLAYER_LOGIN", function()
     -- A banker opens as Banker; the Warband Bank Distance Inhibitor portal as
     -- AccountBanker (warband bank only); CharacterBanker is the personal one.
     local Type = Enum.PlayerInteractionType
-    local BANK = { [Type.Banker] = true, [Type.CharacterBanker or -1] = true, [Type.AccountBanker or -1] = true }
+    local BANK = { [Type.Banker] = true, [Type.CharacterBanker] = true, [Type.AccountBanker] = true }
     On("PLAYER_INTERACTION_MANAGER_FRAME_SHOW", function(t)
         if t == Type.Auctioneer then ADDON:OnAuctionHouseShow() elseif BANK[t] then ADDON:OnBankShow() end
     end)
