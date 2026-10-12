@@ -11,6 +11,8 @@ disagree), **Open** (needs an answer before build).
 
 ## Next session: start here
 
+**2026-10-12: Keep gold on this character (on `dev`, awaiting in-game test).** Settings row "Keep gold on this character" (per character, whole gold, blank = off). At any bank visit StockClerk deposits whole gold above the amount to the warband bank and withdraws whole gold to top up (clamped to the warband balance and the gold cap); silver and copper stay put. Footer line + Recent activity entry. Decided: automatic, both directions, whole gold. The 12.1 probe (StockClerkGoldProbe, dev-only) proved `C_Bank.DepositMoney`/`WithdrawMoney` work from an event and a timer with no click, odd copper amounts included, at a banker. Not yet seen: the Warband portal. Math in `BR.PlanGold` (smoke-tested).
+
 **Release queued (2026-10-11): v1.3.3 is cut from `dev` on Tuesday 2026-10-13, 7 PM ET, by a scheduled task** (ponytail pass + fix, see `Dev/HISTORY.md`). Anything else for that version lands on `dev` before then; the task folds it into the CHANGELOG and bumps to a minor version if `dev` gained a feature.
 
 **2026-09-28 ~11:55 ET: parked after stable v1.3.0** (`main` = `dev`).

@@ -77,8 +77,34 @@ local function Build()
             ADDON.DB.char),
     }
 
+    -- Per character, whole gold; blank = off. Settles right away at a bank.
+    local goldBox, goldEB = MF.MakeEditBox(f, "Off", 7, "Keep gold on this character",
+        "At any bank, StockClerk deposits gold above this amount in the warband bank, and withdraws from it to top you back up. Whole gold only. Leave blank to turn off.")
+    goldBox:SetPoint("TOPRIGHT", -12, -150)
+    goldBox:SetWidth(76)
+    local goldLabel = f:CreateFontString(nil, "OVERLAY", "StockClerkFont")
+    goldLabel:SetPoint("TOPLEFT", 14, -150)
+    goldLabel:SetPoint("BOTTOMRIGHT", goldBox, "BOTTOMLEFT", -8, 0)
+    goldLabel:SetJustifyH("LEFT")
+    goldLabel:SetWordWrap(false)
+    goldLabel:SetText("Keep gold on this character")
+    local function commitGold()
+        local g = tonumber(goldEB:GetText())
+        local keep = g and g > 0 and g * 10000 or nil
+        goldEB:SetText(keep and tostring(g) or "")
+        if keep == ADDON.DB.char.goldKeep then return end
+        ADDON.DB.char.goldKeep = keep
+        ADDON.Log:Emit("setting", nil, { key = "goldKeep", on = keep ~= nil, value = keep })
+        local msg = ADDON.bankOpen and ADDON.BankRestock:SettleGold()
+        if msg then MF:SetStatus(msg, true) end
+    end
+    goldEB:SetScript("OnEnterPressed", goldEB.ClearFocus)
+    goldEB:SetScript("OnEscapePressed", goldEB.ClearFocus)
+    goldEB:HookScript("OnEditFocusLost", commitGold)
+    f.goldEB = goldEB
+
     local add = CreateFrame("Button", nil, f)
-    add:SetPoint("TOPLEFT", 12, -156)
+    add:SetPoint("TOPLEFT", 12, -180)
     add:SetPoint("RIGHT", -12, 0)
     add:SetHeight(22)
     MF.StyleButton(add)
@@ -98,13 +124,13 @@ local function Build()
     local divider = f:CreateTexture(nil, "OVERLAY")
     divider:SetColorTexture(0, 0, 0, 1)
     divider:SetHeight(1)
-    divider:SetPoint("TOPLEFT", 8, -188)
-    divider:SetPoint("TOPRIGHT", -8, -188)
+    divider:SetPoint("TOPLEFT", 8, -212)
+    divider:SetPoint("TOPRIGHT", -8, -212)
 
     -- Recent activity. Hovering the title (or the "/clerk log" link, which
     -- opens the log) explains how to send a bug report.
     local feedTitle = f:CreateFontString(nil, "OVERLAY", "StockClerkFont")
-    feedTitle:SetPoint("TOPLEFT", 12, -196)
+    feedTitle:SetPoint("TOPLEFT", 12, -220)
     feedTitle:SetText("|cff98FF98Recent activity|r")
     local function FeedHelp(owner)
         GameTooltip:SetOwner(owner, "ANCHOR_RIGHT")
@@ -125,7 +151,7 @@ local function Build()
     help:SetScript("OnLeave", GameTooltip_Hide)
 
     local link = CreateFrame("Button", nil, f)
-    link:SetPoint("TOPRIGHT", -12, -198)
+    link:SetPoint("TOPRIGHT", -12, -222)
     link:SetSize(60, 14)
     link:SetHitRectInsets(0, 0, -5, -5)  -- 24px target
     local linkText = link:CreateFontString(nil, "OVERLAY", "StockClerkFontSmall")
@@ -138,10 +164,10 @@ local function Build()
 
     local feedBg = f:CreateTexture(nil, "BACKGROUND")
     feedBg:SetColorTexture(Palette.bgDark[1], Palette.bgDark[2], Palette.bgDark[3], 0.6)
-    feedBg:SetPoint("TOPLEFT", 8, -218)
+    feedBg:SetPoint("TOPLEFT", 8, -242)
     feedBg:SetPoint("BOTTOMRIGHT", -8, 8)
     local scroll = CreateFrame("ScrollFrame", "StockClerkSidecarScroll", f, "UIPanelScrollFrameTemplate")
-    scroll:SetPoint("TOPLEFT", 10, -220)
+    scroll:SetPoint("TOPLEFT", 10, -244)
     scroll:SetPoint("BOTTOMRIGHT", -28, 10)  -- room for the scroll bar
     f.feed = CreateFrame("Frame", nil, scroll)
     f.feed:SetSize(220, 1)
@@ -180,6 +206,8 @@ function Sidecar:Refresh()
     local f = self.frame
     local settings = ADDON.DB:Settings()
     for _, c in ipairs(f.checks) do c:SetChecked((c.store or settings)[c.key]) end
+    local keep = ADDON.DB.char.goldKeep
+    if not f.goldEB:HasFocus() then f.goldEB:SetText(keep and tostring(keep / 10000) or "") end
 
     -- Activity entries, newest first. Cap changes on one item within 10s
     -- collapse to the newest, so retyping a cap doesn't flood the feed.

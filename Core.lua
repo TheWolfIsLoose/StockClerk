@@ -179,18 +179,22 @@ function ADDON:OnBankShow()
         mf:Show()
     end
     mf:RefreshRestockBtn()
-    local n = self.BankRestock:PullableCount()
+    -- Gold first: it's one call, and its line leads the footer (an Express
+    -- pull's receipt replaces it later; Recent activity keeps it).
+    local gold = self.BankRestock:SettleGold()
+    local n, items = self.BankRestock:PullableCount()
     if n > 0 and self.DB:Settings().autoRestockBank then
         -- Express restock at Bank, once the bank frame settles; the pull reports itself.
         C_Timer.After(0.3, function()
             if self.bankOpen then self.BankRestock:Start(true) end
         end)
     elseif n > 0 then
-        mf:SetStatus(("%d short item%s can come from your bank."):format(n, n == 1 and "" or "s"), true)
+        items = ("%d short item%s can come from your bank."):format(n, n == 1 and "" or "s")
     else
         local d = self.BankRestock:DepositableCount()
-        if d > 0 then mf:SetStatus(("|cff5AA9FFWarband: deposit %d item%s.|r"):format(d, d == 1 and "" or "s"), true) end
+        if d > 0 then items = ("|cff5AA9FFWarband: deposit %d item%s.|r"):format(d, d == 1 and "" or "s") end
     end
+    if gold or items then mf:SetStatus(gold and items and (gold .. " " .. items) or gold or items, true) end
 end
 
 function ADDON:OnBankClosed()

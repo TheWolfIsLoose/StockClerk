@@ -291,6 +291,7 @@ local function MakeEditBox(parent, placeholder, maxLetters, tipTitle, tipBody)
     refresh()
     return box, eb
 end
+MF.MakeEditBox = MakeEditBox
 
 -- ---------------------------------------------------------------------------
 -- Rows. Built once per pooled Button and rebound as the ScrollView recycles

@@ -35,6 +35,7 @@ Log.LEVEL = {
     add = "activity", remove = "activity", target_change = "activity", cap_change = "activity",
     buy_success = "activity", buy_fail = "activity", buy_skip = "activity", auto_refuse = "activity",
     bank_pull = "activity", bank_deposit = "activity", deposit_skip = "activity", loop_stop = "activity", error = "activity",
+    gold = "activity",
     ah_search = "detail", buy_attempt = "detail", loop_start = "detail", status = "detail",
     bank_run = "detail", setting = "detail", version = "detail",
     trace = "trace",
@@ -91,6 +92,7 @@ local SETTING_LABELS = {
     autoOpenAtAH = "Auto-open at Auction House", autoOpenAtBank = "Auto-open at bank",
     autoRestock = "Express restock at Auction House", autoRestockBank = "Express restock at bank",
     shopWarband = "Shop for the warband on this character",
+    goldKeep = "Keep gold on this character",
 }
 
 -- "warband " before target/cap for warband-list entries (short: the feed is narrow).
@@ -132,6 +134,12 @@ local FORMAT = {
     deposit_skip  = function(p, item)
         return ("Couldn't deposit %s: %s"):format(item, p.reason == "refused" and "the warband bank won't take it" or Plain(p.reason or "?"))
     end,
+    gold          = function(p)
+        local c, short = p.copper or 0, (p.short or 0) > 0 and (", %s short"):format(Money(p.short)) or ""
+        if c > 0 then return "Deposited " .. Money(c) .. " to the warband bank" end
+        if c < 0 then return "Withdrew " .. Money(-c) .. " from the warband bank" .. short end
+        return "No gold in the warband bank" .. short
+    end,
     loop_stop     = function(p)
         local txt = STOP_REASONS[p.reason] or ("Restock stopped: " .. Plain(p.reason or "?"))
         if p.lane == "warband" then txt = "Warband " .. txt:gsub("^R", "r") end
@@ -161,7 +169,8 @@ local FORMAT = {
         return p.reason and (txt .. ", stopped: " .. p.reason) or txt
     end,
     setting       = function(p)
-        return ("Setting: %s %s"):format(SETTING_LABELS[p.key] or tostring(p.key), p.on and "on" or "off")
+        return ("Setting: %s %s"):format(SETTING_LABELS[p.key] or tostring(p.key),
+            p.value and Money(p.value) or p.on and "on" or "off")
     end,
     version       = function(p)
         if not p.from then return "StockClerk " .. tostring(p.to) .. " installed" end

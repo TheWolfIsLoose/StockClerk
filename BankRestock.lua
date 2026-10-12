@@ -183,6 +183,50 @@ local function scan()
 end
 
 -- ---------------------------------------------------------------------------
+-- Gold: keep this character at its keep amount (DB.char.goldKeep, copper),
+-- the rest in the warband bank. Whole gold only: silver and copper stay put.
+-- Pure: returns the copper to move (+ deposit, - withdraw) and the gold the
+-- warband bank couldn't cover. The 12.1 probe moved gold from an event and a
+-- timer with no click, so this runs on every bank visit.
+-- ---------------------------------------------------------------------------
+local G, MAX_MONEY = 10000, 99999999999  -- copper per gold; the 9,999,999g 99s 99c cap
+
+function BR.PlanGold(keep, have, banked)
+    local diff = have - keep
+    if diff >= G then
+        return math.floor(math.min(diff, MAX_MONEY - banked) / G) * G, 0
+    elseif diff < 0 then
+        local want = math.ceil(-diff / G) * G
+        local take = math.min(want, math.floor(banked / G) * G, math.floor((MAX_MONEY - have) / G) * G)
+        return -take, want - take
+    end
+    return 0, 0
+end
+
+-- Settle now if a keep amount is set and the warband bank is reachable.
+-- Returns a footer line, or nil when nothing moved.
+function BR:SettleGold()
+    local keep, acct = ADDON.DB.char.goldKeep, Enum.BankType.Account
+    if not keep or not usable("Account") then return end
+    local move, short = BR.PlanGold(keep, GetMoney(), C_Bank.FetchDepositedMoney(acct))
+    local gold = function(c) return ADDON.MoneyText(c, "gold") end
+    if move > 0 and C_Bank.CanDepositMoney(acct) then
+        C_Bank.DepositMoney(acct, move)
+    elseif move < 0 and C_Bank.CanWithdrawMoney(acct) then
+        C_Bank.WithdrawMoney(acct, -move)
+    elseif short == 0 then
+        return
+    else
+        move = 0  -- warband bank empty (or refused): only the shortfall to report
+    end
+    ADDON.Log:Emit("gold", nil, { copper = move, short = short })
+    local msg = move > 0 and ("Deposited %s to the warband bank."):format(gold(move))
+        or move < 0 and ("Withdrew %s from the warband bank."):format(gold(-move)) or ""
+    if short > 0 then msg = msg .. (" |cffff8888%s short of %s.|r"):format(gold(short), gold(keep)) end
+    return strtrim(msg)
+end
+
+-- ---------------------------------------------------------------------------
 -- Executor
 -- ---------------------------------------------------------------------------
 function BR:IsActive() return self.active end
