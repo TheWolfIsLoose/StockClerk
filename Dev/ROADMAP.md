@@ -752,9 +752,10 @@ filters vs addon placement; how fast deposits chain.
 Ships with the queued release (see "Next session"). Scope (Decided):
 - **Keep gold on this character**: see the 2026-10-12 note at the top.
 - **Minimap icon** (`UI/Minimap.lua`): click toggles the window, drag moves
-  it around the rim; side-panel checkbox "Minimap icon" hides it. Round
-  minimaps only, no library (LibDBIcon only if square-minimap or
-  button-collector users ask).
+  it around the rim; side-panel checkbox "Minimap icon" hides it. Built on
+  LibDBIcon (embedded in `Libs/` with LibStub, CallbackHandler,
+  LibDataBroker; copied from BigWigs' packaged libs) so square minimaps and
+  button collectors work; the player runs a square minimap.
 - **Cost estimate for your own list at the AH**: the Restock button tooltip
   says "About 1,240g at last seen prices.", same helper as the warband
   button; items whose last price is above their cap are left out (both lanes).

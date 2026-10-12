@@ -69,6 +69,8 @@ tinsert, tremove = table.insert, table.remove
 strsplit = function(d, s) local o = {} for p in (s .. d):gmatch("(.-)" .. d) do o[#o + 1] = p end return unpack(o) end
 strtrim = function(s) return (s:gsub("^%s+", ""):gsub("%s+$", "")) end
 Minimap = Frame()  -- real frame stub: the minimap icon does math on its size
+strmatch, strsub, strlower, tinsert, tremove, wipe = string.match, string.sub, string.lower, table.insert, table.remove, wipe or function(t) for k in pairs(t) do t[k] = nil end return t end
+GetMinimapShape = function() return "ROUND" end
 format = string.format
 hooksecurefunc = function() end
 UnitName = function() return "Tester" end
@@ -612,9 +614,9 @@ do -- v1.3 warband list: counts, transit, sweep, lanes, surplus, deposit plan, b
   io.stdout:write("warband OK\n")
 end
 do -- Minimap icon follows its setting
-  local M, st = ADDON.Minimap, ADDON.DB:Settings()
-  assert(M.button and M.button:IsShown(), "icon shown by default")
-  st.minimapIcon = false; M:Refresh(); assert(not M.button:IsShown(), "icon hides")
-  st.minimapIcon = true;  M:Refresh(); assert(M.button:IsShown(), "icon comes back")
+  local M, st, DBI = ADDON.Minimap, ADDON.DB:Settings(), LibStub("LibDBIcon-1.0")
+  assert(DBI:IsRegistered("StockClerk") and not st.minimap.hide, "icon registered and shown by default")
+  st.minimapIcon = false; M:Refresh(); assert(st.minimap.hide == true, "icon hides")
+  st.minimapIcon = true;  M:Refresh(); assert(st.minimap.hide == false, "icon comes back")
   io.stdout:write("minimap OK\n")
 end
