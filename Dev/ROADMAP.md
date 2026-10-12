@@ -11,6 +11,8 @@ disagree), **Open** (needs an answer before build).
 
 ## Next session: start here
 
+**Release queued (2026-10-11): v1.3.3 is cut from `dev` on Tuesday 2026-10-13, 7 PM ET, by a scheduled task** (ponytail pass + fix, see `Dev/HISTORY.md`). Anything else for that version lands on `dev` before then; the task folds it into the CHANGELOG and bumps to a minor version if `dev` gained a feature.
+
 **2026-09-28 ~11:55 ET: parked after stable v1.3.0** (`main` = `dev`).
 The player is using the addon and collecting feedback; StockClerk is close
 to feature-complete. New release policy in `Dev/RELEASING.md`: commit to
