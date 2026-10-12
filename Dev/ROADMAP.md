@@ -25,13 +25,7 @@ Open follow-ups:
    Deposit (red mark, footer); a full warband bank.
 2. Tab deposit-filter preference if the probe (`/clerk bankprobe
    <itemID>`) shows filters matter.
-3. **v1.4 (planned, see its section):** minimap icon
-   (setting to hide it) + cost estimate for your own list at the AH ("3
-   short, about 1,240g at last seen prices"; the warband button tooltip
-   already does this) + all screenshots retaken on that version.
-   Vendor restock (buy short items at a merchant, checkout pattern): the
-   player is still thinking about it. Mailbox pickup for listed items:
-   very low priority, scope creep (overlaps a mail addon the player uses).
+3. **v1.4:** built on `dev`, see its section; screenshots still to retake.
 
 Pending on the player's side: paste the v1.3.0 CurseForge description
 (drafted 2026-09-28: README intro + features, commands as a list, no
