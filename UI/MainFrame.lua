@@ -1270,21 +1270,27 @@ function MF:RestockState()
     end
     local n = loop:PreviewShortfallCount()
     local ahOpen = AuctionHouseFrame and AuctionHouseFrame:IsShown()
-    if loop:NextLane() == "warband" then  -- after your own run (or nothing of yours short)
-        local w, cost = loop:PreviewShortfallCount("warband"), 0
-        for _, it in ipairs(ADDON.DB:GetSortedItems("warband")) do
-            local short = loop:Short("warband", it.itemID, it.need)
-            if short > 0 and it.lastPrice then cost = cost + short * it.lastPrice.copper end
+    -- "About 1,240g at last seen prices." for a lane's shortfall; items whose
+    -- last price is above their cap are left out (the run passes them over).
+    local function estimate(lane)
+        local cost = 0
+        for _, it in ipairs(ADDON.DB:GetSortedItems(lane)) do
+            local short, lp = loop:Short(lane, it.itemID, it.need), it.lastPrice
+            if short > 0 and lp and not (it.maxPrice and lp.copper > it.maxPrice) then cost = cost + short * lp.copper end
         end
-        local lines = { "Buys what the warband list is short, at the warband caps. You click Buy for each item." }
-        if cost > 0 then lines[2] = "About " .. MoneyText(cost, "gold") .. " at last seen prices." end
+        return cost > 0 and ("About " .. MoneyText(cost, "gold") .. " at last seen prices.") or nil
+    end
+    if loop:NextLane() == "warband" then  -- after your own run (or nothing of yours short)
+        local w = loop:PreviewShortfallCount("warband")
+        local lines = { "Buys what the warband list is short, at the warband caps. You click Buy for each item.", estimate("warband") }
         return { label = ahOpen and (BLUE .. ("Restock warband (%d)"):format(w) .. "|r") or ("Restock warband (%d)"):format(w),
                  enabled = ahOpen, tip = "Restock the warband", action = "warband", lines = lines,
                  reason = not ahOpen and "Auction House isn't open." or nil }
     end
     return { label = n > 0 and ("Restock at AH (%d)"):format(n) or "Restock at AH", enabled = ahOpen and n > 0,
              tip = "Restock at AH", action = "mine",
-             lines = { "Goes down your list in order; you click Buy for each item.", "Items above your cap are marked and passed over." },
+             lines = { "Goes down your list in order; you click Buy for each item.", "Items above your cap are marked and passed over.",
+                       n > 0 and estimate() or nil },
              reason = not ahOpen and "Auction House isn't open."
                    or n == 0 and "Nothing to restock: every row is at or above its need." or nil }
 end

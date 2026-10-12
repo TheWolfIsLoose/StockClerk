@@ -11,7 +11,7 @@ disagree), **Open** (needs an answer before build).
 
 ## Next session: start here
 
-**2026-10-12: Keep gold on this character (on `dev`, awaiting in-game test).** Settings row "Keep gold on this character" (per character, whole gold, blank = off). At any bank visit StockClerk deposits whole gold above the amount to the warband bank and withdraws whole gold to top up (clamped to the warband balance and the gold cap); silver and copper stay put. Footer line + Recent activity entry. Decided: automatic, both directions, whole gold. The 12.1 probe (StockClerkGoldProbe, dev-only) proved `C_Bank.DepositMoney`/`WithdrawMoney` work from an event and a timer with no click, odd copper amounts included, at a banker. Not yet seen: the Warband portal. Math in `BR.PlanGold` (smoke-tested).
+**2026-10-12: v1.4.0 built on `dev` (keep gold, minimap icon, AH cost estimate; see the v1.4.0 section), awaiting in-game test.** Keep gold on this character: Settings row "Keep gold on this character" (per character, whole gold, blank = off). At any bank visit StockClerk deposits whole gold above the amount to the warband bank and withdraws whole gold to top up (clamped to the warband balance and the gold cap); silver and copper stay put. Footer line + Recent activity entry. Decided: automatic, both directions, whole gold. The 12.1 probe (StockClerkGoldProbe, dev-only) proved `C_Bank.DepositMoney`/`WithdrawMoney` work from an event and a timer with no click, odd copper amounts included, at a banker. Not yet seen: the Warband portal. Math in `BR.PlanGold` (smoke-tested).
 
 **Release queued (2026-10-11): v1.3.3 is cut from `dev` on Tuesday 2026-10-13, 7 PM ET, by a scheduled task** (ponytail pass + fix, see `Dev/HISTORY.md`). Anything else for that version lands on `dev` before then; the task folds it into the CHANGELOG and bumps to a minor version if `dev` gained a feature.
 
@@ -753,44 +753,32 @@ hero shots of the Warband Bank stock.
 placing a bag stack into a warband tab slot from addon code; tab deposit
 filters vs addon placement; how fast deposits chain.
 
-## v1.4.0 — Feature-complete polish (Planned 2026-09-28, not built)
+## v1.4.0 — Feature-complete polish (built on `dev` 2026-10-12, awaiting in-game test)
 
-Likely the feature-complete release. Scope (Decided):
-- **Minimap icon** to open StockClerk, with a side-panel setting to hide
-  it.
-- **Cost estimate for your own list at the AH**: e.g. "3 short, about
-  1,240g at last seen prices" on the Restock button tooltip or footer
-  (skip stale prices). The warband button already does this
-  (`MF:RestockState`); reuse it for the "mine" lane.
-- **All screenshots retaken** on that version (README hero, bank, warband;
+Ships with the queued release (see "Next session"). Scope (Decided):
+- **Keep gold on this character**: see the 2026-10-12 note at the top.
+- **Minimap icon** (`UI/Minimap.lua`): click toggles the window, drag moves
+  it around the rim; side-panel checkbox "Minimap icon" hides it. Round
+  minimaps only, no library (LibDBIcon only if square-minimap or
+  button-collector users ask).
+- **Cost estimate for your own list at the AH**: the Restock button tooltip
+  says "About 1,240g at last seen prices.", same helper as the warband
+  button; items whose last price is above their cap are left out (both lanes).
+- **All screenshots retaken** on this version (README hero, bank, warband;
   CurseForge Images tab).
 
-Undecided: **vendor restock** (at a merchant, buy short items it sells,
-checkout pattern; the player is thinking about it).
-Very low priority: **mailbox pickup** for listed items (scope creep: the
-player uses a mail addon for this).
-
-Release: internal testing on `dev`, then a stable tag (no public beta
-unless the scope grows; see `Dev/RELEASING.md`).
+Decided 2026-10-12, no work needed:
+- **Vendor restock**: none. Vendor items have item IDs and fixed prices, so
+  they go on the list like any other item; the player buys them at the vendor.
+- **Mailbox pickup**: not built unless players ask for it.
+- **Bank stock toward Have**: covered. Restock from bank pulls it, and at the
+  AH Buy warns "N in your bank" / "N in your warband bank" and slows down.
+- **Cap input in g/s/c**: dropped; caps are whole gold.
+- **AH and bank open at once**: only if it comes up.
 
 ## Later (unscheduled)
 
-Carried from the legacy backlog; not committed to a release.
-
-- Auto-loot mailbox attachments for tracked items (warn if Postal or a
-  similar addon is loaded).
-- Vendor auto-buy for tracked items a merchant sells.
-- Per-item "count bank toward Have" mode; warband shopper/quartermaster
-  (cross-character restocking).
-- Gold/silver/copper cap input; "no cap" as an explicit checkbox.
-- Minimap icon to open StockClerk, with a settings option to hide it.
-- **AH and bank open at the same time** (fringe cases may allow it,
-  e.g. a mobile/portable banker next to an auctioneer). Today the footer
-  button prefers the bank whenever `ADDON.bankOpen` is true and no AH walk
-  is running; decide the priority (or offer both), and revisit the AH
-  confirm step's "Restock from Bank first" hint for that case.
-- Footer hint at the AH: "3 short, about 1,240g at last seen prices"
-  (estimated restock cost; skip stale prices).
+Nothing queued.
 
 The full pre-1.0 backlog text is in git history (`Dev/NOTES.md`, removed
 in the commit that added this roadmap).

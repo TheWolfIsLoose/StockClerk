@@ -68,6 +68,7 @@ wipe = function(t) for k in pairs(t) do t[k] = nil end return t end
 tinsert, tremove = table.insert, table.remove
 strsplit = function(d, s) local o = {} for p in (s .. d):gmatch("(.-)" .. d) do o[#o + 1] = p end return unpack(o) end
 strtrim = function(s) return (s:gsub("^%s+", ""):gsub("%s+$", "")) end
+Minimap = Frame()  -- real frame stub: the minimap icon does math on its size
 format = string.format
 hooksecurefunc = function() end
 UnitName = function() return "Tester" end
@@ -551,6 +552,13 @@ do -- v1.3 warband list: counts, transit, sweep, lanes, surplus, deposit plan, b
   -- (skipped, over cap) never blocks the warband pass.
   DB:SetItem(9, 5)  -- mine, short (0 in bags)
   L.lastLane = nil;       assert(L:NextLane() == "mine", "own list first")
+  -- Cost estimate: short x last seen, items whose last price is over their cap left out.
+  DB.global.prices[9] = { copper = 20000, seenAt = 1 }
+  st = mf:RestockState()
+  assert(st.lines[3] == "About 10g at last seen prices.", "mine estimate: " .. tostring(st.lines[3]))
+  DB:SetItemMaxPrice(9, 10000)
+  assert(mf:RestockState().lines[3] == nil, "over-cap item must not count toward the estimate")
+  DB:SetItemMaxPrice(9, nil); DB.global.prices[9] = nil
   L.lastLane = "mine";    assert(L:NextLane() == "warband" and mf:RestockState().action == "warband", "warband after your run")
   L.lastLane = "warband"; assert(L:NextLane() == "mine", "back to your list after the warband pass")
   L.lastLane = nil; DB:SetItem(9, 0)
@@ -602,4 +610,11 @@ do -- v1.3 warband list: counts, transit, sweep, lanes, surplus, deposit plan, b
          == "Added [item 1] to the warband list (keep 200)", "warband add wording")
   ADDON.Inventory.GetBreakdown = gb
   io.stdout:write("warband OK\n")
+end
+do -- Minimap icon follows its setting
+  local M, st = ADDON.Minimap, ADDON.DB:Settings()
+  assert(M.button and M.button:IsShown(), "icon shown by default")
+  st.minimapIcon = false; M:Refresh(); assert(not M.button:IsShown(), "icon hides")
+  st.minimapIcon = true;  M:Refresh(); assert(M.button:IsShown(), "icon comes back")
+  io.stdout:write("minimap OK\n")
 end

@@ -23,6 +23,7 @@ BankRestock.lua
 UI\MainFrame.lua
 UI\BulkImport.lua
 UI\Sidecar.lua
+UI\Minimap.lua
 UI\LogPopup.lua
 
 #@debug@

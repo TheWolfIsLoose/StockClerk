@@ -50,6 +50,8 @@ DB.defaults = {
             autoRestock     = false,      -- Express restock at AH: opt-in, it starts a buying flow
             autoRestockBank = false,      -- Express restock at Bank: opt-in
             lastPriceTTL    = 24 * 3600,  -- Last Seen dims after 24h
+            minimapIcon     = true,
+            minimapAngle    = 225,        -- degrees from east: lower left
         },
     },
 }
