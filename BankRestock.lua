@@ -220,8 +220,9 @@ function BR:SettleGold()
         move = 0  -- warband bank empty (or refused): only the shortfall to report
     end
     ADDON.Log:Emit("gold", nil, { copper = move, short = short })
+    -- Short enough for the footer beside the button; Recent activity has the long form.
     local msg = move > 0 and ("Deposited %s to the warband"):format(gold(move))
-        or move < 0 and ("Withdrew %s from the warband"):format(gold(-move)) or "No gold in the warband"
+        or move < 0 and ("Withdrew %s"):format(gold(-move)) or "No gold in the warband"
     if short > 0 then msg = msg .. (" |cffff8888(%s short)|r"):format(gold(short)) end
     return msg .. "."
 end

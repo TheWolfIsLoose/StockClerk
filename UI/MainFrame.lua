@@ -570,7 +570,7 @@ local function BuildRow(row)
         cell.editing = false
         if not cell:IsMouseOver() then
             SetBorderColor(cell, CELL_BORDER_IDLE)
-            cell._bg:SetVertexColor(unpack(CELL_FILL_IDLE))
+            ApplyFill(cell, CELL_FILL_IDLE)
         end
     end
     function row.CloseEditors()
@@ -600,7 +600,7 @@ local function BuildRow(row)
         cell:SetScript("OnEnter", function(self)
             OnChildEnter(self)
             if not self.editing then SetBorderColor(self, Palette.ringHover) end
-            self._bg:SetVertexColor(unpack(CELL_FILL_HOVER))
+            ApplyFill(self, CELL_FILL_HOVER)
             GameTooltip:SetOwner(self, "ANCHOR_TOP")
             e.tooltip(row)
             GameTooltip:Show()
@@ -608,7 +608,7 @@ local function BuildRow(row)
         cell:SetScript("OnLeave", function(self)
             if not self.editing then
                 SetBorderColor(self, CELL_BORDER_IDLE)
-                self._bg:SetVertexColor(unpack(CELL_FILL_IDLE))
+                ApplyFill(self, CELL_FILL_IDLE)
             end
             OnChildLeave(self)
         end)
