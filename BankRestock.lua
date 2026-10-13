@@ -93,7 +93,7 @@ end
 -- Which banks this visit can reach: the warband bank portal opens only the
 -- warband bank. kind: "Character" or "Account".
 local function usable(kind)
-    return not C_Bank.CanUseBank or C_Bank.CanUseBank(Enum.BankType[kind])
+    return C_Bank.CanUseBank(Enum.BankType[kind])
 end
 
 -- Short items with at least one copy in a bank this visit can reach.
@@ -123,10 +123,23 @@ end
 
 -- Bag stacks that can go in the warband bank (soulbound etc. can't).
 local function allowed(bag, slot)
-    if not (C_Bank.IsItemAllowedInBankType and ItemLocation) then return true end  -- the move itself will say no
     local ok, yes = pcall(C_Bank.IsItemAllowedInBankType, Enum.BankType.Account,
         ItemLocation:CreateFromBagAndSlot(bag, slot))
     return ok and yes
+end
+
+-- Every unlocked slot in these bags: { bag, slot, itemID?, count }.
+local function slotsOf(bagIDs)
+    local out = {}
+    for _, bagID in ipairs(bagIDs) do
+        for slot = 1, C_Container.GetContainerNumSlots(bagID) do
+            local i = C_Container.GetContainerItemInfo(bagID, slot)
+            if not (i and i.isLocked) then  -- a slot mid-move can't take a drop
+                out[#out + 1] = { bag = bagID, slot = slot, itemID = i and i.itemID, count = i and i.stackCount or 0 }
+            end
+        end
+    end
+    return out
 end
 
 -- Surplus items split into depositable and refused (nothing in bags the
@@ -135,14 +148,8 @@ function BR:DepositPlan()
     local want, refused = {}, {}
     for _, s in ipairs(self:Surpluses()) do want[s.itemID] = s end
     local sources, ok = {}, {}
-    for _, bagID in ipairs(DEPOSIT_BAGS) do
-        for slot = 1, C_Container.GetContainerNumSlots(bagID) do
-            local i = C_Container.GetContainerItemInfo(bagID, slot)
-            if i and want[i.itemID] and not i.isLocked and allowed(bagID, slot) then
-                sources[#sources + 1] = { bag = bagID, slot = slot, itemID = i.itemID, count = i.stackCount }
-                ok[i.itemID] = true
-            end
-        end
+    for _, b in ipairs(slotsOf(DEPOSIT_BAGS)) do
+        if want[b.itemID] and allowed(b.bag, b.slot) then sources[#sources + 1] = b; ok[b.itemID] = true end
     end
     local list = {}
     for _, s in ipairs(self:Surpluses()) do
@@ -159,29 +166,11 @@ local function warbandTabs()
     return C_Bank.FetchPurchasedBankTabIDs(Enum.BankType.Account) or {}
 end
 
-local function slotsOf(bagIDs)
-    local out = {}
-    for _, bagID in ipairs(bagIDs) do
-        for slot = 1, C_Container.GetContainerNumSlots(bagID) do
-            local i = C_Container.GetContainerItemInfo(bagID, slot)
-            if not (i and i.isLocked) then  -- a slot mid-move can't take a drop
-                out[#out + 1] = { bag = bagID, slot = slot, itemID = i and i.itemID, count = i and i.stackCount or 0 }
-            end
-        end
-    end
-    return out
-end
-
 local function scan()
     local sources, bags = {}, {}
     for _, kind in ipairs({ "Character", "Account" }) do
-        for _, bagID in ipairs(usable(kind) and C_Bank.FetchPurchasedBankTabIDs(Enum.BankType[kind]) or {}) do
-            for slot = 1, C_Container.GetContainerNumSlots(bagID) do
-                local i = C_Container.GetContainerItemInfo(bagID, slot)
-                if i and i.itemID and not i.isLocked then
-                    sources[#sources + 1] = { bag = bagID, slot = slot, itemID = i.itemID, count = i.stackCount }
-                end
-            end
+        for _, b in ipairs(usable(kind) and slotsOf(C_Bank.FetchPurchasedBankTabIDs(Enum.BankType[kind]) or {}) or {}) do
+            if b.itemID then sources[#sources + 1] = b end
         end
     end
     for _, bagID in ipairs(BAGS) do
@@ -191,6 +180,51 @@ local function scan()
         end
     end
     return sources, bags
+end
+
+-- ---------------------------------------------------------------------------
+-- Gold: keep this character at its keep amount (DB.char.goldKeep, copper),
+-- the rest in the warband bank. Whole gold only: silver and copper stay put.
+-- Pure: returns the copper to move (+ deposit, - withdraw) and the gold the
+-- warband bank couldn't cover. The 12.1 probe moved gold from an event and a
+-- timer with no click, so this runs on every bank visit.
+-- ---------------------------------------------------------------------------
+local G, MAX_MONEY = 10000, 99999999999  -- copper per gold; the 9,999,999g 99s 99c cap
+
+function BR.PlanGold(keep, have, banked)
+    local diff = have - keep
+    if diff >= G then
+        return math.floor(math.min(diff, MAX_MONEY - banked) / G) * G, 0
+    elseif diff < 0 then
+        local want = math.ceil(-diff / G) * G
+        local take = math.min(want, math.floor(banked / G) * G, math.floor((MAX_MONEY - have) / G) * G)
+        return -take, want - take
+    end
+    return 0, 0
+end
+
+-- Settle now if a keep amount is set and the warband bank is reachable.
+-- Returns a footer line, or nil when nothing moved.
+function BR:SettleGold()
+    local keep, acct = ADDON.DB.char.goldKeep, Enum.BankType.Account
+    if not keep or not usable("Account") then return end
+    local move, short = BR.PlanGold(keep, GetMoney(), C_Bank.FetchDepositedMoney(acct))
+    local gold = function(c) return ADDON.MoneyText(c, "gold") end
+    if move > 0 and C_Bank.CanDepositMoney(acct) then
+        C_Bank.DepositMoney(acct, move)
+    elseif move < 0 and C_Bank.CanWithdrawMoney(acct) then
+        C_Bank.WithdrawMoney(acct, -move)
+    elseif short == 0 then
+        return
+    else
+        move = 0  -- warband bank empty (or refused): only the shortfall to report
+    end
+    ADDON.Log:Emit("gold", nil, { copper = move, short = short })
+    -- Short enough for the footer beside the button; Recent activity has the long form.
+    local msg = move > 0 and ("Deposited %s to the warband"):format(gold(move))
+        or move < 0 and ("Withdrew %s"):format(gold(-move)) or "No gold in the warband"
+    if short > 0 then msg = msg .. (" |cffff8888(%s short)|r"):format(gold(short)) end
+    return msg .. "."
 end
 
 -- ---------------------------------------------------------------------------

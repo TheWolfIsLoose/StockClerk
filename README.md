@@ -30,11 +30,15 @@ shared stock in your warband bank too, and every character restocks from it.
 - **Deposit at the bank.** Anything above your own targets goes into the
   warband bank, where every character can restock from it. Always a
   button, never automatic.
+- **Keep gold on each character.** Set an amount per character, and at
+  any bank StockClerk deposits the rest in the warband bank, or tops you
+  back up from it. Whole gold only.
 - **Restock from bank.** At the bank, one click moves exactly what you're
   short from your bank and warband bank into your bags.
 - **Checkout at the Auction House.** Restock goes down your list and
   **Buy** appears right where you clicked, so it's one click per item and
-  rows tick off as you go. Nothing is ever bought without your click.
+  rows tick off as you go. The Restock button shows what the trip will
+  cost at last seen prices. Nothing is ever bought without your click.
 - **Price caps.** Set a max per unit and StockClerk won't pay more. It
   also asks for a second look before you buy something you already have in
   the bank, have no cap on, or that costs well above what you last saw.
@@ -43,7 +47,8 @@ shared stock in your warband bank too, and every character restocks from it.
 - **A receipt for everything.** Purchases, bank pulls and deposits show in Recent
   activity; `/clerk log` has the full history.
 - **Hands-free if you like.** Open automatically at the AH or bank, and
-  start restocking as soon as you arrive.
+  start restocking as soon as you arrive. A minimap icon opens the window
+  (hide it in settings).
 
 <p align="center">
   <img src=".assets/screenshots/short-at-bank.png" alt="At the bank: three items short, with stock waiting in the bank, and Restock from bank" width="440">
@@ -84,8 +89,8 @@ and [NorskenUI](https://github.com/Nrsken/NorskenUI).
 [Auctionator](https://www.curseforge.com/wow/addons/auctionator),
 [Baganator](https://www.curseforge.com/wow/addons/baganator) and
 [Syndicator](https://www.curseforge.com/wow/addons/syndicator) set the bar
-for a well-behaved AH addon and for counting items everywhere they live. No
-code is copied.
+for a well-behaved AH addon and for counting items everywhere they live; no
+code is copied from them. The minimap icon uses LibDBIcon and LibDataBroker.
 
 Built with heavy AI assistance; every change is reviewed and tested in-game
 before release. Developers: see [Dev/](Dev/) for the roadmap, history and

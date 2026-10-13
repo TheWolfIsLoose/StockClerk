@@ -100,19 +100,15 @@ local function Solid(frame, layer, sublevel, color)
     return t
 end
 
--- Opaque background (BACKGROUND -8). Recolourable: frame._bg.
-local function ApplyFill(frame, color)
-    frame._bg = frame._bg or Solid(frame, "BACKGROUND", -8, color)
-    frame._bg:SetAllPoints()
-    frame._bg:SetColorTexture(color[1], color[2], color[3], color[4] or 1)
+-- Opaque fill (BACKGROUND -8, frame._bg) or a translucent band over it
+-- (-6, frame._band). Call again to recolour.
+local function Layer(frame, key, sublevel, color)
+    frame[key] = frame[key] or Solid(frame, "BACKGROUND", sublevel, color)
+    frame[key]:SetAllPoints()
+    frame[key]:SetColorTexture(color[1], color[2], color[3], color[4] or 1)
 end
-
--- Translucent strip over the fill (BACKGROUND -6).
-local function ApplyBand(frame, color)
-    frame._band = frame._band or Solid(frame, "BACKGROUND", -6, color)
-    frame._band:SetAllPoints()
-    frame._band:SetColorTexture(color[1], color[2], color[3], color[4] or 1)
-end
+local function ApplyFill(frame, color) Layer(frame, "_bg", -8, color) end
+local function ApplyBand(frame, color) Layer(frame, "_band", -6, color) end
 
 -- A 1px line along one edge ("TOP" / "BOTTOM").
 local function AddRule(frame, edge, color)
@@ -141,30 +137,6 @@ end
 
 local function SetBorderColor(frame, c)
     for _, t in ipairs(frame._border) do t:SetColorTexture(c[1], c[2], c[3], c[4] or 1) end
-end
-
--- Fade a widget's border to a target colour (mint on hover/focus, back on leave).
-local function AttachBorderAnimator(frame, rest)
-    local group = frame:CreateAnimationGroup()
-    group:CreateAnimation("Animation"):SetDuration(0.15)
-    rest = rest or Palette.border
-    local from, to, cur = { unpack(rest) }, { unpack(rest) }, { unpack(rest) }
-    group:SetScript("OnUpdate", function(g)
-        local p = g:GetProgress() or 0
-        for i = 1, 4 do cur[i] = from[i] + (to[i] - from[i]) * p end
-        SetBorderColor(frame, cur)
-    end)
-    group:SetScript("OnFinished", function()
-        for i = 1, 4 do cur[i] = to[i] end
-        SetBorderColor(frame, cur)
-    end)
-    frame._borderAnim = {
-        AnimateTo = function(target)
-            group:Stop()
-            for i = 1, 4 do from[i], to[i] = cur[i], target[i] or 1 end
-            group:Play()
-        end,
-    }
 end
 
 -- Flat button: opaque base + light band, hover wash (ARTWORK 7, not HIGHLIGHT,
@@ -270,7 +242,6 @@ local function MakeEditBox(parent, placeholder, maxLetters, tipTitle, tipBody)
     box:EnableMouse(true)
     ApplyFill(box, Palette.fieldFill)
     AddBlackBorder(box, Palette.ringRest)
-    AttachBorderAnimator(box, Palette.ringRest)
 
     local eb = CreateFrame("EditBox", nil, box)
     eb:SetPoint("TOPLEFT", 6, -3)
@@ -293,7 +264,7 @@ local function MakeEditBox(parent, placeholder, maxLetters, tipTitle, tipBody)
 
     local function over() return box:IsMouseOver() or eb:IsMouseOver() end
     local function enter()
-        box._borderAnim.AnimateTo(eb:HasFocus() and Palette.brand or Palette.ringHover)
+        SetBorderColor(box, eb:HasFocus() and Palette.brand or Palette.ringHover)
         -- 4px above the box: ANCHOR_TOP overlaps it and flickers.
         GameTooltip:SetOwner(box, "ANCHOR_NONE")
         GameTooltip:ClearAllPoints()
@@ -305,21 +276,22 @@ local function MakeEditBox(parent, placeholder, maxLetters, tipTitle, tipBody)
     local function leave()
         if over() then return end
         GameTooltip:Hide()
-        if not eb:HasFocus() then box._borderAnim.AnimateTo(Palette.ringRest) end
+        if not eb:HasFocus() then SetBorderColor(box, Palette.ringRest) end
     end
     box:SetScript("OnEnter", enter)
     box:SetScript("OnLeave", leave)
     eb:HookScript("OnEnter", enter)
     eb:HookScript("OnLeave", leave)
-    eb:HookScript("OnEditFocusGained", function() refresh(); box._borderAnim.AnimateTo(Palette.brand) end)
+    eb:HookScript("OnEditFocusGained", function() refresh(); SetBorderColor(box, Palette.brand) end)
     eb:HookScript("OnEditFocusLost", function()
         refresh()
-        box._borderAnim.AnimateTo(over() and Palette.ringHover or Palette.ringRest)
+        SetBorderColor(box, over() and Palette.ringHover or Palette.ringRest)
     end)
     eb:HookScript("OnTextChanged", refresh)
     refresh()
     return box, eb
 end
+MF.MakeEditBox = MakeEditBox
 
 -- ---------------------------------------------------------------------------
 -- Rows. Built once per pooled Button and rebound as the ScrollView recycles
@@ -494,7 +466,6 @@ local function BuildRow(row)
         cell:SetFrameLevel(row:GetFrameLevel() + 2)
         ApplyFill(cell, CELL_FILL_IDLE)
         AddBlackBorder(cell, CELL_BORDER_IDLE)
-        AttachBorderAnimator(cell, CELL_BORDER_IDLE)
         local text = cell:CreateFontString(nil, "OVERLAY", "StockClerkFontSmall")  -- on the cell: draws over its fill
         text:SetPoint("RIGHT", -6, 0)
         local edit = CreateFrame("EditBox", nil, row)
@@ -558,7 +529,7 @@ local function BuildRow(row)
     row.trash:SetScript("OnLeave", function(self) RowLeave(self:GetParent()) end)
     row.trash:SetScript("OnClick", function(self)
         local r = self:GetParent()
-        ADDON.DB:RemoveItem(r._itemID, MF:View())
+        ADDON.DB:SetItem(r._itemID, 0, nil, MF:View())
         ADDON.Log:Emit("remove", r._itemID, { name = r._itemLink, list = MF:View() })
         MF:Refresh()
     end)
@@ -598,8 +569,8 @@ local function BuildRow(row)
         row[e.label]:Show()
         cell.editing = false
         if not cell:IsMouseOver() then
-            cell._borderAnim.AnimateTo(CELL_BORDER_IDLE)
-            cell._bg:SetVertexColor(unpack(CELL_FILL_IDLE))
+            SetBorderColor(cell, CELL_BORDER_IDLE)
+            ApplyFill(cell, CELL_FILL_IDLE)
         end
     end
     function row.CloseEditors()
@@ -624,20 +595,20 @@ local function BuildRow(row)
             edit:SetFocus()
             edit:HighlightText()
             cell.editing = true
-            cell._borderAnim.AnimateTo(Palette.brand)
+            SetBorderColor(cell, Palette.brand)
         end)
         cell:SetScript("OnEnter", function(self)
             OnChildEnter(self)
-            if not self.editing then self._borderAnim.AnimateTo(Palette.ringHover) end
-            self._bg:SetVertexColor(unpack(CELL_FILL_HOVER))
+            if not self.editing then SetBorderColor(self, Palette.ringHover) end
+            ApplyFill(self, CELL_FILL_HOVER)
             GameTooltip:SetOwner(self, "ANCHOR_TOP")
             e.tooltip(row)
             GameTooltip:Show()
         end)
         cell:SetScript("OnLeave", function(self)
             if not self.editing then
-                self._borderAnim.AnimateTo(CELL_BORDER_IDLE)
-                self._bg:SetVertexColor(unpack(CELL_FILL_IDLE))
+                SetBorderColor(self, CELL_BORDER_IDLE)
+                ApplyFill(self, CELL_FILL_IDLE)
             end
             OnChildLeave(self)
         end)
@@ -726,17 +697,8 @@ local function InitializeRow(row, data)
         row.iconBorder:SetColorTexture(0, 0, 0, 1)
     end
     row._itemLink = link
-    if link then
-        ShowLink(row.name, link)
-    else
-        row.name:SetText(data.name)
-        ADDON.ItemResolver:Resolve(itemID, function(id, _, ln)
-            if row._itemID == id and ln then
-                ShowLink(row.name, ln)
-                row._itemLink = ln
-            end
-        end)
-    end
+    -- Not cached yet: GET_ITEM_INFO_RECEIVED repaints the list (Core).
+    if link then ShowLink(row.name, link) else row.name:SetText(data.name) end
 
     -- Have: red when short, mint when stocked; the (+N) stays grey.
     local bd = ADDON.Inventory:GetBreakdown(itemID)
@@ -1029,16 +991,16 @@ function MF:Build()
     filterBtn:SetHitRectInsets(-3, -3, -4, -4)  -- 24px target (WCAG 2.5.8)
     filterBtn:SetPoint("LEFT", 62, 0)
     local tintFilter = DrawGlyph(filterBtn, { { 12, 2, 4 }, { 8, 2, 0 }, { 4, 2, -4 } })
-    local function paintFilter() tintFilter(Palette.brand, ADDON.DB:GetStuckOnly() and 1 or 0.55) end
+    local function paintFilter() tintFilter(Palette.brand, ADDON.DB.char.ui.stuckOnly and 1 or 0.55) end
     filterBtn:SetScript("OnClick", function()
-        ADDON.DB:SetStuckOnly(not ADDON.DB:GetStuckOnly())
+        ADDON.DB.char.ui.stuckOnly = not ADDON.DB.char.ui.stuckOnly
         paintFilter()
         MF:Refresh()
     end)
     filterBtn:SetScript("OnEnter", function(self)
         tintFilter(Palette.brand)
         GameTooltip:SetOwner(self, "ANCHOR_BOTTOM")
-        GameTooltip:SetText((ADDON.DB:GetStuckOnly() and "|cff98ff98Filter on|r  " or "") .. "Show only: items you're short on", 1, 1, 1)
+        GameTooltip:SetText((ADDON.DB.char.ui.stuckOnly and "|cff98ff98Filter on|r  " or "") .. "Show only: items you're short on", 1, 1, 1)
         GameTooltip:AddLine("Hide items that are fully stocked.", 0.74, 0.74, 0.74, true)
         GameTooltip:Show()
     end)
@@ -1243,7 +1205,7 @@ end
 
 function MF:_RefreshNow()
     if not self.frame then return end
-    local stuckOnly, view = ADDON.DB:GetStuckOnly(), self:View()
+    local stuckOnly, view = ADDON.DB.char.ui.stuckOnly, self:View()
     local provider = CreateDataProvider()
     for i, it in ipairs(ADDON.DB:GetSortedItems(view)) do
         -- Filter on: only short items.
@@ -1308,21 +1270,29 @@ function MF:RestockState()
     end
     local n = loop:PreviewShortfallCount()
     local ahOpen = AuctionHouseFrame and AuctionHouseFrame:IsShown()
-    if loop:NextLane() == "warband" then  -- after your own run (or nothing of yours short)
-        local w, cost = loop:PreviewShortfallCount("warband"), 0
-        for _, it in ipairs(ADDON.DB:GetSortedItems("warband")) do
-            local short = loop:Short("warband", it.itemID, it.need)
-            if short > 0 and it.lastPrice then cost = cost + short * it.lastPrice.copper end
+    -- " · 1,240g" on the button: the lane's shortfall at last seen prices.
+    -- Items without a price, or whose last price is above their cap (the run
+    -- passes them over), are left out; nothing priced means no total.
+    local function total(lane)
+        local cost = 0
+        for _, it in ipairs(ADDON.DB:GetSortedItems(lane)) do
+            local short, lp = loop:Short(lane, it.itemID, it.need), it.lastPrice
+            if short > 0 and lp and not (it.maxPrice and lp.copper > it.maxPrice) then cost = cost + short * lp.copper end
         end
-        local lines = { "Buys what the warband list is short, at the warband caps. You click Buy for each item." }
-        if cost > 0 then lines[2] = "About " .. MoneyText(cost, "gold") .. " at last seen prices." end
-        return { label = ahOpen and (BLUE .. ("Restock warband (%d)"):format(w) .. "|r") or ("Restock warband (%d)"):format(w),
-                 enabled = ahOpen, tip = "Restock the warband", action = "warband", lines = lines,
+        return cost > 0 and (" \194\183 " .. MoneyText(cost, "gold")) or ""
+    end
+    local TOTAL_TIP = "The total is at last seen prices; items above their cap aren't counted."
+    if loop:NextLane() == "warband" then  -- after your own run (or nothing of yours short)
+        local label = ("Restock warband (%d)"):format(loop:PreviewShortfallCount("warband")) .. total("warband")
+        return { label = ahOpen and (BLUE .. label .. "|r") or label,
+                 enabled = ahOpen, tip = "Restock the warband", action = "warband",
+                 lines = { "Buys what the warband list is short, at the warband caps. You click Buy for each item.", TOTAL_TIP },
                  reason = not ahOpen and "Auction House isn't open." or nil }
     end
-    return { label = n > 0 and ("Restock at AH (%d)"):format(n) or "Restock at AH", enabled = ahOpen and n > 0,
+    return { label = n > 0 and (("Restock at AH (%d)"):format(n) .. total()) or "Restock at AH", enabled = ahOpen and n > 0,
              tip = "Restock at AH", action = "mine",
-             lines = { "Goes down your list in order; you click Buy for each item.", "Items above your cap are marked and passed over." },
+             lines = { "Goes down your list in order; you click Buy for each item.", "Items above your cap are marked and passed over.",
+                       n > 0 and TOTAL_TIP or nil },
              reason = not ahOpen and "Auction House isn't open."
                    or n == 0 and "Nothing to restock: every row is at or above its need." or nil }
 end
@@ -1331,6 +1301,8 @@ function MF:RefreshRestockBtn()
     if not self.restockBtn then return end
     local state = self:RestockState()
     self.restockBtn:SetText(state.label)
+    -- Grows to fit a total; the footer status gives up the width.
+    self.restockBtn:SetWidth(math.max(160, self.restockBtn:GetFontString():GetStringWidth() + 24))
     self.restockBtn:SetEnabled(state.enabled)
     self.checkout.skip:SetEnabled(ADDON.RestockLoop:BuyWait() ~= nil)
 end
@@ -1457,9 +1429,11 @@ function MF:EndRowDrag(cancel)
     if cancel or not target then return end
     -- Remove, then reinsert at target (one lower if moving down, since the
     -- removal shifted the rest up).
+    -- Over the whole list: row._index is the full-list position, so this
+    -- works with the short-only filter on too.
     local order, from = {}, nil
-    for i, d in self.dataProvider:Enumerate() do
-        if d.itemID == movedID then from = i else order[#order + 1] = d.itemID end
+    for i, it in ipairs(ADDON.DB:GetSortedItems(self:View())) do
+        if it.itemID == movedID then from = i else order[#order + 1] = it.itemID end
     end
     if not from or from == target then return end
     table.insert(order, math.max(1, math.min(#order + 1, target > from and target - 1 or target)), movedID)

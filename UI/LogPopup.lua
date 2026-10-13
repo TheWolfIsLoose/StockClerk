@@ -77,10 +77,6 @@ local function Build()
     return f
 end
 
-function LogPopup:Show()
-    (self.frame or Build()):Show()
-end
-
 function LogPopup:Toggle()
     local f = self.frame or Build()
     f:SetShown(not f:IsShown())

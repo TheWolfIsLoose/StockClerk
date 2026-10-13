@@ -9,12 +9,12 @@ local ADDON     = _G[addonName]
 
 -- Copper as "12g 34s 56c" (letters, not coin icons, so reskinned coin art
 -- doesn't matter). precision "silver" drops copper; "gold" is whole gold with
--- thousands commas ("7,424g") from 1g up. Zero is "0g".
+-- the game's thousands grouping ("7,424g") from 1g up. Zero is "0g".
 function ADDON.MoneyText(copper, precision)
     copper = tonumber(copper) or 0
     if copper <= 0 then return "0g" end
     if precision == "gold" and copper >= 10000 then
-        return (tostring(math.floor(copper / 10000)):reverse():gsub("(%d%d%d)", "%1,"):reverse():gsub("^,", "")) .. "g"
+        return BreakUpLargeNumbers(math.floor(copper / 10000)) .. "g"
     end
     local g, s, c = math.floor(copper / 10000), math.floor(copper / 100) % 100, copper % 100
     local parts = {}
@@ -80,8 +80,8 @@ On("ADDON_LOADED", function(name)
 end)
 
 On("PLAYER_LOGIN", function()
-    On("GET_ITEM_INFO_RECEIVED", function(itemID, success)
-        ADDON.ItemResolver:OnItemInfoReceived(itemID, success)
+    ADDON.Minimap:Refresh()
+    On("GET_ITEM_INFO_RECEIVED", function(itemID)
         -- Fires for every item any addon asks about (thousands in an AH scan):
         -- repaint only for ours, and only while the window shows.
         local mf = ADDON.MainFrame
@@ -108,7 +108,7 @@ On("PLAYER_LOGIN", function()
     -- A banker opens as Banker; the Warband Bank Distance Inhibitor portal as
     -- AccountBanker (warband bank only); CharacterBanker is the personal one.
     local Type = Enum.PlayerInteractionType
-    local BANK = { [Type.Banker] = true, [Type.CharacterBanker or -1] = true, [Type.AccountBanker or -1] = true }
+    local BANK = { [Type.Banker] = true, [Type.CharacterBanker] = true, [Type.AccountBanker] = true }
     On("PLAYER_INTERACTION_MANAGER_FRAME_SHOW", function(t)
         if t == Type.Auctioneer then ADDON:OnAuctionHouseShow() elseif BANK[t] then ADDON:OnBankShow() end
     end)
@@ -180,18 +180,22 @@ function ADDON:OnBankShow()
         mf:Show()
     end
     mf:RefreshRestockBtn()
-    local n = self.BankRestock:PullableCount()
+    -- Gold first: it's one call, and its line leads the footer (an Express
+    -- pull's receipt replaces it later; Recent activity keeps it).
+    local gold = self.BankRestock:SettleGold()
+    local n, items = self.BankRestock:PullableCount()
     if n > 0 and self.DB:Settings().autoRestockBank then
         -- Express restock at Bank, once the bank frame settles; the pull reports itself.
         C_Timer.After(0.3, function()
             if self.bankOpen then self.BankRestock:Start(true) end
         end)
     elseif n > 0 then
-        mf:SetStatus(("%d short item%s can come from your bank."):format(n, n == 1 and "" or "s"), true)
+        items = ("%d short item%s can come from your bank."):format(n, n == 1 and "" or "s")
     else
         local d = self.BankRestock:DepositableCount()
-        if d > 0 then mf:SetStatus(("|cff5AA9FFWarband: deposit %d item%s.|r"):format(d, d == 1 and "" or "s"), true) end
+        if d > 0 then items = ("|cff5AA9FFWarband: deposit %d item%s.|r"):format(d, d == 1 and "" or "s") end
     end
+    if gold or items then mf:SetStatus(gold and items and (gold .. " " .. items) or gold or items, true) end
 end
 
 function ADDON:OnBankClosed()

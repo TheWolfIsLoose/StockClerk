@@ -35,8 +35,9 @@ Log.LEVEL = {
     add = "activity", remove = "activity", target_change = "activity", cap_change = "activity",
     buy_success = "activity", buy_fail = "activity", buy_skip = "activity", auto_refuse = "activity",
     bank_pull = "activity", bank_deposit = "activity", deposit_skip = "activity", loop_stop = "activity", error = "activity",
+    gold = "activity",
     ah_search = "detail", buy_attempt = "detail", loop_start = "detail", status = "detail",
-    bank_run = "detail", setting = "detail", version = "detail", auto_toggle = "detail",
+    bank_run = "detail", setting = "detail", version = "detail",
     trace = "trace",
 }
 
@@ -80,16 +81,8 @@ end
 
 -- "4,255g" for 100g+, "12g 34s" below that (cheap items would read "0g").
 local function Money(copper)
-    copper = math.floor(copper or 0)
-    local g, s = math.floor(copper / 10000), math.floor(copper / 100) % 100
-    if g >= 100 then
-        local txt = tostring(g):reverse():gsub("(%d%d%d)", "%1,"):reverse():gsub("^,", "")
-        return txt .. "g"
-    end
-    if g > 0 then return s > 0 and ("%dg %ds"):format(g, s) or (g .. "g") end
-    return s .. "s"
+    return ADDON.MoneyText(copper, (copper or 0) >= 1000000 and "gold" or "silver")
 end
-Log.Money = Money
 
 local function Plain(text)
     return (tostring(text or ""):gsub("|c%x%x%x%x%x%x%x%x", ""):gsub("|r", ""))
@@ -99,6 +92,7 @@ local SETTING_LABELS = {
     autoOpenAtAH = "Auto-open at Auction House", autoOpenAtBank = "Auto-open at bank",
     autoRestock = "Express restock at Auction House", autoRestockBank = "Express restock at bank",
     shopWarband = "Shop for the warband on this character",
+    goldKeep = "Keep gold on this character", minimapIcon = "Minimap icon",
 }
 
 -- "warband " before target/cap for warband-list entries (short: the feed is narrow).
@@ -140,6 +134,12 @@ local FORMAT = {
     deposit_skip  = function(p, item)
         return ("Couldn't deposit %s: %s"):format(item, p.reason == "refused" and "the warband bank won't take it" or Plain(p.reason or "?"))
     end,
+    gold          = function(p)
+        local c, short = p.copper or 0, (p.short or 0) > 0 and (", %s short"):format(Money(p.short)) or ""
+        if c > 0 then return "Deposited " .. Money(c) .. " to the warband bank" end
+        if c < 0 then return "Withdrew " .. Money(-c) .. " from the warband bank" .. short end
+        return "No gold in the warband bank" .. short
+    end,
     loop_stop     = function(p)
         local txt = STOP_REASONS[p.reason] or ("Restock stopped: " .. Plain(p.reason or "?"))
         if p.lane == "warband" then txt = "Warband " .. txt:gsub("^R", "r") end
@@ -169,13 +169,13 @@ local FORMAT = {
         return p.reason and (txt .. ", stopped: " .. p.reason) or txt
     end,
     setting       = function(p)
-        return ("Setting: %s %s"):format(SETTING_LABELS[p.key] or tostring(p.key), p.on and "on" or "off")
+        return ("Setting: %s %s"):format(SETTING_LABELS[p.key] or tostring(p.key),
+            p.value and Money(p.value) or p.on and "on" or "off")
     end,
     version       = function(p)
         if not p.from then return "StockClerk " .. tostring(p.to) .. " installed" end
         return ("StockClerk updated from %s to %s"):format(p.from, tostring(p.to))
     end,
-    auto_toggle   = function(p) return "Auto-restock " .. (p.on and "on" or "off") end,
     trace         = function(p) return ("[%s] %s"):format(p.tag or "?", Plain(p.text)) end,
 }
 
