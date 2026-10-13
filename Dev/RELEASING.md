@@ -15,10 +15,15 @@ or a significant redesign. Otherwise the next public build is a stable
 tag.
 
 **Cadence (2026-10-13, all of the player's addons):** feature releases go
-out on a schedule, bundling whatever is tested on `dev`, cut by a scheduled
-task at a set time (first one: 2026-10-13, 9 AM ET). Hotfixes still ship
-as soon as they're needed. Why: fewer update prompts for players, less
-Claude usage per release.
+out every other Tuesday around 9 AM ET (from 2026-10-27), bundling whatever
+is tested on `dev`; the "Addon releases" scheduled task cuts them and skips
+any addon with nothing new. Hotfixes still ship as soon as they're needed.
+Why: fewer update prompts for players, less Claude usage per release.
+**Patch days** (a Retail patch goes live, or the live interface number is
+above our TOCs) move that Tuesday's release to ~8 PM ET, whether or not it's
+a release week: the 9 AM run only tells the player to fitness-test, and the
+"Patch day addon releases" task ships the TOC bump plus any fixes landed on
+`dev` that day. The day matters more than the time.
 
 - Push to `dev` with a new `-alphaN` / `-betaN` version heading to
   publish a prerelease (CurseForge Alpha/Beta).
