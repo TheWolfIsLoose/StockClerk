@@ -557,9 +557,9 @@ do -- v1.3 warband list: counts, transit, sweep, lanes, surplus, deposit plan, b
   -- Cost estimate: short x last seen, items whose last price is over their cap left out.
   DB.global.prices[9] = { copper = 20000, seenAt = 1 }
   st = mf:RestockState()
-  assert(st.lines[3] == "About 10g at last seen prices.", "mine estimate: " .. tostring(st.lines[3]))
+  assert(st.label == "Restock at AH (1) \194\183 10g", "mine total: " .. st.label)
   DB:SetItemMaxPrice(9, 10000)
-  assert(mf:RestockState().lines[3] == nil, "over-cap item must not count toward the estimate")
+  assert(mf:RestockState().label == "Restock at AH (1)", "over-cap item must not count toward the total")
   DB:SetItemMaxPrice(9, nil); DB.global.prices[9] = nil
   L.lastLane = "mine";    assert(L:NextLane() == "warband" and mf:RestockState().action == "warband", "warband after your run")
   L.lastLane = "warband"; assert(L:NextLane() == "mine", "back to your list after the warband pass")

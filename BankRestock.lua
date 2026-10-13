@@ -220,10 +220,10 @@ function BR:SettleGold()
         move = 0  -- warband bank empty (or refused): only the shortfall to report
     end
     ADDON.Log:Emit("gold", nil, { copper = move, short = short })
-    local msg = move > 0 and ("Deposited %s to the warband bank."):format(gold(move))
-        or move < 0 and ("Withdrew %s from the warband bank."):format(gold(-move)) or ""
-    if short > 0 then msg = msg .. (" |cffff8888%s short of %s.|r"):format(gold(short), gold(keep)) end
-    return strtrim(msg)
+    local msg = move > 0 and ("Deposited %s to the warband"):format(gold(move))
+        or move < 0 and ("Withdrew %s from the warband"):format(gold(-move)) or "No gold in the warband"
+    if short > 0 then msg = msg .. (" |cffff8888(%s short)|r"):format(gold(short)) end
+    return msg .. "."
 end
 
 -- ---------------------------------------------------------------------------

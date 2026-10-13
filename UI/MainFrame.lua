@@ -1270,27 +1270,29 @@ function MF:RestockState()
     end
     local n = loop:PreviewShortfallCount()
     local ahOpen = AuctionHouseFrame and AuctionHouseFrame:IsShown()
-    -- "About 1,240g at last seen prices." for a lane's shortfall; items whose
-    -- last price is above their cap are left out (the run passes them over).
-    local function estimate(lane)
+    -- " · 1,240g" on the button: the lane's shortfall at last seen prices.
+    -- Items without a price, or whose last price is above their cap (the run
+    -- passes them over), are left out; nothing priced means no total.
+    local function total(lane)
         local cost = 0
         for _, it in ipairs(ADDON.DB:GetSortedItems(lane)) do
             local short, lp = loop:Short(lane, it.itemID, it.need), it.lastPrice
             if short > 0 and lp and not (it.maxPrice and lp.copper > it.maxPrice) then cost = cost + short * lp.copper end
         end
-        return cost > 0 and ("About " .. MoneyText(cost, "gold") .. " at last seen prices.") or nil
+        return cost > 0 and (" \194\183 " .. MoneyText(cost, "gold")) or ""
     end
+    local TOTAL_TIP = "The total is at last seen prices; items above their cap aren't counted."
     if loop:NextLane() == "warband" then  -- after your own run (or nothing of yours short)
-        local w = loop:PreviewShortfallCount("warband")
-        local lines = { "Buys what the warband list is short, at the warband caps. You click Buy for each item.", estimate("warband") }
-        return { label = ahOpen and (BLUE .. ("Restock warband (%d)"):format(w) .. "|r") or ("Restock warband (%d)"):format(w),
-                 enabled = ahOpen, tip = "Restock the warband", action = "warband", lines = lines,
+        local label = ("Restock warband (%d)"):format(loop:PreviewShortfallCount("warband")) .. total("warband")
+        return { label = ahOpen and (BLUE .. label .. "|r") or label,
+                 enabled = ahOpen, tip = "Restock the warband", action = "warband",
+                 lines = { "Buys what the warband list is short, at the warband caps. You click Buy for each item.", TOTAL_TIP },
                  reason = not ahOpen and "Auction House isn't open." or nil }
     end
-    return { label = n > 0 and ("Restock at AH (%d)"):format(n) or "Restock at AH", enabled = ahOpen and n > 0,
+    return { label = n > 0 and (("Restock at AH (%d)"):format(n) .. total()) or "Restock at AH", enabled = ahOpen and n > 0,
              tip = "Restock at AH", action = "mine",
              lines = { "Goes down your list in order; you click Buy for each item.", "Items above your cap are marked and passed over.",
-                       n > 0 and estimate() or nil },
+                       n > 0 and TOTAL_TIP or nil },
              reason = not ahOpen and "Auction House isn't open."
                    or n == 0 and "Nothing to restock: every row is at or above its need." or nil }
 end
@@ -1299,6 +1301,8 @@ function MF:RefreshRestockBtn()
     if not self.restockBtn then return end
     local state = self:RestockState()
     self.restockBtn:SetText(state.label)
+    -- Grows to fit a total; the footer status gives up the width.
+    self.restockBtn:SetWidth(math.max(160, self.restockBtn:GetFontString():GetStringWidth() + 24))
     self.restockBtn:SetEnabled(state.enabled)
     self.checkout.skip:SetEnabled(ADDON.RestockLoop:BuyWait() ~= nil)
 end
