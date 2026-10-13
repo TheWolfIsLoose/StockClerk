@@ -49,4 +49,4 @@ Cross-reference at least two of:
 - In game: `/dump select(4, GetBuildInfo())`
 
 A TOC-only bump is a patch release (vX.Y.Z+1) with a one-line CHANGELOG
-("Up to date for patch 12.x.y."). Last checked: 2026-10-05, 12.1.0 = 120100.
+("Up to date for patch 12.x.y."). Last checked: 2026-10-13, 12.1.5 = 120105.

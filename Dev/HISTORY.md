@@ -10,7 +10,16 @@ or, where it had no entry, from that version's GitHub release notes.
 > There is no v1.1.2 stable: the v1.1.2 alphas are the start of v1.2.0
 > (efficiency pass). v1.2.0 plan: `Dev/ROADMAP.md`.
 
-## v1.3.3 (on `dev`, release queued for 2026-10-13)
+## v1.4.0 (2026-10-13)
+
+Patch 12.1.5 day release (moved from 9 AM to ~5 PM ET per the patch-day rule, then cut early at the player's call). Was queued as v1.3.3; the new features make it a minor bump.
+
+- TOC `## Interface` 120100 -> 120105 (12.1.5, build 70340; Gethe `live` + Warcraft Wiki).
+- Keep gold on this character: Settings row (per character, whole gold, blank = off). At any bank visit, deposits whole gold above the amount to the warband bank and withdraws to top up, clamped to the warband balance and the gold cap; silver and copper stay put. Footer line + Recent activity entry. Math in `BR.PlanGold` (smoke-tested). Warband portal not yet seen in-game.
+- Minimap icon (`UI/Minimap.lua`) on LibDBIcon (embedded in `Libs/` with LibStub, CallbackHandler, LibDataBroker): click toggles the window, drag moves it around the rim (square minimaps and button collectors work); side-panel checkbox hides it. Position and hide in `settings.minimap`.
+- Restock cost on the button: "Restock at AH (3) · 1,240g" / "Restock warband (4) · 25,317g" at last seen prices; items whose last price is above their cap are left out. The button grows to fit.
+- Fix: Need / Cap cells lost their well after hover (`SetVertexColor` multiplied the colour texture); recoloured with `ApplyFill` like every other fill. Shorter withdraw footer: "Withdrew Xg from the warband (Yg short)."
+- README + `Dev/CURSEFORGE.md` copy for the new features; screenshots still to retake on this version.
 
 Ponytail pass (review 2026-10-11) plus one fix:
 
