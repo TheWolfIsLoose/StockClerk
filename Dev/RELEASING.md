@@ -14,6 +14,12 @@ reads the log). `CHANGELOG.md` keeps the last stable heading meanwhile, so
 or a significant redesign. Otherwise the next public build is a stable
 tag.
 
+**Cadence (2026-10-13, all of the player's addons):** feature releases go
+out on a schedule, bundling whatever is tested on `dev`, cut by a scheduled
+task at a set time (first one: 2026-10-13, 9 AM ET). Hotfixes still ship
+as soon as they're needed. Why: fewer update prompts for players, less
+Claude usage per release.
+
 - Push to `dev` with a new `-alphaN` / `-betaN` version heading to
   publish a prerelease (CurseForge Alpha/Beta).
 - Merge to `main` with a new stable `vX.Y.Z` heading to publish a release.
