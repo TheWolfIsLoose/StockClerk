@@ -15,7 +15,7 @@ or a significant redesign. Otherwise the next public build is a stable
 tag.
 
 **Cadence (2026-10-13, all of the player's addons):** feature releases go
-out every other Tuesday around 9 AM ET (from 2026-10-27), bundling whatever
+out every Tuesday at 9 AM ET (from 2026-10-20), bundling whatever
 is tested on `dev`; the "Addon releases" scheduled task cuts them and skips
 any addon with nothing new. Hotfixes still ship as soon as they're needed.
 Why: fewer update prompts for players, less Claude usage per release.
