@@ -130,7 +130,7 @@ The suite has two motions. Both stop within 5 s (2.2.2), neither is ever the onl
 | 3.2.4 Consistent identification | one look and one name per control across the suite |
 | 3.3.2 Labels | placeholders / labels say what a field is; disabled controls say why |
 
-Accepted exceptions: PickupGroup's apply-as role icons sit 17px apart. StockClerk's Restock button stays in its footer, because it turns into the checkout bar during a run.
+Accepted exceptions: PickupGroup's apply-as role icons sit 17px apart. StockClerk's Restock button stays in its footer, because it turns into the checkout bar during a run. TalentKeeper's first-login "Bring your builds in" / turn-off-the-other-addons prompt stays its own window when the talent window isn't open: another talent addon's panel loads in the same spot as the pane, so a prompt in the pane couldn't be reached to resolve the clash (found in the 0.4.0 cycle, 2026-10-22).
 
 Measure: WCAG relative luminance of each colour composited over its real background; ratio = (L1 + 0.05) / (L2 + 0.05). Re-measure after any palette change.
 
