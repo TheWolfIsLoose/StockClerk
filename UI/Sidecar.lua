@@ -227,7 +227,7 @@ function Sidecar:Refresh()
             -- Base colour on the font string (red for failures), so the item
             -- name's |r falls back to it; the name itself is quality-coloured.
             row.text:SetText(("|cff8c8c8c[%s]|r %s"):format(date("%H:%M", e.ts), ADDON.Log:Format(e, false, true)))
-            row.text:SetTextColor(unpack((e.kind == "error" or e.kind == "buy_fail") and { 1, 0.4, 0.4 } or { 1, 1, 1 }))
+            if e.kind == "error" or e.kind == "buy_fail" then row.text:SetTextColor(unpack(Palette.short)) else row.text:SetTextColor(1, 1, 1) end
             row:Show()
         end
     end

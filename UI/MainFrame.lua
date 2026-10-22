@@ -704,7 +704,7 @@ local function InitializeRow(row, data)
     local bd = ADDON.Inventory:GetBreakdown(itemID)
     local have, stashed, short = MF:Counts(itemID, data.need)
     row._breakdown = bd
-    row.have:SetText((short > 0 and "|cffff6666%d|r" or "|cffffffff%d|r"):format(have)
+    row.have:SetText((short > 0 and "|cffff6666%d|r" or "%d"):format(have)
         .. (stashed > 0 and ("  |cff8c8c8c(+%d)|r"):format(stashed) or ""))
     row.accent:SetColorTexture(unpack(short > 0 and { 0xe5 / 255, 0x62 / 255, 0x4a / 255 } or { 0x4a / 255, 0xde / 255, 0x80 / 255 }))
     row.need:SetText(("|cffCCCCCC%d|r"):format(data.need))
@@ -726,7 +726,7 @@ local function InitializeRow(row, data)
     local lp = data.lastPrice
     if data.maxPrice then
         local over = lp and lp.copper > data.maxPrice
-        row.cap:SetText(("|cff%s%dg|r"):format(over and "ff6666" or "ffffff", math.floor(data.maxPrice / 10000)))
+        row.cap:SetText((over and "|cffff6666%dg|r" or "%dg"):format(math.floor(data.maxPrice / 10000)))
     else
         row.cap:SetText("|cff666666\226\128\148|r")
     end

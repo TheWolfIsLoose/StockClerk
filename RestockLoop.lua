@@ -339,7 +339,7 @@ function Loop:Stop(reason)
     MF():SetCheckout(nil)
 
     -- Receipt: what was spent first, then anything left to act on.
-    local head = ({ done = "|cffffffffDone|r", ["AH closed"] = "AH closed" })[reason] or "Stopped"
+    local head = ({ done = "Done", ["AH closed"] = "AH closed" })[reason] or "Stopped"
     local parts = { s.touched > 0 and ("bought %d for %s"):format(s.touched, ADDON.MoneyText(s.spentCopper, "gold"))
                     or "nothing bought" }
     if s.skippedCapped > 0 then parts[#parts + 1] = s.skippedCapped .. " over cap" end
