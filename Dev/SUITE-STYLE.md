@@ -194,4 +194,4 @@ Files in every repo: `icon.png` (64 px, TOC `## IconTexture`), `.assets/logo-256
 
 ## Status
 
-All four addons follow this guide as of 2026-10-22, tested in game: PickupGroup (dev 2572a6e), StockClerk (dev 7d5ccf2), TalentKeeper (dev 0ae5e89), SharedMedia: Tones (icon only). Monochrome palette, header and options pattern, clash prompt, white icons. On `dev`; they ship with each addon's next release.
+All four addons follow this guide as of 2026-10-22, tested in game: PickupGroup (dev 2572a6e), StockClerk (dev 7d5ccf2), TalentKeeper (dev 0ae5e89), SharedMedia: Tones (icon only). Monochrome palette, header and options pattern, clash prompt, white icons. Released 2026-10-22: PickupGroup v1.2.0, StockClerk v1.5.0, TalentKeeper v0.5.0, SharedMedia: Tones v2.7.4.
