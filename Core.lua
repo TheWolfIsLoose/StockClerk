@@ -33,7 +33,7 @@ function ADDON.VersionText()
 end
 
 function ADDON:Print(msg)
-    print("|cff98ff98StockClerk|r: " .. tostring(msg))
+    print("|cffffffffStock|r|cffb3b3b3Clerk|r: " .. tostring(msg))
 end
 
 -- ---------------------------------------------------------------------------
@@ -76,7 +76,7 @@ On("ADDON_LOADED", function(name)
 
     SLASH_STOCKCLERK1, SLASH_STOCKCLERK2, SLASH_STOCKCLERK3 = "/clerk", "/sc", "/stock"
     SlashCmdList.STOCKCLERK = function(msg) ADDON:OnSlashCommand(msg) end
-    ADDON:Print((version:match("^%d") and "v" or "") .. version .. " loaded. Type |cff98ff98/clerk|r to open.")
+    ADDON:Print((version:match("^%d") and "v" or "") .. version .. " loaded. Type |cffffffff/clerk|r to open.")
 end)
 
 On("PLAYER_LOGIN", function()
@@ -214,12 +214,12 @@ end
 -- /clerk
 -- ---------------------------------------------------------------------------
 local HELP = {
-    "|cff98ff98StockClerk|r commands:",
+    "|cffffffffStock|r|cffb3b3b3Clerk|r commands:",
     "  /clerk  |cff8c8c8c— open the main window (also /sc, /stock)|r",
     "  /clerk <item ID or link> |cff8c8c8c— add an item with target 1|r",
     "  /clerk log [clear] |cff8c8c8c— open the log to copy into a bug report, or clear it|r",
     "  /clerk debug |cff8c8c8c— record detailed steps into the log until /reload|r",
-    "  /clerk reset |cffff8888— wipe this character's list|r",
+    "  /clerk reset |cffff6666— wipe this character's list|r",
 }
 
 function ADDON:OnSlashCommand(msg)
@@ -250,7 +250,7 @@ function ADDON:OnSlashCommand(msg)
         self.debug = not self.debug
         if self.debug then
             self.Debug("debug", "detailed recording started")
-            self:Print("Detailed recording |cff98ff98on|r until you /reload. Repeat the problem, then type /clerk log.")
+            self:Print("Detailed recording on until you /reload. Repeat the problem, then type /clerk log.")
         else
             self:Print("Detailed recording off.")
         end

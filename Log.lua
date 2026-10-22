@@ -50,7 +50,7 @@ end
 -- Log:Emit("buy_success", 212283, { qty = 20, spentCopper = 800000 })
 function Log:Emit(kind, itemID, payload)
     if not self.LEVEL[kind] then
-        if ADDON.debug then print("|cffff8888[SC:Log]|r unknown kind: " .. tostring(kind)) end
+        if ADDON.debug then print("|cffff6666[SC:Log]|r unknown kind: " .. tostring(kind)) end
         return
     end
     local buf = Buffer()

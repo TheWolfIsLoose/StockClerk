@@ -127,7 +127,7 @@ end
 local BUY_LOCK  = 1.5  -- seconds Buy waits when an item looks risky
 local DEBOUNCE  = 0.5  -- no Buy within this long of the player's last click
 local PRICEY    = 1.25 -- "well above Last Seen": average unit price over 125% of it
-local AMBER, GREY = "|cffffb84d", "|cff8c8c8c"
+local AMBER, GREY = "|cffffd84a", "|cff8c8c8c"
 
 local function MF() return ADDON.MainFrame end
 
@@ -175,7 +175,7 @@ function Loop:Start(express, lane)
     if self.state.active then return end
     lane = lane or "mine"
     if not (AuctionHouseFrame and AuctionHouseFrame:IsShown()) then
-        return Status("|cffff8888Open the auction house first.|r")
+        return Status("|cffff6666Open the auction house first.|r")
     end
     local queue = {}
     for _, it in ipairs(ADDON.DB:GetSortedItems(lane)) do  -- list order is the priority
@@ -339,7 +339,7 @@ function Loop:Stop(reason)
     MF():SetCheckout(nil)
 
     -- Receipt: what was spent first, then anything left to act on.
-    local head = ({ done = "|cff98FF98Done|r", ["AH closed"] = "AH closed" })[reason] or "Stopped"
+    local head = ({ done = "|cffffffffDone|r", ["AH closed"] = "AH closed" })[reason] or "Stopped"
     local parts = { s.touched > 0 and ("bought %d for %s"):format(s.touched, ADDON.MoneyText(s.spentCopper, "gold"))
                     or "nothing bought" }
     if s.skippedCapped > 0 then parts[#parts + 1] = s.skippedCapped .. " over cap" end

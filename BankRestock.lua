@@ -223,7 +223,7 @@ function BR:SettleGold()
     -- Short enough for the footer beside the button; Recent activity has the long form.
     local msg = move > 0 and ("Deposited %s to the warband"):format(gold(move))
         or move < 0 and ("Withdrew %s"):format(gold(-move)) or "No gold in the warband"
-    if short > 0 then msg = msg .. (" |cffff8888(%s short)|r"):format(gold(short)) end
+    if short > 0 then msg = msg .. (" |cffff6666(%s short)|r"):format(gold(short)) end
     return msg .. "."
 end
 
@@ -237,8 +237,8 @@ function BR:Start(express, dir)
     if self.active then return end
     local mf = ADDON.MainFrame
     if not ADDON.bankOpen then mf:SetStatus("Open the bank first."); return end
-    if InCombatLockdown() then mf:SetStatus("|cffff8888Can't use the bank in combat.|r"); return end
-    if GetCursorInfo() then mf:SetStatus("|cffff8888Put down the item on your cursor first.|r"); return end
+    if InCombatLockdown() then mf:SetStatus("|cffff6666Can't use the bank in combat.|r"); return end
+    if GetCursorInfo() then mf:SetStatus("|cffff6666Put down the item on your cursor first.|r"); return end
     self.dir = dir or "pull"
     self.active, self.moved, self.tabs, self.run = true, {}, {}, (self.run or 0) + 1
     self.mode = express and "express" or "manual"
@@ -278,9 +278,9 @@ end
 function BR:_PullReceipt(items, reason)
     local msg = items == 0 and "Nothing pulled from the bank." or ("Pulled %s from the bank."):format(plural(items, "item"))
     if reason == "not enough bag space" and items == 0 then
-        msg = "|cffff8888Not enough bag space.|r"
+        msg = "|cffff6666Not enough bag space.|r"
     elseif reason then
-        msg = msg .. " |cffff8888Stopped: " .. reason .. ".|r"
+        msg = msg .. " |cffff6666Stopped: " .. reason .. ".|r"
     end
     local stillShort = #self:Shortfalls()
     if stillShort > 0 and reason ~= "not enough bag space" then  -- they're in the bank, not the AH
@@ -293,7 +293,7 @@ end
 
 -- "Done: deposited 3 to the warband · 1 can't go in the warband · 2 more waiting in your mail"
 function BR:_DepositReceipt(items, reason)
-    local head = ({ [false] = "|cff5AA9FFDone|r", ["warband bank is full"] = "|cffff8888Warband bank is full|r" })[reason or false]
+    local head = ({ [false] = "|cff5AA9FFDone|r", ["warband bank is full"] = "|cffff6666Warband bank is full|r" })[reason or false]
         or ("Stopped (" .. reason .. ")")
     local parts = { items > 0 and ("deposited %s to the warband"):format(plural(items, "item")) or "nothing deposited" }
     local _, _, refused = self:DepositPlan()

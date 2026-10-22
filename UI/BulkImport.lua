@@ -151,7 +151,7 @@ local function BuildFrame()
     well:EnableMouse(true)
     well:SetScript("OnMouseDown", function() if not AddDropped() then edit:SetFocus() end end)
 
-    -- Mint border while the cursor holds an item: "you can drop here".
+    -- White border while the cursor holds an item: "you can drop here".
     local function PaintDropZone()
         local c = MF.CursorItemID() and PALETTE.brand or PALETTE.ringRest
         for _, t in ipairs(wellEdges) do t:SetColorTexture(c[1], c[2], c[3], 1) end
@@ -182,13 +182,13 @@ local function BuildFrame()
     local addBtn = CreateFrame("Button", nil, f)
     addBtn:SetPoint("BOTTOMLEFT", PAD, 10)
     addBtn:SetPoint("BOTTOMRIGHT", -PAD, 10)
-    addBtn:SetHeight(22)
+    addBtn:SetHeight(20)
     MF.StyleButton(addBtn)
     addBtn:SetText("Add all")
     addBtn:SetScript("OnClick", function()
         local entries = ParseBulkText(edit:GetText())
         if #entries == 0 then
-            status:SetText("|cffff8888Nothing to add yet.|r")
+            status:SetText("|cffff6666Nothing to add yet.|r")
             return
         end
         local added, updated, errored = CommitBatch(entries)
@@ -200,11 +200,11 @@ local function BuildFrame()
             for _, e in ipairs(entries) do
                 if not e.ok and #bad < 2 then bad[#bad + 1] = ("line %d: %s"):format(e.line, e.err) end
             end
-            status:SetText(("|cffff8888%s, %d skipped.|r %s"):format(msg, errored, table.concat(bad, "; ")))
+            status:SetText(("|cffff6666%s, %d skipped.|r %s"):format(msg, errored, table.concat(bad, "; ")))
         else
             edit:SetText("")
             status:SetText("")
-            MF:SetStatus("|cff98ff98Bulk import: " .. msg .. (MF:View() == "warband" and " on the warband list" or "") .. ".|r")
+            MF:SetStatus("Bulk import: " .. msg .. (MF:View() == "warband" and " on the warband list" or "") .. ".")
             f:Hide()
         end
     end)
