@@ -77,7 +77,7 @@ Rules:
 
 Every panel and window starts with the same header strip (`band`):
 
-- **Left:** the addon icon, the two-tone name, and the version in Small beside it (`warn` yellow for dev / alpha / beta, muted for releases). The icon is the monochrome mark; the name is two-tone: first word white, second word `glyphRest`.
+- **Left:** the addon icon (16px), the two-tone name in Regular (12, sized for the tightest panels), and the version in Small on its baseline (`warn` yellow for dev / alpha / beta, muted for releases). The icon is the monochrome mark; the name is two-tone: first word white, second word `glyphRest`.
 - **Right:** header icons, close last. The options icon sits left of close.
 - Name and version never move to the bottom of a panel.
 
@@ -130,7 +130,7 @@ The suite has two motions. Both stop within 5 s (2.2.2), neither is ever the onl
 | 3.2.4 Consistent identification | one look and one name per control across the suite |
 | 3.3.2 Labels | placeholders / labels say what a field is; disabled controls say why |
 
-Accepted exceptions: PickupGroup's apply-as role icons sit 17px apart.
+Accepted exceptions: PickupGroup's apply-as role icons sit 17px apart. StockClerk's Restock button stays in its footer, because it turns into the checkout bar during a run.
 
 Measure: WCAG relative luminance of each colour composited over its real background; ratio = (L1 + 0.05) / (L2 + 0.05). Re-measure after any palette change.
 
