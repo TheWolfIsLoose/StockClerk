@@ -27,9 +27,9 @@ local function Build()
 
     local settingsTitle = f:CreateFontString(nil, "OVERLAY", "StockClerkFont")
     settingsTitle:SetPoint("TOPLEFT", 12, -10)
-    settingsTitle:SetText("|cff98FF98Settings|r")
+    settingsTitle:SetText("Settings")
 
-    -- Flat checkbox (light well, gray ring, mint square when on) whose label is
+    -- Flat checkbox (light well, gray ring, white square when on) whose label is
     -- part of the click area, 24px tall (WCAG 2.5.8). Tooltip only where the label needs more.
     -- store: the table the setting lives in (account settings unless given).
     local function Check(y, label, key, tip, store)
@@ -40,7 +40,7 @@ local function Build()
         MF.ApplyFill(c, Palette.fieldFill)
         MF.AddBlackBorder(c, Palette.ringRest)
         local tick = c:CreateTexture(nil, "OVERLAY")
-        tick:SetColorTexture(0.596, 1, 0.596)  -- mint: settings aren't tied to a list view
+        tick:SetColorTexture(1, 1, 1)  -- white: settings aren't tied to a list view
         tick:SetSize(8, 8)
         tick:SetPoint("CENTER")
         c:SetCheckedTexture(tick)
@@ -108,7 +108,7 @@ local function Build()
     local add = CreateFrame("Button", nil, f)
     add:SetPoint("TOPLEFT", 12, -204)
     add:SetPoint("RIGHT", -12, 0)
-    add:SetHeight(22)
+    add:SetHeight(20)
     MF.StyleButton(add)
     add:SetText("Add common consumables")
     add:HookScript("OnEnter", function(self)
@@ -133,7 +133,7 @@ local function Build()
     -- opens the log) explains how to send a bug report.
     local feedTitle = f:CreateFontString(nil, "OVERLAY", "StockClerkFont")
     feedTitle:SetPoint("TOPLEFT", 12, -244)
-    feedTitle:SetText("|cff98FF98Recent activity|r")
+    feedTitle:SetText("Recent activity")
     local function FeedHelp(owner)
         GameTooltip:SetOwner(owner, "ANCHOR_RIGHT")
         GameTooltip:SetText("Recent activity", 1, 1, 1)
@@ -227,7 +227,7 @@ function Sidecar:Refresh()
             -- Base colour on the font string (red for failures), so the item
             -- name's |r falls back to it; the name itself is quality-coloured.
             row.text:SetText(("|cff8c8c8c[%s]|r %s"):format(date("%H:%M", e.ts), ADDON.Log:Format(e, false, true)))
-            row.text:SetTextColor(unpack((e.kind == "error" or e.kind == "buy_fail") and { 1, 0.533, 0.533 } or { 1, 1, 1 }))
+            if e.kind == "error" or e.kind == "buy_fail" then row.text:SetTextColor(unpack(Palette.short)) else row.text:SetTextColor(1, 1, 1) end
             row:Show()
         end
     end

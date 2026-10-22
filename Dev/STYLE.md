@@ -1,8 +1,8 @@
 # StockClerk — UI style rules
 
 Suite-wide rules (colour tokens, controls, accessibility, words, chat) live in
-the "Suite style guide" doc in the WoW Addons project; this file holds StockClerk
-'s specifics and wins only where it names an exception.
+`Dev/SUITE-STYLE.md`; this file holds StockClerk's
+specifics and wins only where it names an exception.
 
 StockClerk should feel like a real shopping list: pocket-sized, efficient,
 minimal without being brutalist. Every pixel and every control earns its
@@ -20,11 +20,12 @@ place. New UI follows these rules; the helpers named here already exist in
 - One window fill (`Palette.bgDark`); regions are separated by 1px black
   borders and the faint `bandTint` strip, never by extra shades.
 - Text and status colours: the suite tokens only (white, soft 0.74, muted
-  `8C8C8C`, faint `666666` for decoration, amber `FFB84D`, red `FF8888`).
-- Accent (`Palette.brand`): hover, focus, "on", marks. Mint `#98FF98` in the
-  Mine view, warband blue `#5AA9FF` in the Warband view (`MF:SetView`
-  recolours the table in place). Deposit marks are blue in either view. The
-  mint "Stock" in the title never changes. Colour is never the only cue.
+  `8C8C8C`, faint `666666` for decoration, yellow `FFD84A`, red `FF6666`).
+- Accent (`Palette.brand`): hover, focus, "on", marks. White in the Mine
+  view, warband blue `#5AA9FF` (the suite's info blue) in the Warband view
+  (`MF:SetView` recolours the table in place). Deposit marks are blue in
+  either view. The title is two-tone (white "Stock", gray "Clerk") and never
+  changes. Colour is never the only cue.
 - Buttons: `StyleButton` only (flat fill, band, hover wash, press flash, gray
   ring `Palette.ringRest`, lighter on hover; label via `SetText`, muted when
   disabled). No Blizzard button or
@@ -33,12 +34,12 @@ place. New UI follows these rules; the helpers named here already exist in
 - Side panels: `MF.DockedPanel(name)` + `MF:ShowPanel(panel)` (right edge,
   window height, one at a time).
 - Icons: drawn bars via `DrawGlyph`, never font glyphs. Header icons via
-  `HeaderIcon` (gray at rest, mint on hover, one-line tooltip).
-- Checkboxes: 16px light well + gray ring, mint square when on; the label is
+  `HeaderIcon` (gray at rest, white on hover, one-line tooltip).
+- Checkboxes: 16px light well + gray ring, white square when on; the label is
   part of the click area, 24px tall; rows 24px apart.
 - Editable spots (text boxes, Need / Cap cells, the bulk-import well) show a
   light well (`Palette.fieldFill`) and a gray ring at rest; the ring fades
-  lighter on hover and to mint while typing (`AttachBorderAnimator`).
+  lighter on hover and to white while typing (`AttachBorderAnimator`).
 - The Mine / Warband switch marks the list on screen with its colour and a
   2px bar, like every "on" toggle.
 - All fills use `SetColorTexture` (White8x8 + vertex colour renders
@@ -62,11 +63,11 @@ place. New UI follows these rules; the helpers named here already exist in
 - Timestamps are bracketed: `[14:24]` in the feed, `[14:24:10]` in the log.
 - Footer = feedback on the last action; it stays until the next one. No
   centre-screen alert text. During a restock it is the checkout bar (item
-  and price over total and progress or amber warnings; Skip; Buy in the
+  and price over total and progress or yellow warnings; Skip; Buy in the
   Restock button's place, same right edge) and the end-of-run receipt
   lands there. No flyouts or popups for a run.
 - Run state lives in the list: a mark in the grip's slot (dot queued,
-  mint chevron current, mint check done, grey/amber/red dash for skipped,
+  accent chevron current, accent check done, grey/yellow/red dash for skipped,
   over cap, not bought), its detail in the grip tooltip. Marks last until
   the AH or bank closes.
 

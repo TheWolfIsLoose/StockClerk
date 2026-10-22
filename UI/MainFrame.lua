@@ -8,7 +8,7 @@
 
     Two lists (header switch: Mine · Warband). The view decides what the
     list shows and where adds go; it never changes what Restock does. The
-    accent (Palette.brand) is mint for Mine, warband blue for Warband.
+    accent (Palette.brand) is white for Mine, warband blue for Warband.
 
     Row: [grip] [icon] name ........ have (+stash)  [need]  [cap]  seen  [x]
     Click Need or Cap to edit; shift-click to link; with the AH open, click
@@ -37,7 +37,7 @@ local EMPTY_WARBAND = "No warband items yet.\n\nFor each item on this list, Stoc
 local FONT_FALLBACK = "Interface\\AddOns\\StockClerk\\Media\\BarlowSemiCondensed-Medium.ttf"
 local FONTS = {
     StockClerkFontSmall = { 10, 1 }, StockClerkFont = { 12, 1 }, StockClerkFontLarge = { 16, 1 },
-    StockClerkFontDisabled = { 12, 0.55 },
+    StockClerkFontDisabled = { 10, 0.55 },  -- disabled button labels: Small in muted
 }
 for name, spec in pairs(FONTS) do
     local fo = CreateFont(name)
@@ -73,19 +73,19 @@ local Palette = {
     hoverWash    = { 0.851, 0.851, 0.851, 0.15 }, -- "the mouse is here"
     pressFill    = { 0.851, 0.851, 0.851, 0.22 },
     border       = { 0, 0, 0, 1 },
-    brand        = { 0.596, 1, 0.596, 1 },        -- accent: mint, or warband blue in the Warband view (SetView)
-    short        = { 1, 0.533, 0.533, 1 },     -- bad: red FF8888 (suite token)
+    brand        = { 1, 1, 1, 1 },                -- accent: white, or warband blue in the Warband view (SetView)
+    short        = { 1, 0.4, 0.4, 1 },     -- bad: red ff6666 (suite token)
     rowSeparator = { 0.15, 0.15, 0.15, 1 },
 }
 MF.Palette = Palette
--- #5AA9FF: apart from mint in lightness, not just hue (holds under colour-
--- deficiency filters); WoW's own Warbound #00CCFF is too close to mint.
-local MINT, WARBAND = { 0.596, 1, 0.596, 1 }, { 0.353, 0.663, 1, 1 }
+-- Monochrome suite: white for Mine, the suite's info blue #5AA9FF for the
+-- Warband view (its one mode colour; the lit tab is the non-colour cue).
+local WHITE, WARBAND = { 1, 1, 1, 1 }, { 0.353, 0.663, 1, 1 }
 MF.WARBAND_HEX = "5AA9FF"
 
 local TRASH_TEX     = "Interface\\Buttons\\UI-GroupLoot-Pass-Up"  -- native red X
 local QUESTION_ICON = 134400
-local ICON_REST     = { 0.85, 0.85, 0.85 }
+local ICON_REST     = { 0.7, 0.7, 0.7 }  -- glyphRest
 
 -- ---------------------------------------------------------------------------
 -- Style helpers. Fills use SetColorTexture (White8x8 + SetVertexColor renders
@@ -154,8 +154,8 @@ local function StyleButton(btn)
     btn:HookScript("OnLeave", function() wash:Hide(); SetBorderColor(btn, Palette.ringRest) end)
     btn:HookScript("OnMouseDown", function(self) if self:IsEnabled() then ApplyBand(self, Palette.pressFill) end end)
     btn:HookScript("OnMouseUp", function(self) ApplyBand(self, Palette.btnRest) end)
-    btn:SetNormalFontObject("StockClerkFont")
-    btn:SetHighlightFontObject("StockClerkFont")
+    btn:SetNormalFontObject("StockClerkFontSmall")  -- buttons: Small, 20px (suite)
+    btn:SetHighlightFontObject("StockClerkFontSmall")
     btn:SetDisabledFontObject("StockClerkFontDisabled")
 end
 
@@ -175,7 +175,7 @@ local function DrawGlyph(frame, bars)
     return tint
 end
 
--- Header icon button: drawn glyph, mint on hover, one-line tooltip (below
+-- Header icon button: drawn glyph, white on hover, one-line tooltip (below
 -- unless anchor says otherwise).
 local CLOSE_GLYPH = { { 12, 2, 0, math.pi / 4 }, { 12, 2, 0, -math.pi / 4 } }
 local function HeaderIcon(parent, bars, tip, onClick, anchor)
@@ -232,7 +232,7 @@ MF.ApplyFill, MF.AddBlackBorder, MF.StyleButton = ApplyFill, AddBlackBorder, Sty
 MF.DrawGlyph, MF.HeaderIcon, MF.CLOSE_GLYPH = DrawGlyph, HeaderIcon, CLOSE_GLYPH
 MF.CursorItemID, MF.DockedPanel = CursorItemID, DockedPanel
 
--- Toolbar edit box: a styled container (sunken well, mint border on hover or
+-- Toolbar edit box: a styled container (sunken well, white border on hover or
 -- focus) around the EditBox, which covers the container and eats its hover,
 -- so both count as one hover region. The placeholder names the field (shown
 -- while empty and unfocused); the tooltip explains it.
@@ -310,7 +310,7 @@ local MARK_SHAPES = {
     dot     = { { 3, 3, 0 } },
     dash    = { { 8, 2, 0 } },
 }
-local MARK_GREY, MARK_AMBER = { 0.55, 0.55, 0.55 }, { 1, 0.72, 0.3 }
+local MARK_GREY, MARK_AMBER = { 0.55, 0.55, 0.55 }, { 1, 0.847, 0.29 }
 local MARK_STYLES = {
     queued  = { "dot", MARK_GREY },       current = { "chevron", Palette.brand },
     done    = { "check", Palette.brand }, skipped = { "dash", MARK_GREY },
@@ -454,7 +454,7 @@ local function BuildRow(row)
     row.name:SetJustifyH("LEFT")
     row.name:SetWordWrap(false)
 
-    -- Need and Cap: click-to-edit cells (faint well; dark fill and mint border
+    -- Need and Cap: click-to-edit cells (faint well; dark fill and white border
     -- on hover). A click swaps in an inline edit box. The edit box never calls
     -- EnableKeyboard(true), and clears focus when hidden (row recycled
     -- mid-edit): a hidden EditBox holding the keyboard swallows every key
@@ -510,7 +510,7 @@ local function BuildRow(row)
         GameTooltip:AddLine(MoneyText(lp.copper) .. " per unit", 1, 1, 1)
         GameTooltip:AddLine(agoText .. how, 0.74, 0.74, 0.74)
         if ago > ADDON.DB:Settings().lastPriceTTL then
-            GameTooltip:AddLine("Price is stale: search again to refresh", 1, 0.72, 0.3)
+            GameTooltip:AddLine("Price is stale: search again to refresh", 1, 0.847, 0.29)
         end
         GameTooltip:Show()
     end)
@@ -546,7 +546,7 @@ local function BuildRow(row)
             -- not during a restock, whose own search it would cancel
             MF:SetStatus(("Searching AH for %s..."):format(self.name:GetText()))
             ADDON.AH:SearchItem(self._itemID, function(ok, results)
-                if not ok then return MF:SetStatus("|cffff8888AH search failed: " .. tostring(results) .. "|r") end
+                if not ok then return MF:SetStatus("|cffff6666AH search failed: " .. tostring(results) .. "|r") end
                 if results[1] then
                     MF:SetStatus(("Cheapest: %s / unit (%d listings)"):format(MoneyText(results[1].unitPrice), #results))
                 else
@@ -700,11 +700,11 @@ local function InitializeRow(row, data)
     -- Not cached yet: GET_ITEM_INFO_RECEIVED repaints the list (Core).
     if link then ShowLink(row.name, link) else row.name:SetText(data.name) end
 
-    -- Have: red when short, mint when stocked; the (+N) stays grey.
+    -- Have: red when short, white when stocked; the (+N) stays grey.
     local bd = ADDON.Inventory:GetBreakdown(itemID)
     local have, stashed, short = MF:Counts(itemID, data.need)
     row._breakdown = bd
-    row.have:SetText((short > 0 and "|cffff8888%d|r" or "|cff98FF98%d|r"):format(have)
+    row.have:SetText((short > 0 and "|cffff6666%d|r" or "%d"):format(have)
         .. (stashed > 0 and ("  |cff8c8c8c(+%d)|r"):format(stashed) or ""))
     row.accent:SetColorTexture(unpack(short > 0 and { 0xe5 / 255, 0x62 / 255, 0x4a / 255 } or { 0x4a / 255, 0xde / 255, 0x80 / 255 }))
     row.need:SetText(("|cffCCCCCC%d|r"):format(data.need))
@@ -721,12 +721,12 @@ local function InitializeRow(row, data)
     row._current:SetColorTexture(accent[1], accent[2], accent[3], 0.08)
     if mark and mark.kind == "current" then row.accent:SetColorTexture(unpack(accent)) end
 
-    -- Cap: mint "Ng"; red when last seen is above it (a buy would be refused);
+    -- Cap: white "Ng"; red when last seen is above it (a buy would be refused);
     -- a dash when unset (buys at market; checkout warns "No cap set").
     local lp = data.lastPrice
     if data.maxPrice then
         local over = lp and lp.copper > data.maxPrice
-        row.cap:SetText(("|cff%s%dg|r"):format(over and "ff8888" or "98FF98", math.floor(data.maxPrice / 10000)))
+        row.cap:SetText((over and "|cffff6666%dg|r" or "%dg"):format(math.floor(data.maxPrice / 10000)))
     else
         row.cap:SetText("|cff666666\226\128\148|r")
     end
@@ -809,7 +809,7 @@ function MF:Build()
     end)
     f:SetScript("OnShow", function() MF:RefreshRestockBtn() end)
 
-    -- ---- Header: title, version, side panel, close; drag to move ----------
+    -- ---- Header: icon, title, version, side panel, close; drag to move ----
     local header = CreateFrame("Frame", nil, f)
     header:SetHeight(26)
     header:SetPoint("TOPLEFT")
@@ -821,14 +821,18 @@ function MF:Build()
     header:SetScript("OnDragStart", function() f:StartMoving() end)
     header:SetScript("OnDragStop", function() f:StopMovingOrSizing(); SavePosition(f) end)
 
-    local title = header:CreateFontString(nil, "OVERLAY", "StockClerkFontLarge")
-    title:SetPoint("LEFT", 12, 0)
-    title:SetText("|cff98FF98Stock|rClerk")
-    -- Version ("dev 7c13266" in a git checkout); amber for alpha/beta.
+    local mark = header:CreateTexture(nil, "ARTWORK")
+    mark:SetSize(16, 16)
+    mark:SetPoint("LEFT", 8, 0)
+    mark:SetTexture("Interface\\AddOns\\StockClerk\\icon.png")
+    local title = header:CreateFontString(nil, "OVERLAY", "StockClerkFont")  -- Regular, like the suite's other headers
+    title:SetPoint("LEFT", mark, "RIGHT", 6, 0)
+    title:SetText("|cffffffffStock|r|cffb3b3b3Clerk|r")
+    -- Version ("dev 7c13266" in a git checkout); yellow for dev / alpha / beta.
     local version = ADDON.VersionText()
     local versionLabel = header:CreateFontString(nil, "OVERLAY", "StockClerkFontSmall")
-    versionLabel:SetPoint("LEFT", title, "RIGHT", 6, -1)
-    versionLabel:SetText(((version:match("%-alpha") or version:match("%-beta")) and "|cffffb84d" or "|cff8c8c8c") .. version .. "|r")
+    versionLabel:SetPoint("BOTTOMLEFT", title, "BOTTOMRIGHT", 6, 1)
+    versionLabel:SetText(((version:match("%-alpha") or version:match("%-beta") or version:match("^dev")) and "|cffffd84a" or "|cff8c8c8c") .. version .. "|r")
 
     local closeX = HeaderIcon(header, CLOSE_GLYPH, "Close", function() MF:Hide() end)
     closeX:SetPoint("RIGHT", -4, 0)
@@ -917,7 +921,7 @@ function MF:Build()
         if not itemID or itemID == 0 then return end
         local need = tonumber(countBox:GetText()) or 1
         ADDON.ItemResolver:Resolve(itemID, function(resolvedID, name)
-            if not resolvedID then return MF:SetStatus(("|cffff8888Unknown item ID: %d|r"):format(itemID)) end
+            if not resolvedID then return MF:SetStatus(("|cffff6666Unknown item ID: %d|r"):format(itemID)) end
             ADDON.DB:SetItem(resolvedID, need, nil, MF:View())
             ADDON.Log:Emit("add", resolvedID, { name = name, need = need, list = MF:View() })
             addBox:SetText("")
@@ -934,7 +938,7 @@ function MF:Build()
     countBox:SetScript("OnTabPressed", function() addBox:SetFocus() end)
 
     -- Quick add: drop an item on the Item ID box (or click it while holding
-    -- one) to fill in its ID; Enter still commits. A mint outline shows while
+    -- one) to fill in its ID; Enter still commits. A white outline shows while
     -- the cursor holds an item.
     local function StampDrop()
         local id = CursorItemID()
@@ -985,7 +989,7 @@ function MF:Build()
     Header("Cap",  -106)
     Header("Seen", -30)
 
-    -- "Short items only" filter: drawn funnel, dim mint off, bright mint on.
+    -- "Short items only" filter: drawn funnel, dim off, bright on (the view's accent).
     local filterBtn = CreateFrame("Button", nil, headers)
     filterBtn:SetSize(18, 16)
     filterBtn:SetHitRectInsets(-3, -3, -4, -4)  -- 24px target (WCAG 2.5.8)
@@ -1000,7 +1004,7 @@ function MF:Build()
     filterBtn:SetScript("OnEnter", function(self)
         tintFilter(Palette.brand)
         GameTooltip:SetOwner(self, "ANCHOR_BOTTOM")
-        GameTooltip:SetText((ADDON.DB.char.ui.stuckOnly and "|cff98ff98Filter on|r  " or "") .. "Show only: items you're short on", 1, 1, 1)
+        GameTooltip:SetText((ADDON.DB.char.ui.stuckOnly and "Filter on  " or "") .. "Show only: items you're short on", 1, 1, 1)
         GameTooltip:AddLine("Hide items that are fully stocked.", 0.74, 0.74, 0.74, true)
         GameTooltip:Show()
     end)
@@ -1020,7 +1024,7 @@ function MF:Build()
     -- During an AH restock the same button is Buy (right edge fixed, so the
     -- cursor never moves); RestockLoop debounces it against a double click.
     local restockBtn = CreateFrame("Button", nil, footer)
-    restockBtn:SetSize(160, 22)
+    restockBtn:SetSize(160, 20)
     restockBtn:SetPoint("RIGHT", -18, 0)  -- leaves the corner to the resize grip
     StyleButton(restockBtn)
     restockBtn:SetMotionScriptsWhileDisabled(true)  -- a disabled button still explains itself
@@ -1058,14 +1062,14 @@ function MF:Build()
 
     -- Checkout bar (during a restock, in place of the status text):
     --   [x]  16 x Flask of the Shattered Sun          [Skip] [Buy]
-    --        7,424g  2 of 4 (or amber warnings)
+    --        7,424g  2 of 4 (or yellow warnings)
     -- x (far from Buy) and Escape are the only ways to stop a run.
     local stopX = HeaderIcon(footer, { { 9, 2, 0, math.pi / 4 }, { 9, 2, 0, -math.pi / 4 } },
         "Stop (or press Escape)", function() MF.StopRun("user_stop") end, "ANCHOR_TOP")
     stopX:SetSize(20, 24)
     stopX:SetPoint("LEFT", 3, 0)
     local skipBtn = CreateFrame("Button", nil, footer)
-    skipBtn:SetSize(50, 22)
+    skipBtn:SetSize(50, 20)
     skipBtn:SetPoint("RIGHT", restockBtn, "LEFT", -6, 0)
     StyleButton(skipBtn)
     skipBtn:SetText("Skip")
@@ -1148,7 +1152,7 @@ end
 
 function MF:SetView(view)
     ADDON.DB.char.ui.view = view
-    local c = view == "warband" and WARBAND or MINT
+    local c = view == "warband" and WARBAND or WHITE
     for i = 1, 4 do Palette.brand[i] = c[i] end
     if not self.frame then return end
     for _, fs in ipairs(self.headerLabels) do fs:SetTextColor(unpack(Palette.brand)) end
@@ -1178,12 +1182,12 @@ function MF:_PaintSwitch()
         local label = v == "mine" and "Mine" or "Warband"
         b.bar:SetShown(v == view)
         if v == view then
-            b.fs:SetText(("|cff%s%s|r"):format(v == "warband" and MF.WARBAND_HEX or "98FF98", label))
-            local c = v == "warband" and WARBAND or MINT
+            b.fs:SetText(("|cff%s%s|r"):format(v == "warband" and MF.WARBAND_HEX or "ffffff", label))
+            local c = v == "warband" and WARBAND or WHITE
             b.bar:SetColorTexture(c[1], c[2], c[3], 1)
         else
             local n = ADDON.RestockLoop:PreviewShortfallCount(v)
-            b.fs:SetText("|cff8c8c8c" .. label .. (n > 0 and (" |cffff8888%d|r"):format(n) or "") .. "|r")
+            b.fs:SetText("|cff8c8c8c" .. label .. (n > 0 and (" |cffff6666%d|r"):format(n) or "") .. "|r")
         end
         b:SetWidth(b.fs:GetStringWidth() + 2)
     end
@@ -1250,7 +1254,7 @@ function MF:RestockState()
         if wait then  -- armed: say what, and why Buy may be waiting
             if wait > 0 and #plan.warnings > 0 then st.label = ("Buy (%d)"):format(math.ceil(wait)) end
             st.tip = ("Buy %d %s for %s"):format(plan.planQuantity, plan.name, MoneyText(plan.plannedSpend))
-            for _, w in ipairs(plan.warnings) do st.lines[#st.lines + 1] = "|cffffb84d" .. w .. "|r" end
+            for _, w in ipairs(plan.warnings) do st.lines[#st.lines + 1] = "|cffffd84a" .. w .. "|r" end
         end
         if loop.state.lane == "warband" and st.enabled then st.label = BLUE .. st.label .. "|r" end
         return st
@@ -1377,7 +1381,7 @@ function MF:SetStatus(text, skipLog)
 end
 
 -- ---------------------------------------------------------------------------
--- Drag to reorder (the grip). A mint line follows the cursor to the nearest
+-- Drag to reorder (the grip). A white line follows the cursor to the nearest
 -- gap between visible rows; dropping reorders the list (= restock order).
 -- Above or below the rows means top or bottom.
 -- ---------------------------------------------------------------------------
