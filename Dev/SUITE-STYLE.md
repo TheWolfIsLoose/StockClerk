@@ -93,7 +93,7 @@ Every panel and window starts with the same header strip (`band`):
 | Header icon | drawn glyph only (no game textures), `glyphRest` at rest, white on hover, one-line tooltip | 24px target |
 | Options icon | the drawn three-bar glyph in the header, tooltip "Settings & Activity" (or "Settings") | opens the addon's options (and activity / log) as a view in its side panel; one per addon, nowhere else (no Options tab) |
 | More... menu | a button labelled "More..." opening the suite's picker (headings, 24px check rows, plain rows) | for an item's less-used actions (rename, copy, group, delete); never for the addon's options. *On trial in TalentKeeper.* |
-| Destructive action | label turns to "Sure?" (in `bad`) for 3 s; second click acts | no confirm dialogs |
+| Destructive action | label turns to "Sure?" in `bad` with a `bad` ring, flashing (the pulse, 3 x 1 s) for 3 s; second click acts | no confirm dialogs |
 | Side panel / sidecar | docked to the window's edge, window height, one view at a time | opens where the player needs it (PickupGroup: with the search pane); forms and options open as a view inside it, never a separate window |
 | Footer band | 36px, a black 1px rule over a `band` strip | holds a form's buttons when it opens in the panel |
 | Clash prompt | a view in the side panel: Large title naming the choice ("Turn off <other addon>'s group finder?"), a `soft` note saying what overlaps, one 24px check row per clashing feature (ticked = theirs stays on), footer band with "Reload now" and "Later" | while a clash stands, our overlapping part is off. The view opens by itself the next time the panel opens; at login, one chat line points there. Unticking turns their feature off from the next reload: our addon writes that one setting in the other addon's saved settings, or turns the whole addon off when the clash is the whole addon; "Later" keeps ours off and asks again next login. Follows TalentKeeper's "Turn off the other talent addons?" view |
@@ -112,7 +112,7 @@ The suite has two motions. Both stop within 5 s (2.2.2), neither is ever the onl
 | Motion | Look | Used for |
 |---|---|---|
 | **Shimmer** | one 2 s white sweep (low alpha) across a row (a 90px band) | something new or just changed in a list: PickupGroup's new groups, TalentKeeper's saved / tagged / moved builds and the build that just went into the tree. Skipped when too many rows would shimmer at once (PickupGroup: 20). |
-| **Pulse** | alpha pulse, 3 times, then holds | "more below" chevrons, the picker's attention mark |
+| **Pulse** | alpha pulse, 3 times, then holds | "more below" chevrons, the picker's attention mark, an armed "Sure?" (1 s pulses; it lapses after the third) |
 
 - **Motion during a game hitch is invisible:** don't animate on events where the game freezes (a spec change landing). Animate before (a cast fill) or after.
 - A new motion joins this table before it ships in any addon.
