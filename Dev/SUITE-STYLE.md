@@ -194,10 +194,4 @@ Files in every repo: `icon.png` (64 px, TOC `## IconTexture`), `.assets/logo-256
 
 ## Status
 
-Reconciled with the addons (PickupGroup 1.1.0, StockClerk 1.4.0, TalentKeeper 0.4.0). Palette moved to monochrome (no addon updated yet). Gaps each addon closes in its GUI pass:
-
-- **All:** palette swap (mint to white / `glyphRest`, amber to yellow, red to `FF6666`, alt accent to `info`, marks ▲ / ✕ beside warn / bad); two-tone titles and chat prefix in white + gray; white shimmer; icons redrawn in white (icon.png, logo-256, logo).
-
-- **PickupGroup:** name + version move from bottom right to the header (sidecar, quick list); Options tab becomes the header's options icon; the leader refresh button gets a drawn glyph; the clash alert window becomes a clash prompt in the sidecar (one chat line at login), and the Group Finder clash switches PickupGroup's list off like the notes and quick list clashes already do; sidecar buttons settle on 20px.
-- **StockClerk:** matches (it set the header and options patterns).
-- **TalentKeeper:** the game-texture gear becomes the drawn options icon.
+All four addons follow this guide as of 2026-10-22, tested in game: PickupGroup (dev 2572a6e), StockClerk (dev 7d5ccf2), TalentKeeper (dev 0ae5e89), SharedMedia: Tones (icon only). Monochrome palette, header and options pattern, clash prompt, white icons. On `dev`; they ship with each addon's next release.
