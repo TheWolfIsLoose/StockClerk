@@ -14,14 +14,15 @@ Reference for accessibility: WCAG 2.2 (https://www.w3.org/TR/WCAG22/).
 - **All controls together, at the top.** A panel's controls live in one place, never split between top and bottom. Order top to bottom: header, controls, the state (what's selected / what's live), then tabs and the list, which runs to the bottom. A form opened in the panel is the one exception: its buttons sit in the footer band.
 - **A button does one thing, always,** whenever the action is allowed. No buttons whose meaning changes with state or a second press. The two-click guard on destructive actions doesn't break this: the button still does one thing, the first click only arms it.
 - **Stable positions.** A set of items (specs, roles, views) keeps each item in the same spot and fills a fixed strip (width shared out), so the layout never shifts or leaves holes by class or state.
-- **Flat and quiet.** Flat fills, 1px lines, one accent. Colour carries meaning, never decoration.
+- **Monochrome, colour for meaning only.** Whites and grays carry the whole UI: on / off, focus, selection, success, identity. Colour appears only when something needs attention (`warn`, `bad`, `info`), when it's Blizzard's own, or when it identifies content.
+- **Flat and quiet.** Flat fills, 1px lines.
 - **Controls look like controls at rest**, not only on hover.
 - **Help lives in tooltips**, never in standing lines of text. A short status or reason line is fine when it changes.
 - **Standalone.** No dependency on other addons; optional pass-through from them (Raider.IO, LibSharedMedia) when present.
 
 ## Colour tokens
 
-All text tokens pass 4.5:1 on the panel (0.06 grey) and the window (0.031 grey).
+All text tokens pass 4.5:1 on the panel (0.06 grey) and the window (0.031 grey); monochrome palette.
 
 ### Surfaces and lines
 
@@ -35,31 +36,32 @@ All text tokens pass 4.5:1 on the panel (0.06 grey) and the window (0.031 grey).
 | `band` | white 3.5% | header / toolbar / footer strip |
 | row stripe | white 5% | alternate rows |
 | `hoverWash` / `pressFill` | 0.851 grey, 15% / 22% | hover, press |
-| selection wash | mint, low alpha | the row the player clicked |
+| selection wash | white 12% | the row the player clicked |
 | `border` | black | window edges, icon tiles, the footer band's rule (not controls) |
 | `ringRest` | 0.4 grey (3.3:1) | every control's ring at rest (WCAG 1.4.11) |
 | `ringHover` | 0.7 grey | control under the mouse |
-| accent ring | mint | focus (typing), "on" |
+| `ringOn` | white | focus (typing), "on" |
 
 ### Text and status
 
 | Token | Hex | Contrast | Use |
 |---|---|---|---|
-| text | `FFFFFF` | 19:1 | body, values, names |
-| `glyphRest` | `D9D9D9` (0.85) | 13:1 | icons and secondary values at rest |
+| text | `FFFFFF` | 19:1 | body, values, names; also "on", live, hover, focus, success (with ✓), the first word of the title |
+| `glyphRest` | `B3B3B3` (0.7) | 9.1:1 | header icons and secondary values at rest, the second word of the title |
 | `soft` | `BDBDBD` (0.74) | 10:1 | tooltip bodies, explanations, instructions |
 | `muted` | `8C8C8C` (0.55) | 5.7:1 | labels, column headings, placeholders, "off", hints in chat, release version label |
 | faint | `666666` (0.4) | 3.3:1 | decoration only: an em-dash for "no value", separator dots. Never words. |
-| `brand` | `98FF98` mint | 16:1 | the accent: hover, focus, "on", marks, success, the addon's name in chat |
-| `warn` | `FFB84D` amber | 11:1 | warnings, untimed / over cap, dev / alpha / beta version label |
-| `bad` | `FF8888` red | 8.3:1 | errors, failures, shortages, destructive labels |
-| alt accent | `5AA9FF` blue | 7.8:1 | a second mode only (StockClerk's Warband view); apart from mint in lightness |
+| `warn` | `FFD84A` yellow | 13.9:1 | warnings, untimed / over cap, dev / alpha / beta version label; mark ▲ |
+| `bad` | `FF6666` red | 6.7:1 | errors, failures, shortages, destructive labels; mark ✕ |
+| `info` | `5AA9FF` blue | 7.8:1 | something new or worth a look that isn't a problem; also StockClerk's Warband view (its one mode colour) |
 
 Rules:
-- One amber, one red, one muted grey. No near-duplicates.
+- **Marks are drawn, not typed:** the bundled font has no ✓ ▲ ✕ (only × and !), so the check, triangle and cross are drawn glyphs like the header icons (Expressway may lack them too).
+- Three attention colours, far apart in hue **and** lightness: yellow is the bright one, red the dark one, blue between and cool (yellow vs red 2.1:1, where the old amber vs red was 1.3:1). No near-duplicates, no fourth colour without a guide change.
+- No mint anywhere in the UI (Tones' Organic set colour is content, so it stays).
 - Neutral feedback ("nothing to do") is muted, not red.
-- **Colour is never the only cue (1.4.1):** pair it with a word, mark or shape (untimed key = amber **and** a trailing x; friend vs guild = different glyphs).
-- **Selection vs live state:** the selection wash marks what the player clicked; mint text **and** a 2px edge bar mark what's live (TalentKeeper: the build actually committed in the tree). Never the same mark for both.
+- **Colour is never the only cue (1.4.1):** pair it with a word, mark or shape (untimed key = yellow **and** a trailing x; `warn` always with ▲, `bad` with ✕ where there's room; friend vs guild = different glyphs).
+- **Selection vs live state:** the selection wash marks what the player clicked; white text **and** a 2px edge bar mark what's live (TalentKeeper: the build actually committed in the tree). Never the same mark for both.
 - **Blizzard's own colours stay Blizzard's:** class colours, item quality, raid difficulty, Battle.net friend blue, guild green, Raider.IO's colours. Don't recolour them to the palette.
 - **Marks inside Blizzard's frames use Blizzard's art,** recoloured only where the game's own language already does it (TalentKeeper: the game's green glow for talents a build takes, the same glow in red for talents it drops). Our palette is for our own frames.
 - **Content colours are allowed when they identify content,** not state: SharedMedia: Tones colours its sets (Organic mint, Classic pink `FF69B4`, Memes lime `32CD32`).
@@ -75,7 +77,7 @@ Rules:
 
 Every panel and window starts with the same header strip (`band`):
 
-- **Left:** the addon icon, the two-tone name, and the version in Small beside it (amber for dev / alpha / beta, muted for releases).
+- **Left:** the addon icon, the two-tone name, and the version in Small beside it (`warn` yellow for dev / alpha / beta, muted for releases). The icon is the monochrome mark; the name is two-tone: first word white, second word `glyphRest`.
 - **Right:** header icons, close last. The options icon sits left of close.
 - Name and version never move to the bottom of a panel.
 
@@ -84,11 +86,11 @@ Every panel and window starts with the same header strip (`band`):
 | Control | Look | Behaviour |
 |---|---|---|
 | Button | 20px tall, Small font; flat face (`btnRest`), grey rest ring, hover wash, press flash; label via `SetText`, muted when disabled | grayed buttons still show a tooltip saying why |
-| Checkbox | 16px well + grey ring, mint square when on; label is part of the click area (24px tall) | rows 24px apart |
-| Slider | well track + grey ring, light thumb (mint while dragging), value as % above it | applied on release, not while dragging |
-| Text box | well + grey ring; lighter ring on hover; mint ring while typing; placeholder names the field (muted) | clears focus when hidden; never `EnableKeyboard(true)` |
-| Toggle / tab | muted text off; mint text **and** a 2px bottom bar on; the bar spans the word exactly | same mark for tabs and toggles (3.2.4) |
-| Header icon | drawn glyph only (no game textures), `glyphRest` at rest, mint on hover, one-line tooltip | 24px target |
+| Checkbox | 16px well + grey ring, white square when on; label is part of the click area (24px tall) | rows 24px apart |
+| Slider | well track + grey ring, light gray thumb (white while dragging), value as % above it | applied on release, not while dragging |
+| Text box | well + grey ring; lighter ring on hover; white ring while typing; placeholder names the field (muted) | clears focus when hidden; never `EnableKeyboard(true)` |
+| Toggle / tab | muted text off; white text **and** a 2px white bottom bar on; the bar spans the word exactly | same mark for tabs and toggles (3.2.4) |
+| Header icon | drawn glyph only (no game textures), `glyphRest` at rest, white on hover, one-line tooltip | 24px target |
 | Options icon | the drawn three-bar glyph in the header, tooltip "Settings & Activity" (or "Settings") | opens the addon's options (and activity / log) as a view in its side panel; one per addon, nowhere else (no Options tab) |
 | More... menu | a button labelled "More..." opening the suite's picker (headings, 24px check rows, plain rows) | for an item's less-used actions (rename, copy, group, delete); never for the addon's options. *On trial in TalentKeeper.* |
 | Destructive action | label turns to "Sure?" (in `bad`) for 3 s; second click acts | no confirm dialogs |
@@ -109,7 +111,7 @@ The suite has two motions. Both stop within 5 s (2.2.2), neither is ever the onl
 
 | Motion | Look | Used for |
 |---|---|---|
-| **Shimmer** | one 2 s mint sweep across a row (a 90px band) | something new or just changed in a list: PickupGroup's new groups, TalentKeeper's saved / tagged / moved builds and the build that just went into the tree. Skipped when too many rows would shimmer at once (PickupGroup: 20). |
+| **Shimmer** | one 2 s white sweep (low alpha) across a row (a 90px band) | something new or just changed in a list: PickupGroup's new groups, TalentKeeper's saved / tagged / moved builds and the build that just went into the tree. Skipped when too many rows would shimmer at once (PickupGroup: 20). |
 | **Pulse** | alpha pulse, 3 times, then holds | "more below" chevrons, the picker's attention mark |
 
 - **Motion during a game hitch is invisible:** don't animate on events where the game freezes (a spec change landing). Animate before (a cast fill) or after.
@@ -123,7 +125,7 @@ The suite has two motions. Both stop within 5 s (2.2.2), neither is ever the onl
 | 1.4.3 Contrast (AA) | text 4.5:1; use the tokens (all pass) |
 | 1.4.11 Non-text contrast | control rings 3:1 (`ringRest` 0.4 grey) |
 | 2.2.2 Pause, Stop, Hide | motion stops within 5 s; shimmer can be switched off |
-| 2.4.7 Focus visible | mint ring while typing |
+| 2.4.7 Focus visible | white ring while typing |
 | 2.5.8 Target size | 24px targets or 24px spacing |
 | 3.2.4 Consistent identification | one look and one name per control across the suite |
 | 3.3.2 Labels | placeholders / labels say what a field is; disabled controls say why |
@@ -139,7 +141,7 @@ Measure: WCAG relative luminance of each colour composited over its real backgro
 - Sentence case everywhere: titles, buttons, labels, tooltips, feature names (Restock from bank, Recent activity). Blizzard's proper nouns keep their capitals (Auction House, Group Finder, Premade Groups).
 - "AH" is fine on a tight button or label; spell out Auction House in sentences.
 - No `--` in sentences: use a colon or a new sentence. Em dashes only in command help lists (`/cmd sub — what it does`).
-- On / off in lowercase, in mint when on (never ON / OFF).
+- On / off in lowercase, in white when on, muted when off (never ON / OFF).
 - Plain words a player uses. No dev terms (loop, ledger, queue, payload, schema, pending, staging), reason codes or bare `?`.
 - A button's label names its one action (Apply applies, every time).
 - Short. A tooltip body is one or two sentences.
@@ -158,8 +160,8 @@ Suite vocabulary (one word per idea across the addons):
 
 ## Chat
 
-- Prefix: the addon's name in mint, then a colon: `|cff98ff98PickupGroup|r: ...`.
-- One load line: `<Name>: v1.2.3 loaded. Type /cmd to <verb>.` The command in mint. Git checkouts show `dev <commit>` instead of the version.
+- Prefix: the addon's two-tone name, then a colon: `|cffffffffPickup|r|cffb3b3b3Group|r: ...` (white + `glyphRest`, as in the header).
+- One load line: `<Name>: v1.2.3 loaded. Type /cmd to <verb>.` The command in white. Git checkouts show `dev <commit>` instead of the version.
 - Help lists: `/cmd sub` in white, ` - what it does` in muted.
 - Errors in chat use `bad`; never spam (one line per event).
 - Alerts the player must see with the panel closed (another addon clashing, say) are one chat line pointing at the panel, where the clash prompt waits. No alert windows.
@@ -173,31 +175,28 @@ Every addon has the same README shape: centered title, one-line tagline, CurseFo
 - Every addon keeps a saved log with a copyable report window (`/cmd log`), and a debug switch (`/cmd debug`) for detailed steps. Debug defaults off at 1.0.
 - Log what a player or support would want: activity for players, detail for support.
 
-## Per-addon accents
+## Per-addon colour
 
-| Addon | Accent | Notes |
+Monochrome for every addon. What each keeps:
+
+| Addon | Colour it keeps | Notes |
 |---|---|---|
-| PickupGroup | mint | amber for untimed / warnings; Blizzard difficulty and friend colours pass through |
-| StockClerk | mint (Mine view), blue `5AA9FF` (Warband view) | the mint "Stock" in the title never changes |
-| SharedMedia: Tones | none (no UI) | set colours in sound lists: Organic mint, Classic pink, Memes lime; names "T: Name" |
-| TalentKeeper | mint | gold is the icon only; in-game warnings stay amber; tree marks are Blizzard's green / red glow |
+| PickupGroup | none of its own | `warn` for untimed; Blizzard difficulty and friend colours pass through |
+| StockClerk | `info` blue for the Warband view | the Mine view is plain white; the tab mark still says which list is on screen (colour isn't the only cue) |
+| SharedMedia: Tones | set colours (content) | Organic mint, Classic pink, Memes lime in sound lists; names "T: Name" |
+| TalentKeeper | none of its own | tree marks are Blizzard's green / red glow |
 
 ## Icons
 
-One icon per addon, built from the in-game style guide so the icon looks like the addon: a 96px-grid square in window black (`#080808`), the 0.4 gray control ring, a faint 4% inner wash, the addon's mark as a flat line drawing in its color, and the 2px "on" bar underneath (the suite tie). Marks: PickupGroup a portal swirl (instanced content: dungeons and raids alike), StockClerk a flask with a check, Tones sound bars, TalentKeeper a talent tree (1-2-3 nodes in a triangle, the bottom-center node joined to both middle nodes).
+One icon per addon, built from the in-game style guide so the icon looks like the addon: a 96px-grid square in window black (`#080808`), the 0.4 gray control ring, a faint 4% inner wash, the addon's mark as a flat **white** line drawing, and the 2px white "on" bar underneath (the suite tie). All four read as one family; the mark alone tells them apart. Marks: PickupGroup a portal swirl (instanced content: dungeons and raids alike), StockClerk a flask with a check, Tones sound bars, TalentKeeper a talent tree (1-2-3 nodes in a triangle, the bottom-center node joined to both middle nodes).
 
-| Addon | Icon color |
-|---|---|
-| PickupGroup | `5AB4FF` |
-| StockClerk | `98FF98` (mint) |
-| SharedMedia: Tones | `FF6FC8` |
-| TalentKeeper | `FFD84A` (gold; icon only, since it sits near the `warn` amber) |
-
-Files in every repo: `icon.png` (64 px, TOC `## IconTexture`), `.assets/logo-256.png` (README, shown at 128), `.assets/logo.png` (400 px, the CurseForge logo). `.assets/` never ships (`.pkgmeta` ignore). A new addon gets a new mark and color in the same frame; check it at 16 px before adopting it.
+Files in every repo: `icon.png` (64 px, TOC `## IconTexture`), `.assets/logo-256.png` (README, shown at 128), `.assets/logo.png` (400 px, the CurseForge logo). `.assets/` never ships (`.pkgmeta` ignore). A new addon gets a new mark in the same frame; check it at 16 px before adopting it.
 
 ## Status
 
-Reconciled with the addons (PickupGroup 1.1.0, StockClerk 1.4.0, TalentKeeper 0.4.0). Gaps each addon closes in its GUI pass, after the palette pass:
+Reconciled with the addons (PickupGroup 1.1.0, StockClerk 1.4.0, TalentKeeper 0.4.0). Palette moved to monochrome (no addon updated yet). Gaps each addon closes in its GUI pass:
+
+- **All:** palette swap (mint to white / `glyphRest`, amber to yellow, red to `FF6666`, alt accent to `info`, marks ▲ / ✕ beside warn / bad); two-tone titles and chat prefix in white + gray; white shimmer; icons redrawn in white (icon.png, logo-256, logo).
 
 - **PickupGroup:** name + version move from bottom right to the header (sidecar, quick list); Options tab becomes the header's options icon; the leader refresh button gets a drawn glyph; the clash alert window becomes a clash prompt in the sidecar (one chat line at login), and the Group Finder clash switches PickupGroup's list off like the notes and quick list clashes already do; sidecar buttons settle on 20px.
 - **StockClerk:** matches (it set the header and options patterns).
