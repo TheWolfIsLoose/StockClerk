@@ -10,6 +10,10 @@ or, where it had no entry, from that version's GitHub release notes.
 > There is no v1.1.2 stable: the v1.1.2 alphas are the start of v1.2.0
 > (efficiency pass). v1.2.0 plan: `Dev/ROADMAP.md`.
 
+## v1.5.0 (2026-10-22)
+
+Suite style pass (`Dev/SUITE-STYLE.md`): accent white in the Mine view (`Palette.brand`), warband blue kept for the Warband view; yellow `FFD84A` warnings, red `FF6666` short / over cap / errors; two-tone title (white Stock, gray Clerk) and chat prefix; header gains the 16px icon, title in the Regular font with the version on its baseline (yellow for dev builds); `ICON_REST` 0.7; buttons Small font, 20px; checkout marks follow the accent; white icon. Have / Cap / Done drop colour codes when the text is plain white. Smoke test reads past the two-tone name.
+
 ## v1.4.0 (2026-10-13)
 
 Patch 12.1.5 day release (moved from 9 AM to ~5 PM ET per the patch-day rule, then cut early at the player's call). Was queued as v1.3.3; the new features make it a minor bump.

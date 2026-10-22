@@ -1,9 +1,4 @@
-## v1.4.0
+## v1.5.0
 
-- Up to date for patch 12.1.5.
-- New: keep a set amount of gold on each character; the rest goes to your warband bank, and you're topped back up from it at any bank.
-- New: a minimap icon opens StockClerk (hide it in settings).
-- New: the Restock button shows what the trip will cost at last seen prices.
-- Fixed: dragging a row to reorder now works while the short-items filter is on.
-- Fixed: Need and Cap boxes no longer fade after you hover them.
-- Under the hood: leaner code, same behavior.
+- New look: a quieter, monochrome style shared across our addons. Your list is white, the warband list stays blue, and red still marks what you are short on.
+- A tidier header (icon, name and version) and smaller, consistent buttons.
