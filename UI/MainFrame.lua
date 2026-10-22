@@ -825,13 +825,13 @@ function MF:Build()
     mark:SetSize(16, 16)
     mark:SetPoint("LEFT", 8, 0)
     mark:SetTexture("Interface\\AddOns\\StockClerk\\icon.png")
-    local title = header:CreateFontString(nil, "OVERLAY", "StockClerkFontLarge")
+    local title = header:CreateFontString(nil, "OVERLAY", "StockClerkFont")  -- Regular, like the suite's other headers
     title:SetPoint("LEFT", mark, "RIGHT", 6, 0)
     title:SetText("|cffffffffStock|r|cffb3b3b3Clerk|r")
     -- Version ("dev 7c13266" in a git checkout); yellow for dev / alpha / beta.
     local version = ADDON.VersionText()
     local versionLabel = header:CreateFontString(nil, "OVERLAY", "StockClerkFontSmall")
-    versionLabel:SetPoint("LEFT", title, "RIGHT", 6, -1)
+    versionLabel:SetPoint("BOTTOMLEFT", title, "BOTTOMRIGHT", 6, 1)
     versionLabel:SetText(((version:match("%-alpha") or version:match("%-beta") or version:match("^dev")) and "|cffffd84a" or "|cff8c8c8c") .. version .. "|r")
 
     local closeX = HeaderIcon(header, CLOSE_GLYPH, "Close", function() MF:Hide() end)
