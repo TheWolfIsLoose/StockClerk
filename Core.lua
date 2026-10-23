@@ -147,6 +147,7 @@ function ADDON:OnAuctionHouseShow()
         mf:DockToAHIfOpen()
     end
     -- Express restock: start buying once the AH frame settles, if anything is short.
+    if not settings.autoRestock then C_Timer.After(0.3, function() mf:PulseRestock() end) end
     if settings.autoRestock then
         C_Timer.After(0.3, function()
             local loop = self.RestockLoop
@@ -184,6 +185,7 @@ function ADDON:OnBankShow()
     -- pull's receipt replaces it later; Recent activity keeps it).
     local gold = self.BankRestock:SettleGold()
     local n, items = self.BankRestock:PullableCount()
+    if n > 0 and not self.DB:Settings().autoRestockBank then C_Timer.After(0.3, function() mf:PulseRestock() end) end
     if n > 0 and self.DB:Settings().autoRestockBank then
         -- Express restock at Bank, once the bank frame settles; the pull reports itself.
         C_Timer.After(0.3, function()
