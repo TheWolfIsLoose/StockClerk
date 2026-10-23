@@ -25,7 +25,7 @@ function ADDON.MoneyText(copper, precision)
 end
 
 -- "1.2.0-beta4" for a release; "dev 7c13266" for a git checkout synced by
--- Dev\update.bat (the packager fills the .toc version, update.bat Build.lua).
+-- a dev install (the packager fills the .toc version; a dev install stamps Build.lua).
 function ADDON.VersionText()
     local v = C_AddOns.GetAddOnMetadata(addonName, "Version") or "?"
     if v:sub(1, 1) ~= "@" then return v end
