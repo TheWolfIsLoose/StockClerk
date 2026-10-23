@@ -53,8 +53,8 @@ All text tokens pass 4.5:1 on the panel (0.06 grey) and the window (0.031 grey);
 | faint | `666666` (0.4) | 3.3:1 | decoration only: an em-dash for "no value", separator dots. Never words. |
 | `warn` | `FFD84A` yellow | 13.9:1 | warnings, untimed / over cap, dev / alpha / beta version label; mark ▲ |
 | `bad` | `FF6666` red | 6.7:1 | errors, failures, shortages, destructive labels; mark ✕ |
-| `info` | `5AA9FF` blue | 7.8:1 | something new or worth a look that isn't a problem; also StockClerk's Warband view (its one mode colour) |
-| `good` | `4ADE80` green | 11.0:1 | yours and in progress: PickupGroup's sign-ups while they're waiting or invited (name, dungeon, edge), a sign-up that got you in (added 2026-10-22) |
+| `info` | `5AA9FF` blue | 7.8:1 | something worth a look that isn't a problem (PickupGroup's leader view: fills a seat); also StockClerk's Warband view (its one mode colour). Never for "new" in a group list: Blizzard colours a group with a friend in it blue, so new groups get a white edge instead |
+| `good` | `4ADE80` green | 11.0:1 | yours and in progress: PickupGroup's sign-ups while they're waiting or invited (name, dungeon, edge), a sign-up that got you in (added 2026-10-23) |
 
 Rules:
 - **Marks are drawn, not typed:** the bundled font has no ✓ ▲ ✕ (only × and !), so the check, triangle and cross are drawn glyphs like the header icons (Expressway may lack them too).
