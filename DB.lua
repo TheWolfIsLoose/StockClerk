@@ -51,6 +51,7 @@ DB.defaults = {
             autoRestockBank = false,      -- Express restock at Bank: opt-in
             lastPriceTTL    = 24 * 3600,  -- Last Seen dims after 24h
             minimapIcon     = true,
+            motion          = true,       -- pulse / shimmer on what just changed
             minimap         = {},         -- LibDBIcon position/hide, see UI/Minimap.lua
         },
     },

@@ -331,10 +331,50 @@ local function WatchRowHover(row)
     row:SetScript("OnUpdate", nil)
 end
 
+-- The suite's motions: a shimmer (one 2 s white sweep, "this row is news")
+-- and a pulse (three 1 s fades, "this wants a click").
+function MF.Shimmer(r, h)
+    local clip = CreateFrame("Frame", nil, r)
+    clip:SetAllPoints()
+    clip:SetClipsChildren(true)
+    local band = CreateFrame("Frame", nil, clip)
+    band:SetSize(90, h)
+    band:SetPoint("RIGHT", clip, "LEFT")
+    local none, peak = CreateColor(1, 1, 1, 0), CreateColor(1, 1, 1, 0.15)
+    for half = 1, 2 do
+        local t = band:CreateTexture(nil, "ARTWORK")
+        t:SetColorTexture(1, 1, 1, 1)
+        t:SetSize(45, h)
+        t:SetPoint(half == 1 and "LEFT" or "RIGHT")
+        t:SetGradient("HORIZONTAL", half == 1 and none or peak, half == 1 and peak or none)
+    end
+    band:Hide()
+    local sweep = band:CreateAnimationGroup()
+    local move = sweep:CreateAnimation("Translation")
+    move:SetDuration(2); move:SetSmoothing("IN_OUT")
+    sweep:SetScript("OnPlay", function() band:Show() end)
+    sweep:SetScript("OnFinished", function() band:Hide() end)
+    sweep:SetScript("OnStop", function() band:Hide() end)
+    function r.Shimmer() sweep:Stop(); move:SetOffset(r:GetWidth() + 90, 0); sweep:Play() end
+end
+
+function MF.Pulse(region)
+    local g = region:CreateAnimationGroup()
+    local a = g:CreateAnimation("Alpha")
+    a:SetFromAlpha(1); a:SetToAlpha(0.35); a:SetDuration(0.5); a:SetSmoothing("IN_OUT")
+    local b = g:CreateAnimation("Alpha")
+    b:SetFromAlpha(0.35); b:SetToAlpha(1); b:SetDuration(0.5); b:SetStartDelay(0.5); b:SetSmoothing("IN_OUT")
+    g:SetLooping("REPEAT")
+    g:SetScript("OnPlay", function(self) self.n = 0 end)
+    g:SetScript("OnLoop", function(self) self.n = self.n + 1; if self.n >= 3 then self:Stop() end end)
+    return g
+end
+
 local function BuildRow(row)
     row:SetHeight(ROW_HEIGHT)
     row:RegisterForClicks("LeftButtonUp")
 
+    MF.Shimmer(row, ROW_HEIGHT)
     row._wash = Solid(row, "ARTWORK", 7, Palette.hoverWash)
     row._wash:SetPoint("TOPLEFT", 1, -1)
     row._wash:SetPoint("BOTTOMRIGHT", -1, 1)
@@ -706,7 +746,13 @@ local function InitializeRow(row, data)
     row._breakdown = bd
     row.have:SetText((short > 0 and "|cffff6666%d|r" or "%d"):format(have)
         .. (stashed > 0 and ("  |cff8c8c8c(+%d)|r"):format(stashed) or ""))
-    row.accent:SetColorTexture(unpack(short > 0 and { 0xe5 / 255, 0x62 / 255, 0x4a / 255 } or { 0x4a / 255, 0xde / 255, 0x80 / 255 }))
+    row.accent:SetColorTexture(unpack(short > 0 and Palette.short or Palette.ringRest))
+    -- Went short since the window was last open: one shimmer (motion setting).
+    local key = MF:View() .. ":" .. itemID
+    if short > 0 and MF._wasShort and not MF._wasShort[key] and not MF._shone[key] and ADDON.DB:Settings().motion then
+        MF._shone[key] = true
+        row.Shimmer()
+    end
     row.need:SetText(("|cffCCCCCC%d|r"):format(data.need))
 
     -- Restock mark in the grip's place; the current item gets an accent wash.
@@ -795,6 +841,7 @@ function MF:Build()
     -- close panels, editors and any drag, and drop tooltips owned inside the
     -- window (no OnLeave fires when the owner just vanishes).
     f:SetScript("OnHide", function()
+        pcall(MF.SnapshotShort, MF)
         pcall(function() ADDON.Sidecar:Hide(); ADDON.BulkImport:Close() end)
         f:SetPropagateKeyboardInput(true)
         local focused = GetCurrentKeyBoardFocus()
@@ -1448,7 +1495,30 @@ end
 -- ---------------------------------------------------------------------------
 -- Show / Hide
 -- ---------------------------------------------------------------------------
+-- Items short in each list when the window last closed (per character), so a
+-- reopen can shimmer what went short since.
+function MF:SnapshotShort()
+    local snap = {}
+    for _, view in ipairs({ "mine", "warband" }) do
+        for _, it in ipairs(ADDON.DB:GetSortedItems(view)) do
+            local have = view == "warband" and ADDON.RestockLoop:WarbandHave(it.itemID)
+                or ADDON.Inventory:GetBreakdown(it.itemID).bags
+            if it.need - have > 0 then snap[view .. ":" .. it.itemID] = true end
+        end
+    end
+    ADDON.DB.char.ui.shortAtClose = snap
+end
+
+-- Arriving at the AH or bank with something to restock: the button pulses.
+function MF:PulseRestock()
+    local b = self.restockBtn
+    if not (b and b:IsVisible() and b:IsEnabled() and ADDON.DB:Settings().motion) then return end
+    self._restockPulse = self._restockPulse or MF.Pulse(b)
+    self._restockPulse:Play()
+end
+
 function MF:Show()
+    self._wasShort, self._shone = ADDON.DB.char.ui.shortAtClose, {}
     self:Build()
     self.frame:Show()
     self:Refresh()

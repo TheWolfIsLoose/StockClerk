@@ -53,11 +53,12 @@ All text tokens pass 4.5:1 on the panel (0.06 grey) and the window (0.031 grey);
 | faint | `666666` (0.4) | 3.3:1 | decoration only: an em-dash for "no value", separator dots. Never words. |
 | `warn` | `FFD84A` yellow | 13.9:1 | warnings, untimed / over cap, dev / alpha / beta version label; mark ▲ |
 | `bad` | `FF6666` red | 6.7:1 | errors, failures, shortages, destructive labels; mark ✕ |
-| `info` | `5AA9FF` blue | 7.8:1 | something new or worth a look that isn't a problem; also StockClerk's Warband view (its one mode colour) |
+| `info` | `5AA9FF` blue | 7.8:1 | something worth a look that isn't a problem (PickupGroup's leader view: fills a seat); also StockClerk's Warband view (its one mode colour). Never for "new" in a group list: Blizzard colours a group with a friend in it blue, so new groups get a white edge instead |
+| `good` | `4ADE80` green | 11.0:1 | yours and in progress: PickupGroup's sign-ups while they're waiting or invited (name, dungeon, edge), a sign-up that got you in (added 2026-10-23) |
 
 Rules:
 - **Marks are drawn, not typed:** the bundled font has no ✓ ▲ ✕ (only × and !), so the check, triangle and cross are drawn glyphs like the header icons (Expressway may lack them too).
-- Three attention colours, far apart in hue **and** lightness: yellow is the bright one, red the dark one, blue between and cool (yellow vs red 2.1:1, where the old amber vs red was 1.3:1). No near-duplicates, no fourth colour without a guide change.
+- Four meaning colours, far apart in hue: yellow (the bright one) and red (the dark one) for attention, blue for new / info, green for yours and in progress (yellow vs red 2.1:1, where the old amber vs red was 1.3:1). No near-duplicates, no fifth colour without a guide change. Green is not mint: a saturated mid green, kept to things that are the player's own and still going.
 - No mint anywhere in the UI (Tones' Organic set colour is content, so it stays).
 - Neutral feedback ("nothing to do") is muted, not red.
 - **Colour is never the only cue (1.4.1):** pair it with a word, mark or shape (untimed key = yellow **and** a trailing x; `warn` always with ▲, `bad` with ✕ where there's room; friend vs guild = different glyphs).
@@ -98,7 +99,7 @@ Every panel and window starts with the same header strip (`band`):
 | Footer band | 36px, a black 1px rule over a `band` strip | holds a form's buttons when it opens in the panel |
 | Clash prompt | a view in the side panel: Large title naming the choice ("Turn off <other addon>'s group finder?"), a `soft` note saying what overlaps, one 24px check row per clashing feature (ticked = theirs stays on), footer band with "Reload now" and "Later" | while a clash stands, our overlapping part is off. The view opens by itself the next time the panel opens; at login, one chat line points there. Unticking turns their feature off from the next reload: our addon writes that one setting in the other addon's saved settings, or turns the whole addon off when the clash is the whole addon; "Later" keeps ours off and asks again next login. Follows TalentKeeper's "Turn off the other talent addons?" view |
 | Prompt strip | small strip outside the host window (TalentKeeper's zone-in bar and ready check strip); panel fill, grey ring | shift-drag to move; closes with the thing it's attached to; one at a time |
-| Lists | rows 24px (18px in dense tables), 5% alternate shading; no scroll bars in our own lists: a "more below" chevron pulses (see Motion) | long text windows (log, history) keep Blizzard's scroll bar |
+| Lists | rows 24px (18px in dense tables), 5% alternate shading; entries under a heading indent and hang from it on tree lines (1px 0.3 gray trunk from the heading, a short branch to each entry, the trunk ending at the last); no scroll bars in our own lists: a "more below" chevron pulses (see Motion) | long text windows (log, history) keep Blizzard's scroll bar |
 
 - No Blizzard button / checkbox templates; build through each addon's kit helpers (`Kit.*` in PickupGroup, `MF.*` in StockClerk, `UI.*` in TalentKeeper).
 - All fills use `SetColorTexture` (White8x8 + vertex colour renders transparent on retail); 1px lines turn off texel snapping.
@@ -107,12 +108,12 @@ Every panel and window starts with the same header strip (`band`):
 
 ## Motion
 
-The suite has two motions. Both stop within 5 s (2.2.2), neither is ever the only cue, and the player can switch shimmer off in options.
+The suite has two motions, and they mark **what just changed, never a standing state**: a shimmer says "this row is news", a pulse says "this control wants a click". Both stop within 5 s (2.2.2), neither is ever the only cue (the colour or word stays), and each addon has one switch that turns its motion off.
 
 | Motion | Look | Used for |
 |---|---|---|
-| **Shimmer** | one 2 s white sweep (low alpha) across a row (a 90px band) | something new or just changed in a list: PickupGroup's new groups, TalentKeeper's saved / tagged / moved builds and the build that just went into the tree. Skipped when too many rows would shimmer at once (PickupGroup: 20). |
-| **Pulse** | alpha pulse, 3 times, then holds | "more below" chevrons, the picker's attention mark, an armed "Sure?" (1 s pulses; it lapses after the third) |
+| **Shimmer** | one 2 s white sweep (low alpha) across a row (a 90px band) | something new or just changed in a list: PickupGroup's new groups, a sign-up whose status changed, a new applicant when leading; TalentKeeper's saved / tagged / moved builds and the build that just went into the tree; StockClerk's rows that went short since the window last closed. Skipped when too many rows would shimmer at once (PickupGroup: 20). |
+| **Pulse** | alpha pulse, 3 times, then holds | "more below" chevrons, the picker's attention mark, an armed "Sure?" (1 s pulses; it lapses after the third); a control that wants a click as it appears: StockClerk's Restock on arriving with something short, TalentKeeper's zone-in prompt button and the ready check strip's Switch on a wrong build |
 
 - **Motion during a game hitch is invisible:** don't animate on events where the game freezes (a spec change landing). Animate before (a cast fill) or after.
 - A new motion joins this table before it ships in any addon.
@@ -194,4 +195,4 @@ Files in every repo: `icon.png` (64 px, TOC `## IconTexture`), `.assets/logo-256
 
 ## Status
 
-All four addons follow this guide as of 2026-10-22, tested in game: PickupGroup (dev 2572a6e), StockClerk (dev 7d5ccf2), TalentKeeper (dev 0ae5e89), SharedMedia: Tones (icon only). Monochrome palette, header and options pattern, clash prompt, white icons. On `dev`; they ship with each addon's next release.
+All four addons follow this guide as of 2026-10-22, tested in game: PickupGroup (dev 2572a6e), StockClerk (dev 7d5ccf2), TalentKeeper (dev 0ae5e89), SharedMedia: Tones (icon only). Monochrome palette, header and options pattern, clash prompt, white icons. Released 2026-10-22: PickupGroup v1.2.0, StockClerk v1.5.0, TalentKeeper v0.5.0, SharedMedia: Tones v2.7.4.

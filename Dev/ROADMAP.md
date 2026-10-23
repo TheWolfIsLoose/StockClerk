@@ -11,35 +11,16 @@ disagree), **Open** (needs an answer before build).
 
 ## Next session: start here
 
-**2026-10-12: v1.4.0 built on `dev` (keep gold, minimap icon, AH cost estimate; see the v1.4.0 section), awaiting in-game test.** Keep gold on this character: Settings row "Keep gold on this character" (per character, whole gold, blank = off). At any bank visit StockClerk deposits whole gold above the amount to the warband bank and withdraws whole gold to top up (clamped to the warband balance and the gold cap); silver and copper stay put. Footer line + Recent activity entry. Decided: automatic, both directions, whole gold. The 12.1 probe (StockClerkGoldProbe, dev-only) proved `C_Bank.DepositMoney`/`WithdrawMoney` work from an event and a timer with no click, odd copper amounts included, at a banker. Not yet seen: the Warband portal. Math in `BR.PlanGold` (smoke-tested).
+**Parked 2026-10-22 ~23:45 ET:** on `dev` and installed (dev 8947f89), test round set: motion (Restock pulses on arrival with something short, newly short rows shimmer on reopen, "Animate what changed" setting) and the monochrome row accent strip. Read the DevChecklist ticks and log first.
 
-**2026-10-13: v1.4.0 released** (patch 12.1.5 day; keep gold, minimap icon, restock cost on the button, ponytail pass; notes in `Dev/HISTORY.md`). Screenshots still to retake on v1.4.
+**2026-10-22: v1.5.0 released** (suite style pass: monochrome palette with the Warband view's blue kept, two-tone title, icon in the header, Small 20px buttons, white icon). Notes in `Dev/HISTORY.md`. `main` = `dev`. StockClerk is close to feature-complete; the player uses it and collects feedback.
 
-**2026-09-28 ~11:55 ET: parked after stable v1.3.0** (`main` = `dev`).
-The player is using the addon and collecting feedback; StockClerk is close
-to feature-complete. New release policy in `Dev/RELEASING.md`: commit to
-`dev`, test internally, no public prereleases except big features.
-Open follow-ups:
-1. Not yet covered in-game: buy on one character, switch before
-   depositing (transit: not short there); a soulbound listed item at
-   Deposit (red mark, footer); a full warband bank.
-2. Tab deposit-filter preference if the probe (`/clerk bankprobe
-   <itemID>`) shows filters matter.
-3. **v1.4:** built on `dev`, see its section; screenshots still to retake.
+Open:
+1. Not yet seen in game (organic): buy on one character and switch before depositing (transit: not short there); a soulbound listed item at Deposit (red mark, footer); a full warband bank; the Warband portal for keep-gold.
+2. Tab deposit-filter preference, if the bank probe (`/clerk bankprobe <itemID>`) shows filters matter.
+3. Retake the CurseForge gallery shots (they show the old mint look).
 
-Pending on the player's side: paste the v1.3.0 CurseForge description
-(drafted 2026-09-28: README intro + features, commands as a list, no
-credits) and upload the warband screenshot to the CurseForge Images tab.
-
-State: `main` = `dev` = v1.2.0.
-
-Session setup: player syncs with `Dev\update.bat dev` and `/reload`;
-Claude reads `WTF\Account\SAVAGEFEARLESS\SavedVariables\StockClerk.lua`
-via the connected `_retail_` folder (after a `/reload`) for logs. Local
-smoke: `lua5.1 Dev/smoke.lua .` (Lua 5.1 builds from github.com/lua/lua
-tag v5.1 when no package manager is reachable). Pushing needs the repo
-attached with push access (add_repo), then `git push origin dev`. Wait for
-a release push's tag (`git ls-remote --tags origin`) before pushing again.
+Session setup: Claude installs changed files into the game folder and stamps `Build.lua`; the player `/reload`s; Claude reads `WTF\Account\<account>\SavedVariables\StockClerk.lua` for logs. Local smoke: `lua5.1 Dev/smoke.lua .` (Lua 5.1 builds from github.com/lua/lua tag v5.1 when no package manager is reachable). Pushing needs the repo attached with push access. Wait for a release push's tag (`git ls-remote --tags origin`) before pushing again.
 
 ---
 

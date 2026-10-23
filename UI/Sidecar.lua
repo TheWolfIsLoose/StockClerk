@@ -76,16 +76,18 @@ local function Build()
             "Offer to restock the warband list after your own shopping at the Auction House. Surplus is always deposited at the bank.",
             ADDON.DB.char),
         Check(-150, "Minimap icon", "minimapIcon"),
+        Check(-174, "Animate what changed", "motion",
+            "The Restock button pulses when you arrive with something short, and rows that went short since you last looked shimmer once."),
     }
-    f.checks[#f.checks]:HookScript("OnClick", function() ADDON.Minimap:Refresh() end)
+    f.checks[#f.checks - 1]:HookScript("OnClick", function() ADDON.Minimap:Refresh() end)
 
     -- Per character, whole gold; blank = off. Settles right away at a bank.
     local goldBox, goldEB = MF.MakeEditBox(f, "Off", 7, "Keep gold on this character",
         "At any bank, StockClerk deposits gold above this amount in the warband bank, and withdraws from it to top you back up. Whole gold only. Leave blank to turn off.")
-    goldBox:SetPoint("TOPRIGHT", -12, -174)
+    goldBox:SetPoint("TOPRIGHT", -12, -198)
     goldBox:SetWidth(76)
     local goldLabel = f:CreateFontString(nil, "OVERLAY", "StockClerkFont")
-    goldLabel:SetPoint("TOPLEFT", 14, -174)
+    goldLabel:SetPoint("TOPLEFT", 14, -198)
     goldLabel:SetPoint("BOTTOMRIGHT", goldBox, "BOTTOMLEFT", -8, 0)
     goldLabel:SetJustifyH("LEFT")
     goldLabel:SetWordWrap(false)
@@ -106,7 +108,7 @@ local function Build()
     f.goldEB = goldEB
 
     local add = CreateFrame("Button", nil, f)
-    add:SetPoint("TOPLEFT", 12, -204)
+    add:SetPoint("TOPLEFT", 12, -228)
     add:SetPoint("RIGHT", -12, 0)
     add:SetHeight(20)
     MF.StyleButton(add)
@@ -126,13 +128,13 @@ local function Build()
     local divider = f:CreateTexture(nil, "OVERLAY")
     divider:SetColorTexture(0, 0, 0, 1)
     divider:SetHeight(1)
-    divider:SetPoint("TOPLEFT", 8, -236)
-    divider:SetPoint("TOPRIGHT", -8, -236)
+    divider:SetPoint("TOPLEFT", 8, -260)
+    divider:SetPoint("TOPRIGHT", -8, -260)
 
     -- Recent activity. Hovering the title (or the "/clerk log" link, which
     -- opens the log) explains how to send a bug report.
     local feedTitle = f:CreateFontString(nil, "OVERLAY", "StockClerkFont")
-    feedTitle:SetPoint("TOPLEFT", 12, -244)
+    feedTitle:SetPoint("TOPLEFT", 12, -268)
     feedTitle:SetText("Recent activity")
     local function FeedHelp(owner)
         GameTooltip:SetOwner(owner, "ANCHOR_RIGHT")
@@ -153,7 +155,7 @@ local function Build()
     help:SetScript("OnLeave", GameTooltip_Hide)
 
     local link = CreateFrame("Button", nil, f)
-    link:SetPoint("TOPRIGHT", -12, -246)
+    link:SetPoint("TOPRIGHT", -12, -270)
     link:SetSize(60, 14)
     link:SetHitRectInsets(0, 0, -5, -5)  -- 24px target
     local linkText = link:CreateFontString(nil, "OVERLAY", "StockClerkFontSmall")
@@ -166,10 +168,10 @@ local function Build()
 
     local feedBg = f:CreateTexture(nil, "BACKGROUND")
     feedBg:SetColorTexture(Palette.bgDark[1], Palette.bgDark[2], Palette.bgDark[3], 0.6)
-    feedBg:SetPoint("TOPLEFT", 8, -266)
+    feedBg:SetPoint("TOPLEFT", 8, -290)
     feedBg:SetPoint("BOTTOMRIGHT", -8, 8)
     local scroll = CreateFrame("ScrollFrame", "StockClerkSidecarScroll", f, "UIPanelScrollFrameTemplate")
-    scroll:SetPoint("TOPLEFT", 10, -268)
+    scroll:SetPoint("TOPLEFT", 10, -292)
     scroll:SetPoint("BOTTOMRIGHT", -28, 10)  -- room for the scroll bar
     f.feed = CreateFrame("Frame", nil, scroll)
     f.feed:SetSize(220, 1)

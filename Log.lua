@@ -93,6 +93,7 @@ local SETTING_LABELS = {
     autoRestock = "Express restock at Auction House", autoRestockBank = "Express restock at bank",
     shopWarband = "Shop for the warband on this character",
     goldKeep = "Keep gold on this character", minimapIcon = "Minimap icon",
+    motion = "Animate what changed",
 }
 
 -- "warband " before target/cap for warband-list entries (short: the feed is narrow).
