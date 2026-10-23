@@ -11,7 +11,7 @@ disagree), **Open** (needs an answer before build).
 
 ## Next session: start here
 
-**Parked 2026-10-22 ~23:45 ET:** on `dev` and installed (dev 8947f89), test round set: motion (Restock pulses on arrival with something short, newly short rows shimmer on reopen, "Animate what changed" setting) and the monochrome row accent strip. Read the DevChecklist ticks and log first.
+**2026-10-23: v1.5.1 released** (motion: Restock pulse, newly short rows shimmer; gray / red row strip; the release workflow can upload to CurseForge itself with a `CF_API_KEY` secret).
 
 **2026-10-22: v1.5.0 released** (suite style pass: monochrome palette with the Warband view's blue kept, two-tone title, icon in the header, Small 20px buttons, white icon). Notes in `Dev/HISTORY.md`. `main` = `dev`. StockClerk is close to feature-complete; the player uses it and collects feedback.
 
