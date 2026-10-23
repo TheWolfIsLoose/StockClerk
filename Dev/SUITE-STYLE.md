@@ -54,10 +54,11 @@ All text tokens pass 4.5:1 on the panel (0.06 grey) and the window (0.031 grey);
 | `warn` | `FFD84A` yellow | 13.9:1 | warnings, untimed / over cap, dev / alpha / beta version label; mark ▲ |
 | `bad` | `FF6666` red | 6.7:1 | errors, failures, shortages, destructive labels; mark ✕ |
 | `info` | `5AA9FF` blue | 7.8:1 | something new or worth a look that isn't a problem; also StockClerk's Warband view (its one mode colour) |
+| `good` | `4ADE80` green | 11.0:1 | yours and in progress: PickupGroup's sign-ups while they're waiting or invited (name, dungeon, edge), a sign-up that got you in (added 2026-10-22) |
 
 Rules:
 - **Marks are drawn, not typed:** the bundled font has no ✓ ▲ ✕ (only × and !), so the check, triangle and cross are drawn glyphs like the header icons (Expressway may lack them too).
-- Three attention colours, far apart in hue **and** lightness: yellow is the bright one, red the dark one, blue between and cool (yellow vs red 2.1:1, where the old amber vs red was 1.3:1). No near-duplicates, no fourth colour without a guide change.
+- Four meaning colours, far apart in hue: yellow (the bright one) and red (the dark one) for attention, blue for new / info, green for yours and in progress (yellow vs red 2.1:1, where the old amber vs red was 1.3:1). No near-duplicates, no fifth colour without a guide change. Green is not mint: a saturated mid green, kept to things that are the player's own and still going.
 - No mint anywhere in the UI (Tones' Organic set colour is content, so it stays).
 - Neutral feedback ("nothing to do") is muted, not red.
 - **Colour is never the only cue (1.4.1):** pair it with a word, mark or shape (untimed key = yellow **and** a trailing x; `warn` always with ▲, `bad` with ✕ where there's room; friend vs guild = different glyphs).
