@@ -12,7 +12,7 @@ or, where it had no entry, from that version's GitHub release notes.
 
 ## v1.5.1 (2026-10-23)
 
-Motion (suite rule: motion marks what just changed): `MF.Shimmer` / `MF.Pulse`; Restock pulses on arriving at the AH or bank with something short when Express restock is off (`MF:PulseRestock`); rows short now but not when the window last closed shimmer once (`DB.char.ui.shortAtClose`, snapshot in the frame's OnHide); setting "Animate what changed" (`settings.motion`, default on; settings rows below it moved down 24px). Row accent strip monochrome: `Palette.short` / `ringRest` (was green / orange-red). Release workflow: with a `CF_API_KEY` secret the packager uploads to CurseForge itself (webhook unreliable); without it, unchanged.
+Motion (suite rule: motion marks what just changed): `MF.Shimmer` / `MF.Pulse`; Restock pulses on arriving at the AH or bank with something short when Express restock is off (`MF:PulseRestock`); rows short now but not when the window last closed shimmer once (`DB.char.ui.shortAtClose`, snapshot in the frame's OnHide); setting "Animate what changed" (`settings.motion`, default on; settings rows below it moved down 24px). Row accent strip monochrome: `Palette.short` / `ringRest` (was green / orange-red). (A direct CurseForge upload from the workflow was tried and reverted the same day: the webhook stays the one path to CurseForge.)
 
 ## v1.5.0 (2026-10-22)
 
