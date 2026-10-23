@@ -107,12 +107,12 @@ Every panel and window starts with the same header strip (`band`):
 
 ## Motion
 
-The suite has two motions. Both stop within 5 s (2.2.2), neither is ever the only cue, and the player can switch shimmer off in options.
+The suite has two motions, and they mark **what just changed, never a standing state**: a shimmer says "this row is news", a pulse says "this control wants a click". Both stop within 5 s (2.2.2), neither is ever the only cue (the colour or word stays), and each addon has one switch that turns its motion off.
 
 | Motion | Look | Used for |
 |---|---|---|
-| **Shimmer** | one 2 s white sweep (low alpha) across a row (a 90px band) | something new or just changed in a list: PickupGroup's new groups, TalentKeeper's saved / tagged / moved builds and the build that just went into the tree. Skipped when too many rows would shimmer at once (PickupGroup: 20). |
-| **Pulse** | alpha pulse, 3 times, then holds | "more below" chevrons, the picker's attention mark, an armed "Sure?" (1 s pulses; it lapses after the third) |
+| **Shimmer** | one 2 s white sweep (low alpha) across a row (a 90px band) | something new or just changed in a list: PickupGroup's new groups, a sign-up whose status changed, a new applicant when leading; TalentKeeper's saved / tagged / moved builds and the build that just went into the tree; StockClerk's rows that went short since the window last closed. Skipped when too many rows would shimmer at once (PickupGroup: 20). |
+| **Pulse** | alpha pulse, 3 times, then holds | "more below" chevrons, the picker's attention mark, an armed "Sure?" (1 s pulses; it lapses after the third); a control that wants a click as it appears: StockClerk's Restock on arriving with something short, TalentKeeper's zone-in prompt button and the ready check strip's Switch on a wrong build |
 
 - **Motion during a game hitch is invisible:** don't animate on events where the game freezes (a spec change landing). Animate before (a cast fill) or after.
 - A new motion joins this table before it ships in any addon.
