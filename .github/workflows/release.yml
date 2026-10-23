@@ -122,14 +122,22 @@ jobs:
         # Run release.sh directly (what the packager action does) so the
         # ref can be presented as the tag: on a branch push the packager
         # otherwise sees a tag at HEAD and skips, expecting a tag-push run.
-        # -d: no CurseForge upload (webhook handles that)
+        # CurseForge: with a CF_API_KEY repo secret the packager uploads the
+        # zip itself (project ID from the TOC's X-Curse-Project-ID), which is
+        # more reliable than CurseForge's webhook; turn off Automatic
+        # Packaging on CurseForge then, or each release lands twice. Without
+        # the secret: -d, no upload (the webhook handles it).
         # -w: no WoWInterface upload
         # -a: no Wago upload (no Wago project configured)
+        env:
+          CF_API_KEY: ${{ secrets.CF_API_KEY }}
         run: |
           TAG="${{ steps.tag.outputs.tag }}"
           curl -fsSL https://raw.githubusercontent.com/BigWigsMods/packager/master/release.sh -o /tmp/release.sh
+          FLAGS="-w -a"
+          [ -z "$CF_API_KEY" ] && FLAGS="$FLAGS -d"
           GITHUB_REF="refs/tags/$TAG" GITHUB_REF_NAME="$TAG" GITHUB_REF_TYPE=tag \
-            bash /tmp/release.sh -d -w -a
+            bash /tmp/release.sh $FLAGS
 
       - name: Create GitHub Release
         if: steps.tag.outputs.skip != 'true'

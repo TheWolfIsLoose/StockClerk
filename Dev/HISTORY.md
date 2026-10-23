@@ -10,6 +10,10 @@ or, where it had no entry, from that version's GitHub release notes.
 > There is no v1.1.2 stable: the v1.1.2 alphas are the start of v1.2.0
 > (efficiency pass). v1.2.0 plan: `Dev/ROADMAP.md`.
 
+## v1.5.1 (2026-10-23)
+
+Motion (suite rule: motion marks what just changed): `MF.Shimmer` / `MF.Pulse`; Restock pulses on arriving at the AH or bank with something short when Express restock is off (`MF:PulseRestock`); rows short now but not when the window last closed shimmer once (`DB.char.ui.shortAtClose`, snapshot in the frame's OnHide); setting "Animate what changed" (`settings.motion`, default on; settings rows below it moved down 24px). Row accent strip monochrome: `Palette.short` / `ringRest` (was green / orange-red). Release workflow: with a `CF_API_KEY` secret the packager uploads to CurseForge itself (webhook unreliable); without it, unchanged.
+
 ## v1.5.0 (2026-10-22)
 
 Suite style pass (`Dev/SUITE-STYLE.md`): accent white in the Mine view (`Palette.brand`), warband blue kept for the Warband view; yellow `FFD84A` warnings, red `FF6666` short / over cap / errors; two-tone title (white Stock, gray Clerk) and chat prefix; header gains the 16px icon, title in the Regular font with the version on its baseline (yellow for dev builds); `ICON_REST` 0.7; buttons Small font, 20px; checkout marks follow the accent; white icon. Have / Cap / Done drop colour codes when the text is plain white. Smoke test reads past the two-tone name.

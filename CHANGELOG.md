@@ -1,4 +1,4 @@
-## v1.5.0
+## v1.5.1
 
-- New look: a quieter, monochrome style shared across our addons. Your list is white, the warband list stays blue, and red still marks what you are short on.
-- A tidier header (icon, name and version) and smaller, consistent buttons.
+- The Restock button pulses when you arrive at the Auction House or bank with something short, and items that went short since you last opened StockClerk shimmer once. Turn it off with Animate what changed in settings.
+- The strip at the left of each row is gray when stocked and red when short.
