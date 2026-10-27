@@ -51,17 +51,17 @@ All text tokens pass 4.5:1 on the panel (0.06 grey) and the window (0.031 grey);
 | `soft` | `BDBDBD` (0.74) | 10:1 | tooltip bodies, explanations, instructions |
 | `muted` | `8C8C8C` (0.55) | 5.7:1 | labels, column headings, placeholders, "off", hints in chat, release version label |
 | faint | `666666` (0.4) | 3.3:1 | decoration only: an em-dash for "no value", separator dots. Never words. |
-| `warn` | `FFD84A` yellow | 13.9:1 | warnings, untimed / over cap, dev / alpha / beta version label; mark ▲ |
-| `bad` | `FF6666` red | 6.7:1 | errors, failures, shortages, destructive labels; mark ✕ |
-| `info` | `5AA9FF` blue | 7.8:1 | something worth a look that isn't a problem (PickupGroup's leader view: fills a seat); also StockClerk's Warband view (its one mode colour). Never for "new" in a group list: Blizzard colours a group with a friend in it blue, so new groups get a white edge instead |
+| `warn` | `FFD84A` yellow | 13.9:1 | warnings, untimed / over cap, dev / alpha / beta version label |
+| `bad` | `FF6666` red | 6.7:1 | errors, failures, shortages, destructive labels |
+| `info` | `5AA9FF` blue | 7.8:1 | something worth a look that isn't a problem (PickupGroup's leader view: fills a seat); also StockClerk's Warband view (its one mode colour). Never for "new" in a group list: Blizzard colours a group with a friend in it blue, so new groups get a white edge instead. Blue keeps both meanings only while they never share an addon: StockClerk uses blue for Warband alone |
 | `good` | `4ADE80` green | 11.0:1 | yours and in progress: PickupGroup's sign-ups while they're waiting or invited (name, dungeon, edge), a sign-up that got you in (added 2026-10-23) |
 
 Rules:
-- **Marks are drawn, not typed:** the bundled font has no ✓ ▲ ✕ (only × and !), so the check, triangle and cross are drawn glyphs like the header icons (Expressway may lack them too).
+- **Marks are drawn, not typed:** the bundled font has no ✓ (only × and !), so the check is a drawn glyph like the header icons (Expressway may lack it too).
 - Four meaning colours, far apart in hue: yellow (the bright one) and red (the dark one) for attention, blue for info, green for yours and in progress (yellow vs red 2.1:1, where the old amber vs red was 1.3:1). No near-duplicates, no fifth colour without a guide change. Green is not mint: a saturated mid green, kept to things that are the player's own and still going.
 - No mint anywhere in the UI (Tones' Organic set colour is content, so it stays).
 - Neutral feedback ("nothing to do") is muted, not red.
-- **Colour is never the only cue (1.4.1):** pair it with a word, mark or shape (untimed key = yellow **and** a trailing x; `warn` always with ▲, `bad` with ✕ where there's room; friend vs guild = different glyphs).
+- **Colour is never the only cue (1.4.1):** pair it with a word, mark or shape (untimed key = yellow **and** a trailing x; friend vs guild = different glyphs). Yellow and red always come with a word, so they get no extra ▲ / ✕ marks.
 - **Selection vs live state:** the selection wash marks what the player clicked; white text **and** a 2px edge bar mark what's live (TalentKeeper: the build actually committed in the tree). Never the same mark for both.
 - **Blizzard's own colours stay Blizzard's:** class colours, item quality, raid difficulty, Battle.net friend blue, guild green, Raider.IO's colours. Don't recolour them to the palette.
 - **Marks inside Blizzard's frames use Blizzard's art,** recoloured only where the game's own language already does it (TalentKeeper: the game's green glow for talents a build takes, the same glow in red for talents it drops). Our palette is for our own frames.
