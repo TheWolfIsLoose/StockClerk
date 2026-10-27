@@ -10,6 +10,10 @@ or, where it had no entry, from that version's GitHub release notes.
 > There is no v1.1.2 stable: the v1.1.2 alphas are the start of v1.2.0
 > (efficiency pass). v1.2.0 plan: `Dev/ROADMAP.md`.
 
+## Next (on `dev`, not released)
+
+Nothing yet.
+
 ## v1.5.1 (2026-10-23)
 
 Motion (suite rule: motion marks what just changed): `MF.Shimmer` / `MF.Pulse`; Restock pulses on arriving at the AH or bank with something short when Express restock is off (`MF:PulseRestock`); rows short now but not when the window last closed shimmer once (`DB.char.ui.shortAtClose`, snapshot in the frame's OnHide); setting "Animate what changed" (`settings.motion`, default on; settings rows below it moved down 24px). Row accent strip monochrome: `Palette.short` / `ringRest` (was green / orange-red). (A direct CurseForge upload from the workflow was tried and reverted the same day: the webhook stays the one path to CurseForge.)

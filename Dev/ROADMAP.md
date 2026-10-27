@@ -11,11 +11,9 @@ disagree), **Open** (needs an answer before build).
 
 ## Next session: start here
 
-**2026-10-23: v1.5.1 released** (motion: Restock pulse, newly short rows shimmer; gray / red row strip).
+**2026-10-23: v1.5.1 released** (motion: Restock pulse, newly short rows shimmer; gray / red row strip). v1.5.0 2026-10-22 (suite style pass: monochrome palette with the Warband view's blue kept, two-tone title, icon in the header, Small 20px buttons, white icon). Notes in `Dev/HISTORY.md`. Nothing unreleased on `dev`. StockClerk is close to feature-complete; the player uses it and collects feedback.
 
-CurseForge publishing stays on the webhook (player, 2026-10-23: no direct uploads). When it misses a tag, upload the release zip by hand with the CHANGELOG text.
-
-**2026-10-22: v1.5.0 released** (suite style pass: monochrome palette with the Warband view's blue kept, two-tone title, icon in the header, Small 20px buttons, white icon). Notes in `Dev/HISTORY.md`. `main` = `dev`. StockClerk is close to feature-complete; the player uses it and collects feedback.
+CurseForge publishing stays on the webhook (decided 2026-10-23: no direct uploads). When it misses a tag, upload the release zip by hand with the CHANGELOG text.
 
 Open:
 1. Not yet seen in game (organic): buy on one character and switch before depositing (transit: not short there); a soulbound listed item at Deposit (red mark, footer); a full warband bank; the Warband portal for keep-gold.
