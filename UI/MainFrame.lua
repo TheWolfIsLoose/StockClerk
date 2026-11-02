@@ -58,7 +58,7 @@ function MF.ApplyFontFace()
 end
 
 -- ---------------------------------------------------------------------------
--- Palette (after atrocityEssentials: near-black, flat). The window paints one
+-- Palette (near-black, flat). The window paints one
 -- fill; regions are separated by 1px black lines, not extra shades.
 -- ---------------------------------------------------------------------------
 local Palette = {
@@ -260,6 +260,7 @@ local function MakeEditBox(parent, placeholder, maxLetters, tipTitle, tipBody)
     ph:SetJustifyH("LEFT")
     ph:SetText(placeholder)
     ph:SetTextColor(0.55, 0.55, 0.55, 1)
+    box.placeholder = ph
     local function refresh() ph:SetShown(eb:GetText() == "" and not eb:HasFocus()) end
 
     local function over() return box:IsMouseOver() or eb:IsMouseOver() end
@@ -331,16 +332,17 @@ local function WatchRowHover(row)
     row:SetScript("OnUpdate", nil)
 end
 
--- The suite's motions: a shimmer (one 2 s white sweep, "this row is news")
--- and a pulse (three 1 s fades, "this wants a click").
-function MF.Shimmer(r, h)
+-- The suite's motions: a shimmer (one 2 s white sweep, "this row is news";
+-- the gold line's is gold) and a pulse (three 1 s fades, "this wants a click").
+function MF.Shimmer(r, h, c)
     local clip = CreateFrame("Frame", nil, r)
     clip:SetAllPoints()
     clip:SetClipsChildren(true)
     local band = CreateFrame("Frame", nil, clip)
     band:SetSize(90, h)
     band:SetPoint("RIGHT", clip, "LEFT")
-    local none, peak = CreateColor(1, 1, 1, 0), CreateColor(1, 1, 1, 0.15)
+    c = c or { 1, 1, 1, 0.15 }
+    local none, peak = CreateColor(c[1], c[2], c[3], 0), CreateColor(c[1], c[2], c[3], c[4])
     for half = 1, 2 do
         local t = band:CreateTexture(nil, "ARTWORK")
         t:SetColorTexture(1, 1, 1, 1)
@@ -1162,7 +1164,7 @@ function MF:Build()
     -- ---- The list -----------------------------------------------------------
     local listHolder = CreateFrame("Frame", nil, f)
     listHolder:SetPoint("TOPLEFT", headers, "BOTTOMLEFT", 4, -2)
-    listHolder:SetPoint("BOTTOMRIGHT", footer, "TOPRIGHT", -4, 2)
+    listHolder:SetPoint("BOTTOMRIGHT", self:BuildGoldLine(f, footer), "TOPRIGHT", -4, 2)
     local scrollBox = CreateFrame("Frame", nil, listHolder, "WowScrollBoxList")
     scrollBox:SetPoint("TOPLEFT")
     scrollBox:SetPoint("BOTTOMRIGHT", -18, 0)
@@ -1187,6 +1189,95 @@ function MF:Build()
     self.frame = f
     self:SetView(self:View())
     return f
+end
+
+-- ---------------------------------------------------------------------------
+-- Gold line: this character's gold (gold coin, white amount) and its Minimum gold, pinned under the
+-- list like a receipt's bottom line. Window chrome, not a row: it never
+-- scrolls, sorts, filters, counts as short or drags. Same columns as a row
+-- (offsets less the list's 22px right inset): gold under Have, the minimum
+-- across Need and Cap. Below the minimum the amount turns amber: the bank
+-- tops it up on its own, so it's never the red of a short item.
+-- ---------------------------------------------------------------------------
+local GOLD = { 1, 0.82, 0, 1 }  -- WoW's coin gold
+
+function MF:BuildGoldLine(f, footer)
+    local line = CreateFrame("Frame", nil, f)
+    line:SetHeight(ROW_HEIGHT)
+    line:SetPoint("BOTTOMLEFT", footer, "TOPLEFT")
+    line:SetPoint("BOTTOMRIGHT", footer, "TOPRIGHT")
+    ApplyBand(line, Palette.bandTint)
+    AddRule(line, "TOP")
+    MF.Shimmer(line, ROW_HEIGHT, { GOLD[1], GOLD[2], GOLD[3], 0.25 })
+
+    local coin = line:CreateTexture(nil, "OVERLAY")
+    coin:SetTexture("Interface\\MoneyFrame\\UI-GoldIcon")
+    coin:SetSize(14, 14)
+    coin:SetPoint("LEFT", 28, 0)
+    local name = line:CreateFontString(nil, "OVERLAY", "StockClerkFontSmall")
+    name:SetPoint("LEFT", 52, 0)
+    name:SetText("Gold")
+    line.amount = line:CreateFontString(nil, "OVERLAY", "StockClerkFontSmall")
+    line.amount:SetPoint("RIGHT", -240, 0)
+
+    -- The minimum: an edit box spanning Need and Cap. Unfocused it's empty, so
+    -- its placeholder shows the formatted value (or the invitation).
+    local box, eb = MakeEditBox(line, "", 7, "Minimum gold on this character", function()
+        local keep = ADDON.DB.char.goldKeep
+        return "At any bank, if you have less than this, StockClerk tops you up from the warband bank. It never deposits gold. Whole gold only."
+            .. (keep and "\n\nClear the box to turn it off." or "")
+    end)
+    box:SetHeight(20)
+    box:SetWidth(102)
+    box:SetPoint("RIGHT", -122, 0)
+    box.placeholder:SetJustifyH("RIGHT")
+    eb:SetJustifyH("RIGHT")
+    eb:HookScript("OnEditFocusGained", function(self)
+        local keep = ADDON.DB.char.goldKeep
+        self:SetText(keep and tostring(keep / 10000) or "")
+    end)
+    eb:SetScript("OnEnterPressed", eb.ClearFocus)
+    eb:SetScript("OnEscapePressed", function(self) self._cancel = true; self:ClearFocus() end)
+    eb:HookScript("OnEditFocusLost", function(self)
+        local g, cancel = tonumber(self:GetText()), self._cancel
+        self._cancel = nil
+        self:SetText("")
+        if cancel then return MF:RefreshGold() end
+        local keep = g and g > 0 and g * 10000 or nil
+        if keep ~= ADDON.DB.char.goldKeep then
+            ADDON.DB.char.goldKeep = keep
+            ADDON.Log:Emit("setting", nil, { key = "goldKeep", on = keep ~= nil, value = keep })
+            ADDON.BankRestock:TakeOverGold()
+            local msg = ADDON.bankOpen and ADDON.BankRestock:SettleGold()
+            if msg then MF:SetStatus(msg, true) end
+        end
+        MF:RefreshGold()
+    end)
+    line.minBox = box
+
+    line:RegisterEvent("PLAYER_MONEY")
+    line:SetScript("OnEvent", function() MF:RefreshGold() end)
+    line:SetScript("OnShow", function() MF:RefreshGold() end)
+    self.goldLine = line
+    self:RefreshGold()
+    return line
+end
+
+function MF:RefreshGold()
+    local line = self.goldLine
+    if not line then return end
+    local have, keep = GetMoney(), ADDON.DB.char.goldKeep
+    line.amount:SetText(MoneyText(have, "gold"))
+    if keep and have < keep then line.amount:SetTextColor(unpack(MARK_AMBER)) else line.amount:SetTextColor(1, 1, 1) end
+    local ph = line.minBox.placeholder
+    ph:SetText(keep and ("min " .. MoneyText(keep, "gold")) or "Set a minimum")
+    if keep then ph:SetTextColor(1, 1, 1, 1) else ph:SetTextColor(0.55, 0.55, 0.55, 1) end
+end
+
+-- One gold glint when the bank tops this character up (motion setting).
+function MF:GlintGold()
+    local line = self.goldLine
+    if line and line:IsVisible() and ADDON.DB:Settings().motion then line.Shimmer() end
 end
 
 -- ---------------------------------------------------------------------------

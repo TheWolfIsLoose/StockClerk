@@ -14,7 +14,7 @@ Set how many of each flask, potion and food you want on hand. StockClerk shows w
 - **A list per character.** Add items by ID, by dragging them from your bags, or in bulk. One click adds this expansion's common consumables.
 - **A warband list.** Keep at least a set number of anything in your warband bank for all your characters. After your own shopping, StockClerk offers to top it up, with its own price caps.
 - **Deposit at the bank.** Anything above your own targets goes into the warband bank, where every character can restock from it. Always a button, never automatic.
-- **Minimum gold on each character.** Set an amount per character, and at any bank StockClerk tops you back up to it from the warband bank. It never deposits your gold. Whole gold only.
+- **Minimum gold on each character.** Set it on the Gold line under your list, and at any bank StockClerk tops you back up to it from the warband bank. It never deposits your gold. Whole gold only.
 - **Restock from bank.** At the bank, one click moves exactly what you're short from your bank and warband bank into your bags.
 - **Checkout at the Auction House.** Restock goes down your list and **Buy** appears right where you clicked, so it's one click per item and rows tick off as you go. The Restock button shows what the trip will cost at last seen prices. Nothing is ever bought without your click.
 - **Price caps.** Set a max per unit and StockClerk won't pay more. It also asks for a second look before you buy something you already have in the bank, have no cap on, or that costs well above what you last saw.

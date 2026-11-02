@@ -221,6 +221,7 @@ function BR:SettleGold()
     local gold = function(c) return ADDON.MoneyText(c, "gold") end
     if move < 0 and C_Bank.CanWithdrawMoney(acct) then
         C_Bank.WithdrawMoney(acct, -move)
+        ADDON.MainFrame:GlintGold()
     elseif short == 0 then
         return
     else
