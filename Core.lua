@@ -81,6 +81,7 @@ end)
 
 On("PLAYER_LOGIN", function()
     ADDON.Minimap:Refresh()
+    ADDON.BankRestock:TakeOverGold()
     On("GET_ITEM_INFO_RECEIVED", function(itemID)
         -- Fires for every item any addon asks about (thousands in an AH scan):
         -- repaint only for ours, and only while the window shows.

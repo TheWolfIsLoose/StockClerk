@@ -93,6 +93,7 @@ local SETTING_LABELS = {
     autoRestock = "Express restock at Auction House", autoRestockBank = "Express restock at bank",
     shopWarband = "Shop for the warband on this character",
     goldKeep = "Minimum gold on this character", minimapIcon = "Minimap icon",
+    euiAutoGold = "EllesmereUI Auto Deposit/Withdraw",
     motion = "Animate what changed",
 }
 

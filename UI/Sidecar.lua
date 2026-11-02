@@ -99,6 +99,7 @@ local function Build()
         if keep == ADDON.DB.char.goldKeep then return end
         ADDON.DB.char.goldKeep = keep
         ADDON.Log:Emit("setting", nil, { key = "goldKeep", on = keep ~= nil, value = keep })
+        ADDON.BankRestock:TakeOverGold()
         local msg = ADDON.bankOpen and ADDON.BankRestock:SettleGold()
         if msg then MF:SetStatus(msg, true) end
     end

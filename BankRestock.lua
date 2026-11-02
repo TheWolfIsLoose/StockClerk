@@ -199,6 +199,19 @@ function BR.PlanGold(keep, have, banked)
     return -take, want - take
 end
 
+-- A bag addon's account-wide auto gold (one exact amount, deposits too) can
+-- drag a character below its floor. With a floor set, Minimum gold wins: turn
+-- that option off, live (its own Sync drops the bank event), and say so.
+function BR:TakeOverGold()
+    local db = _G.EllesmereUIDB
+    if not (ADDON.DB.char.goldKeep and db and db.bagAutoGold) then return end
+    db.bagAutoGold = nil
+    local ns = EllesmereUI and EllesmereUI._ModuleNS and EllesmereUI._ModuleNS.EllesmereUIBags
+    if ns and ns.AutoGold then ns.AutoGold.Sync() end
+    ADDON.Log:Emit("setting", nil, { key = "euiAutoGold", on = false })
+    ADDON:Print("Turned off EllesmereUI's Auto Deposit/Withdraw (all characters) so it can't take you below Minimum gold.")
+end
+
 -- Settle now if a floor is set and the warband bank is reachable.
 -- Returns a footer line, or nil when nothing moved.
 function BR:SettleGold()

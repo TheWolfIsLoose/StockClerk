@@ -503,6 +503,19 @@ do -- Minimum gold: a floor only (never deposits), whole gold, warband balance a
   eq(100, 40 * g, 0, 0, 60 * g)                -- warband empty
   eq(100, 99999999999 - 10 * g, 500 * g, 0, 0) -- above the floor at the cap: nothing moves
 end
+do -- Minimum gold turns an account-wide auto gold option off, live, only when a floor is set
+  local synced, br, char = 0, ADDON.BankRestock, ADDON.DB.char
+  local origPrint, keep = ADDON.Print, char.goldKeep
+  ADDON.Print = function() end
+  _G.EllesmereUIDB = { bagAutoGold = true }
+  _G.EllesmereUI = { _ModuleNS = { EllesmereUIBags = { AutoGold = { Sync = function() synced = synced + 1 end } } } }
+  char.goldKeep = nil; br:TakeOverGold()
+  assert(EllesmereUIDB.bagAutoGold == true and synced == 0, "no floor: leave it alone")
+  char.goldKeep = 100 * 10000; br:TakeOverGold()
+  assert(EllesmereUIDB.bagAutoGold == nil and synced == 1, "floor set: turned off and synced")
+  br:TakeOverGold(); assert(synced == 1, "already off: nothing again")
+  _G.EllesmereUIDB, _G.EllesmereUI, ADDON.Print, char.goldKeep = nil, nil, origPrint, keep
+end
 do -- Restock from Bank planner: exact amounts, char bank first, top up stacks, bag space
   local plan, max20 = ADDON.BankRestock.PlanPulls, function() return 20 end
   local sources = { { bag = 6, slot = 1, itemID = 1, count = 10 }, { bag = 7, slot = 1, itemID = 2, count = 50 },
