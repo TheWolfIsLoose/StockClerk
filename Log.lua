@@ -92,7 +92,7 @@ local SETTING_LABELS = {
     autoOpenAtAH = "Auto-open at Auction House", autoOpenAtBank = "Auto-open at bank",
     autoRestock = "Express restock at Auction House", autoRestockBank = "Express restock at bank",
     shopWarband = "Shop for the warband on this character",
-    goldKeep = "Keep gold on this character", minimapIcon = "Minimap icon",
+    goldKeep = "Minimum gold on this character", minimapIcon = "Minimap icon",
     motion = "Animate what changed",
 }
 
@@ -137,7 +137,7 @@ local FORMAT = {
     end,
     gold          = function(p)
         local c, short = p.copper or 0, (p.short or 0) > 0 and (", %s short"):format(Money(p.short)) or ""
-        if c > 0 then return "Deposited " .. Money(c) .. " to the warband bank" end
+        if c > 0 then return "Deposited " .. Money(c) .. " to the warband bank" end  -- before v1.6: keep gold deposited too
         if c < 0 then return "Withdrew " .. Money(-c) .. " from the warband bank" .. short end
         return "No gold in the warband bank" .. short
     end,

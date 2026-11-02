@@ -30,9 +30,9 @@ shared stock in your warband bank too, and every character restocks from it.
 - **Deposit at the bank.** Anything above your own targets goes into the
   warband bank, where every character can restock from it. Always a
   button, never automatic.
-- **Keep gold on each character.** Set an amount per character, and at
-  any bank StockClerk deposits the rest in the warband bank, or tops you
-  back up from it. Whole gold only.
+- **Minimum gold on each character.** Set an amount per character, and at
+  any bank StockClerk tops you back up to it from the warband bank. It
+  never deposits your gold. Whole gold only.
 - **Restock from bank.** At the bank, one click moves exactly what you're
   short from your bank and warband bank into your bags.
 - **Checkout at the Auction House.** Restock goes down your list and

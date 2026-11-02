@@ -81,9 +81,9 @@ local function Build()
     }
     f.checks[#f.checks - 1]:HookScript("OnClick", function() ADDON.Minimap:Refresh() end)
 
-    -- Per character, whole gold; blank = off. Settles right away at a bank.
-    local goldBox, goldEB = MF.MakeEditBox(f, "Off", 7, "Keep gold on this character",
-        "At any bank, StockClerk deposits gold above this amount in the warband bank, and withdraws from it to top you back up. Whole gold only. Leave blank to turn off.")
+    -- Per character, whole gold, a floor only; blank = off. Settles right away at a bank.
+    local goldBox, goldEB = MF.MakeEditBox(f, "Off", 7, "Minimum gold on this character",
+        "At any bank, if you have less than this, StockClerk tops you up from the warband bank. It never deposits gold. Whole gold only. Leave blank to turn off.")
     goldBox:SetPoint("TOPRIGHT", -12, -198)
     goldBox:SetWidth(76)
     local goldLabel = f:CreateFontString(nil, "OVERLAY", "StockClerkFont")
@@ -91,7 +91,7 @@ local function Build()
     goldLabel:SetPoint("BOTTOMRIGHT", goldBox, "BOTTOMLEFT", -8, 0)
     goldLabel:SetJustifyH("LEFT")
     goldLabel:SetWordWrap(false)
-    goldLabel:SetText("Keep gold on this character")
+    goldLabel:SetText("Minimum gold on this character")
     local function commitGold()
         local g = tonumber(goldEB:GetText())
         local keep = g and g > 0 and g * 10000 or nil

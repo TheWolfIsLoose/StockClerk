@@ -13,8 +13,9 @@
       ui.stuckOnly   "short items only" filter (old name kept for saved data)
       ui.view        "mine" | "warband": the list the window shows
       shopWarband    offer the warband pass at the AH on this character
-      goldKeep       copper to keep on this character (whole gold), the rest
-                     in the warband bank; nil = off (see BankRestock:SettleGold)
+      goldKeep       minimum copper on this character (whole gold), topped up
+                     from the warband bank, never deposited; nil = off
+                     (see BankRestock:SettleGold)
       pendingBuys    mail ledger, see RestockLoop
     StockClerkDB.global (account): settings, log, warband list,
       prices[itemID] = { copper, seenAt, source }  Last Seen, shared by every

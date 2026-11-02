@@ -12,7 +12,8 @@ or, where it had no entry, from that version's GitHub release notes.
 
 ## Next (on `dev`, not released)
 
-Nothing yet.
+- Keep gold is now a floor only ("Minimum gold on this character", player 2026-11-02): below the amount, withdraw whole gold from the warband bank to reach it; at or above it, nothing moves. It never deposits. `BR.PlanGold` lost its deposit branch (smoke updated); the saved key stays `goldKeep`; the log formatter still reads old deposit entries.
+- Open: EllesmereUI v9.7.2's Bags "Auto Deposit/Withdraw" (keep an exact amount at the bank) can deposit a character below the minimum. Player's call: StockClerk defers to itself by turning EUI's option off when a minimum is set (as PickupGroup does). Needs the setting's key from the player's EllesmereUI SavedVariables.
 
 ## v1.5.1 (2026-10-23)
 

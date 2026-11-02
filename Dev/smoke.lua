@@ -490,18 +490,18 @@ do -- Filter chip: shows only short items (items 111 need 5, 42 need 30; bags ho
   assert(shown and #shown.n == 1 and shown.n[1] == 42, "filter should show only the short item: " .. (shown and table.concat(shown.n, ",") or "nothing shown"))
   ADDON.DB.char.ui.stuckOnly = false; mf.scrollBox = sb; CreateDataProvider = origCDP
 end
-do -- Keep gold: whole gold only, both ways, warband balance and gold cap respected
+do -- Minimum gold: a floor only (never deposits), whole gold, warband balance and gold cap respected
   local g, plan = 10000, ADDON.BankRestock.PlanGold
   local function eq(keep, have, banked, move, short)
     local m, s = plan(keep * g, have, banked)
     assert(m == move and s == short, ("PlanGold(%d, %d, %d) = %d, %d"):format(keep, have, banked, m, s))
   end
-  eq(100, 150 * g + 55, 0, 50 * g, 0)          -- deposit the whole-gold surplus, silver stays
-  eq(100, 100 * g + 9999, 0, 0, 0)             -- under 1g over: nothing moves
+  eq(100, 150 * g + 55, 0, 0, 0)               -- above the floor: nothing moves (no ceiling)
+  eq(100, 100 * g, 50 * g, 0, 0)               -- exactly at the floor
   eq(100, 99 * g + 50, 10 * g, -g, 0)          -- 50s under: withdraw a whole 1g
   eq(100, 40 * g, 25 * g + 5, -25 * g, 35 * g) -- warband short: take its whole gold, report the rest
   eq(100, 40 * g, 0, 0, 60 * g)                -- warband empty
-  eq(100, 150 * g, 99999999999 - 20 * g, 20 * g, 0) -- warband near the cap
+  eq(100, 99999999999 - 10 * g, 500 * g, 0, 0) -- above the floor at the cap: nothing moves
 end
 do -- Restock from Bank planner: exact amounts, char bank first, top up stacks, bag space
   local plan, max20 = ADDON.BankRestock.PlanPulls, function() return 20 end
