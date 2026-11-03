@@ -490,18 +490,37 @@ do -- Filter chip: shows only short items (items 111 need 5, 42 need 30; bags ho
   assert(shown and #shown.n == 1 and shown.n[1] == 42, "filter should show only the short item: " .. (shown and table.concat(shown.n, ",") or "nothing shown"))
   ADDON.DB.char.ui.stuckOnly = false; mf.scrollBox = sb; CreateDataProvider = origCDP
 end
-do -- Keep gold: whole gold only, both ways, warband balance and gold cap respected
+do -- Minimum gold: a floor only (never deposits), whole gold, warband balance and gold cap respected
   local g, plan = 10000, ADDON.BankRestock.PlanGold
   local function eq(keep, have, banked, move, short)
     local m, s = plan(keep * g, have, banked)
     assert(m == move and s == short, ("PlanGold(%d, %d, %d) = %d, %d"):format(keep, have, banked, m, s))
   end
-  eq(100, 150 * g + 55, 0, 50 * g, 0)          -- deposit the whole-gold surplus, silver stays
-  eq(100, 100 * g + 9999, 0, 0, 0)             -- under 1g over: nothing moves
+  eq(100, 150 * g + 55, 0, 0, 0)               -- above the floor: nothing moves (no ceiling)
+  eq(100, 100 * g, 50 * g, 0, 0)               -- exactly at the floor
   eq(100, 99 * g + 50, 10 * g, -g, 0)          -- 50s under: withdraw a whole 1g
   eq(100, 40 * g, 25 * g + 5, -25 * g, 35 * g) -- warband short: take its whole gold, report the rest
   eq(100, 40 * g, 0, 0, 60 * g)                -- warband empty
-  eq(100, 150 * g, 99999999999 - 20 * g, 20 * g, 0) -- warband near the cap
+  eq(100, 99999999999 - 10 * g, 500 * g, 0, 0) -- above the floor at the cap: nothing moves
+end
+do -- Minimum gold turns an account-wide auto gold option off, live, only when a floor is set
+  local synced, br, char = 0, ADDON.BankRestock, ADDON.DB.char
+  local origPrint, keep = ADDON.Print, char.goldKeep
+  ADDON.Print = function() end
+  _G.EllesmereUIDB = { bagAutoGold = true }
+  _G.EllesmereUI = { _ModuleNS = { EllesmereUIBags = { AutoGold = { Sync = function() synced = synced + 1 end } } } }
+  char.goldKeep = nil; br:TakeOverGold()
+  assert(EllesmereUIDB.bagAutoGold == true and synced == 0, "no floor: leave it alone")
+  char.goldKeep = 100 * 10000; br:TakeOverGold()
+  assert(EllesmereUIDB.bagAutoGold == nil and synced == 1, "floor set: turned off and synced")
+  br:TakeOverGold(); assert(synced == 1, "already off: nothing again")
+  _G.EllesmereUIDB, _G.EllesmereUI, ADDON.Print, char.goldKeep = nil, nil, origPrint, keep
+end
+do -- Gold line's Need cell: 9,999 / 200k / 1.5m (fits 42px)
+  local sg = ADDON.MainFrame.ShortGold
+  for g, want in pairs({ [999] = "999", [150000] = "150k", [175999] = "175k", [2000000] = "2m", [1550000] = "1.5m", [9999999] = "9.9m" }) do
+    assert(sg(g) == want, ("ShortGold(%d) = %s, want %s"):format(g, sg(g), want))
+  end
 end
 do -- Restock from Bank planner: exact amounts, char bank first, top up stacks, bag space
   local plan, max20 = ADDON.BankRestock.PlanPulls, function() return 20 end

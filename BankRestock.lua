@@ -183,37 +183,45 @@ local function scan()
 end
 
 -- ---------------------------------------------------------------------------
--- Gold: keep this character at its keep amount (DB.char.goldKeep, copper),
--- the rest in the warband bank. Whole gold only: silver and copper stay put.
--- Pure: returns the copper to move (+ deposit, - withdraw) and the gold the
--- warband bank couldn't cover. The 12.1 probe moved gold from an event and a
--- timer with no click, so this runs on every bank visit.
+-- Gold: a floor for this character (DB.char.goldKeep, copper). Below it,
+-- withdraw from the warband bank to reach it; at or above it, nothing moves.
+-- Never deposits. Whole gold only: silver and copper stay put.
+-- Pure: returns the copper to move (0 or negative = withdraw) and the gold
+-- the warband bank couldn't cover. The 12.1 probe moved gold from an event
+-- and a timer with no click, so this runs on every bank visit.
 -- ---------------------------------------------------------------------------
 local G, MAX_MONEY = 10000, 99999999999  -- copper per gold; the 9,999,999g 99s 99c cap
 
 function BR.PlanGold(keep, have, banked)
-    local diff = have - keep
-    if diff >= G then
-        return math.floor(math.min(diff, MAX_MONEY - banked) / G) * G, 0
-    elseif diff < 0 then
-        local want = math.ceil(-diff / G) * G
-        local take = math.min(want, math.floor(banked / G) * G, math.floor((MAX_MONEY - have) / G) * G)
-        return -take, want - take
-    end
-    return 0, 0
+    if have >= keep then return 0, 0 end
+    local want = math.ceil((keep - have) / G) * G
+    local take = math.min(want, math.floor(banked / G) * G, math.floor((MAX_MONEY - have) / G) * G)
+    return -take, want - take
 end
 
--- Settle now if a keep amount is set and the warband bank is reachable.
+-- A bag addon's account-wide auto gold (one exact amount, deposits too) can
+-- drag a character below its floor. With a floor set, Minimum gold wins: turn
+-- that option off, live (its own Sync drops the bank event), and say so.
+function BR:TakeOverGold()
+    local db = _G.EllesmereUIDB
+    if not (ADDON.DB.char.goldKeep and db and db.bagAutoGold) then return end
+    db.bagAutoGold = nil
+    local ns = EllesmereUI and EllesmereUI._ModuleNS and EllesmereUI._ModuleNS.EllesmereUIBags
+    if ns and ns.AutoGold then ns.AutoGold.Sync() end
+    ADDON.Log:Emit("setting", nil, { key = "euiAutoGold", on = false })
+    ADDON:Print("Turned off EllesmereUI's Auto Deposit/Withdraw (all characters) so it can't take you below Minimum gold.")
+end
+
+-- Settle now if a floor is set and the warband bank is reachable.
 -- Returns a footer line, or nil when nothing moved.
 function BR:SettleGold()
     local keep, acct = ADDON.DB.char.goldKeep, Enum.BankType.Account
     if not keep or not usable("Account") then return end
     local move, short = BR.PlanGold(keep, GetMoney(), C_Bank.FetchDepositedMoney(acct))
     local gold = function(c) return ADDON.MoneyText(c, "gold") end
-    if move > 0 and C_Bank.CanDepositMoney(acct) then
-        C_Bank.DepositMoney(acct, move)
-    elseif move < 0 and C_Bank.CanWithdrawMoney(acct) then
+    if move < 0 and C_Bank.CanWithdrawMoney(acct) then
         C_Bank.WithdrawMoney(acct, -move)
+        ADDON.MainFrame:GlintGold()
     elseif short == 0 then
         return
     else
@@ -221,8 +229,7 @@ function BR:SettleGold()
     end
     ADDON.Log:Emit("gold", nil, { copper = move, short = short })
     -- Short enough for the footer beside the button; Recent activity has the long form.
-    local msg = move > 0 and ("Deposited %s to the warband"):format(gold(move))
-        or move < 0 and ("Withdrew %s"):format(gold(-move)) or "No gold in the warband"
+    local msg = move < 0 and ("Withdrew %s"):format(gold(-move)) or "No gold in the warband"
     if short > 0 then msg = msg .. (" |cffff6666(%s short)|r"):format(gold(short)) end
     return msg .. "."
 end

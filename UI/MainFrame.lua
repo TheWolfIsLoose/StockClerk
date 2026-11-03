@@ -58,7 +58,7 @@ function MF.ApplyFontFace()
 end
 
 -- ---------------------------------------------------------------------------
--- Palette (after atrocityEssentials: near-black, flat). The window paints one
+-- Palette (near-black, flat). The window paints one
 -- fill; regions are separated by 1px black lines, not extra shades.
 -- ---------------------------------------------------------------------------
 local Palette = {
@@ -331,16 +331,17 @@ local function WatchRowHover(row)
     row:SetScript("OnUpdate", nil)
 end
 
--- The suite's motions: a shimmer (one 2 s white sweep, "this row is news")
--- and a pulse (three 1 s fades, "this wants a click").
-function MF.Shimmer(r, h)
+-- The suite's motions: a shimmer (one 2 s white sweep, "this row is news";
+-- the gold line's is gold) and a pulse (three 1 s fades, "this wants a click").
+function MF.Shimmer(r, h, c)
     local clip = CreateFrame("Frame", nil, r)
     clip:SetAllPoints()
     clip:SetClipsChildren(true)
     local band = CreateFrame("Frame", nil, clip)
     band:SetSize(90, h)
     band:SetPoint("RIGHT", clip, "LEFT")
-    local none, peak = CreateColor(1, 1, 1, 0), CreateColor(1, 1, 1, 0.15)
+    c = c or { 1, 1, 1, 0.15 }
+    local none, peak = CreateColor(c[1], c[2], c[3], 0), CreateColor(c[1], c[2], c[3], c[4])
     for half = 1, 2 do
         local t = band:CreateTexture(nil, "ARTWORK")
         t:SetColorTexture(1, 1, 1, 1)
@@ -368,6 +369,38 @@ function MF.Pulse(region)
     g:SetScript("OnPlay", function(self) self.n = 0 end)
     g:SetScript("OnLoop", function(self) self.n = self.n + 1; if self.n >= 3 then self:Stop() end end)
     return g
+end
+
+-- Need and Cap: click-to-edit cells (faint well; dark fill and white border
+-- on hover). A click swaps in an inline edit box. The edit box never calls
+-- EnableKeyboard(true), and clears focus when hidden (row recycled
+-- mid-edit): a hidden EditBox holding the keyboard swallows every key
+-- game-wide until /reload.
+local function MakeCell(row, width, right, maxLetters)
+    local cell = CreateFrame("Button", nil, row)
+    cell:SetSize(width, 20)
+    cell:SetPoint("RIGHT", right, 0)
+    cell:SetFrameLevel(row:GetFrameLevel() + 2)
+    ApplyFill(cell, CELL_FILL_IDLE)
+    AddBlackBorder(cell, CELL_BORDER_IDLE)
+    local text = cell:CreateFontString(nil, "OVERLAY", "StockClerkFontSmall")  -- on the cell: draws over its fill
+    text:SetPoint("RIGHT", -6, 0)
+    local edit = CreateFrame("EditBox", nil, row)
+    edit:SetFontObject("StockClerkFontSmall")
+    edit:SetAutoFocus(false)
+    edit:SetNumeric(true)
+    edit:SetMaxLetters(maxLetters)
+    edit:SetJustifyH("CENTER")
+    edit:SetSize(width, 20)
+    edit:SetPoint("CENTER", cell)
+    edit:SetFrameLevel(cell:GetFrameLevel() + 1)
+    edit.bg = Solid(row, "BACKGROUND", 0, Palette.bgDark)
+    edit.bg:SetPoint("TOPLEFT", edit, -4, 2)
+    edit.bg:SetPoint("BOTTOMRIGHT", edit, 4, -2)
+    edit.bg:Hide()
+    edit:HookScript("OnHide", function(self) if self:HasFocus() then self:ClearFocus() end end)
+    edit:Hide()
+    return cell, text, edit
 end
 
 local function BuildRow(row)
@@ -494,39 +527,8 @@ local function BuildRow(row)
     row.name:SetJustifyH("LEFT")
     row.name:SetWordWrap(false)
 
-    -- Need and Cap: click-to-edit cells (faint well; dark fill and white border
-    -- on hover). A click swaps in an inline edit box. The edit box never calls
-    -- EnableKeyboard(true), and clears focus when hidden (row recycled
-    -- mid-edit): a hidden EditBox holding the keyboard swallows every key
-    -- game-wide until /reload.
-    local function MakeCell(width, right, maxLetters)
-        local cell = CreateFrame("Button", nil, row)
-        cell:SetSize(width, 20)
-        cell:SetPoint("RIGHT", right, 0)
-        cell:SetFrameLevel(row:GetFrameLevel() + 2)
-        ApplyFill(cell, CELL_FILL_IDLE)
-        AddBlackBorder(cell, CELL_BORDER_IDLE)
-        local text = cell:CreateFontString(nil, "OVERLAY", "StockClerkFontSmall")  -- on the cell: draws over its fill
-        text:SetPoint("RIGHT", -6, 0)
-        local edit = CreateFrame("EditBox", nil, row)
-        edit:SetFontObject("StockClerkFontSmall")
-        edit:SetAutoFocus(false)
-        edit:SetNumeric(true)
-        edit:SetMaxLetters(maxLetters)
-        edit:SetJustifyH("CENTER")
-        edit:SetSize(width, 20)
-        edit:SetPoint("CENTER", cell)
-        edit:SetFrameLevel(cell:GetFrameLevel() + 1)
-        edit.bg = Solid(row, "BACKGROUND", 0, Palette.bgDark)
-        edit.bg:SetPoint("TOPLEFT", edit, -4, 2)
-        edit.bg:SetPoint("BOTTOMRIGHT", edit, 4, -2)
-        edit.bg:Hide()
-        edit:HookScript("OnHide", function(self) if self:HasFocus() then self:ClearFocus() end end)
-        edit:Hide()
-        return cell, text, edit
-    end
-    row.needCell, row.need, row.needEdit = MakeCell(42, -160, 5)
-    row.capCell,  row.cap,  row.capEdit  = MakeCell(50, -100, 7)  -- up to 9,999,999g
+    row.needCell, row.need, row.needEdit = MakeCell(row, 42, -160, 5)
+    row.capCell,  row.cap,  row.capEdit  = MakeCell(row, 50, -100, 7)  -- up to 9,999,999g
 
     -- Last Seen: dim last AH unit price, or a dash; tooltip with age and source.
     row.lastSeen = row:CreateFontString(nil, "OVERLAY", "StockClerkFontSmall")
@@ -1162,7 +1164,7 @@ function MF:Build()
     -- ---- The list -----------------------------------------------------------
     local listHolder = CreateFrame("Frame", nil, f)
     listHolder:SetPoint("TOPLEFT", headers, "BOTTOMLEFT", 4, -2)
-    listHolder:SetPoint("BOTTOMRIGHT", footer, "TOPRIGHT", -4, 2)
+    listHolder:SetPoint("BOTTOMRIGHT", self:BuildGoldLine(f, footer), "TOPRIGHT", 18, 2)
     local scrollBox = CreateFrame("Frame", nil, listHolder, "WowScrollBoxList")
     scrollBox:SetPoint("TOPLEFT")
     scrollBox:SetPoint("BOTTOMRIGHT", -18, 0)
@@ -1188,6 +1190,134 @@ function MF:Build()
     self:SetView(self:View())
     return f
 end
+
+-- ---------------------------------------------------------------------------
+-- Gold line: this character's gold and its Minimum gold, pinned under the
+-- list (the receipt's bottom line). Built on the row grid, so every column
+-- lines up: coin tile in the icon slot, "Gold" in the name slot, gold on
+-- hand under Have, the minimum in a Need cell. What says "not an item": the
+-- black rule above it, no grip, no accent strip, no Cap or Seen, and it never
+-- scrolls, sorts, filters or counts towards Restock. Below the minimum the
+-- amount is red like any short Have; the bank tops it up on its own.
+-- ---------------------------------------------------------------------------
+local GOLD_GLINT = { 1, 0.82, 0, 0.25 }  -- the shimmer, in coin gold
+
+-- 9,999 / 200k / 1.5m: fits the 42px Need cell; the tooltip has the exact figure.
+local function ShortGold(g)
+    if g < 10000 then return BreakUpLargeNumbers(g) end
+    if g < 1000000 then return math.floor(g / 1000) .. "k" end
+    return (("%.1f"):format(math.floor(g / 100000) / 10):gsub("%.0$", "")) .. "m"
+end
+MF.ShortGold = ShortGold
+
+function MF:BuildGoldLine(f, footer)
+    -- Same box as a row: list inset 4 on the left, list + scroll bar 22 on the right.
+    local line = CreateFrame("Frame", nil, f)
+    line:SetHeight(ROW_HEIGHT)
+    line:SetPoint("BOTTOMLEFT", footer, "TOPLEFT", 4, 0)
+    line:SetPoint("BOTTOMRIGHT", footer, "TOPRIGHT", -22, 0)
+    AddRule(line, "TOP")
+    MF.Shimmer(line, ROW_HEIGHT, GOLD_GLINT)
+
+    local coin = line:CreateTexture(nil, "OVERLAY")
+    coin:SetSize(18, 18)
+    coin:SetPoint("LEFT", 22, 0)  -- the row icon slot (grip 14 + 8)
+    coin:SetTexture("Interface\\Icons\\INV_Misc_Coin_01")
+    coin:SetTexCoord(0.08, 0.92, 0.08, 0.92)
+    local tile = Solid(line, "OVERLAY", -1, Palette.border)
+    tile:SetPoint("TOPLEFT", coin, -1, 1)
+    tile:SetPoint("BOTTOMRIGHT", coin, 1, -1)
+    local name = line:CreateFontString(nil, "OVERLAY", "StockClerkFontSmall")
+    name:SetPoint("LEFT", coin, "RIGHT", 8, 0)
+    name:SetText("Gold")
+    line.amount = line:CreateFontString(nil, "OVERLAY", "StockClerkFontSmall")
+    line.amount:SetPoint("RIGHT", -218, 0)  -- the Have text's right edge
+
+    -- The minimum: a Need cell. Click edits; Enter, Tab or blur commit; Escape discards.
+    local cell, text, edit = MakeCell(line, 42, -160, 7)
+    line.minText = text
+    local function close()
+        edit:Hide(); edit.bg:Hide(); text:Show()
+        cell.editing = false
+        SetBorderColor(cell, cell:IsMouseOver() and Palette.ringHover or CELL_BORDER_IDLE)
+    end
+    local function commit()
+        local g = tonumber(edit:GetText())
+        local keep = g and g > 0 and g * 10000 or nil
+        close()
+        if keep == ADDON.DB.char.goldKeep then return end
+        ADDON.DB.char.goldKeep = keep
+        ADDON.Log:Emit("setting", nil, { key = "goldKeep", on = keep ~= nil, value = keep })
+        ADDON.BankRestock:TakeOverGold()
+        local msg = ADDON.bankOpen and ADDON.BankRestock:SettleGold()
+        if msg then MF:SetStatus(msg, true) end
+        MF:RefreshGold()
+    end
+    cell:SetScript("OnClick", function()
+        local keep = ADDON.DB.char.goldKeep
+        edit:SetText(keep and tostring(keep / 10000) or "")
+        text:Hide(); edit:Show(); edit.bg:Show()
+        edit:SetFocus(); edit:HighlightText()
+        cell.editing = true
+        SetBorderColor(cell, Palette.brand)
+    end)
+    cell:SetScript("OnEnter", function(self)
+        if not self.editing then SetBorderColor(self, Palette.ringHover) end
+        ApplyFill(self, CELL_FILL_HOVER)
+        local keep = ADDON.DB.char.goldKeep
+        GameTooltip:SetOwner(self, "ANCHOR_TOP")
+        GameTooltip:SetText(keep and ("Minimum gold: %s"):format(MoneyText(keep, "gold")) or "No minimum gold", 1, 1, 1)
+        GameTooltip:AddLine("At any bank, StockClerk tops this character up to it from the warband bank. It never deposits gold.", 0.74, 0.74, 0.74, true)
+        GameTooltip:Show()
+    end)
+    cell:SetScript("OnLeave", function(self)
+        if not self.editing then SetBorderColor(self, CELL_BORDER_IDLE) end
+        ApplyFill(self, CELL_FILL_IDLE)
+        GameTooltip:Hide()
+    end)
+    edit:SetScript("OnEscapePressed", function(self) self.escaping = true; close(); self.escaping = false end)
+    edit:SetScript("OnEnterPressed", commit)
+    edit:SetScript("OnTabPressed", function(self) self:ClearFocus() end)
+    edit:SetScript("OnEditFocusLost", function(self) if not self.escaping and self:IsShown() then commit() end end)
+
+    line:RegisterEvent("PLAYER_MONEY")
+    line:SetScript("OnEvent", function()
+        MF:RefreshGold()
+        -- The glint waits for the gold to land, then one more beat: a first
+        -- bank visit hitches while bags load, and motion during a hitch is
+        -- invisible (the 2 s sweep would finish in one frame).
+        local asked = MF._glintAt
+        MF._glintAt = nil
+        if asked and GetTime() - asked < 10 then
+            C_Timer.After(0.3, function()
+                if line:IsVisible() and ADDON.DB:Settings().motion then line.Shimmer() end
+            end)
+        end
+    end)
+    line:SetScript("OnShow", function() MF:RefreshGold() end)
+    self.goldLine = line
+    self:RefreshGold()
+    return line
+end
+
+function MF:RefreshGold()
+    local line = self.goldLine
+    if not line then return end
+    local have, keep = GetMoney(), ADDON.DB.char.goldKeep
+    line.amount:SetText(MoneyText(have, "gold"))
+    line.amount:SetTextColor(unpack(keep and have < keep and Palette.short or WHITE))
+    if keep then
+        line.minText:SetText(ShortGold(keep / 10000))
+        line.minText:SetTextColor(1, 1, 1)
+    else
+        line.minText:SetText("\226\128\148")  -- em dash: no value (faint)
+        line.minText:SetTextColor(0.4, 0.4, 0.4)
+    end
+end
+
+-- One gold glint when the bank tops this character up (motion setting),
+-- once the gold arrives (the line's PLAYER_MONEY).
+function MF:GlintGold() self._glintAt = GetTime() end
 
 -- ---------------------------------------------------------------------------
 -- Views: which list the window shows. The accent follows it (Palette.brand
