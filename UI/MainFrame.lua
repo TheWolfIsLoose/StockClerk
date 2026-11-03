@@ -1281,7 +1281,19 @@ function MF:BuildGoldLine(f, footer)
     edit:SetScript("OnEditFocusLost", function(self) if not self.escaping and self:IsShown() then commit() end end)
 
     line:RegisterEvent("PLAYER_MONEY")
-    line:SetScript("OnEvent", function() MF:RefreshGold() end)
+    line:SetScript("OnEvent", function()
+        MF:RefreshGold()
+        -- The glint waits for the gold to land, then one more beat: a first
+        -- bank visit hitches while bags load, and motion during a hitch is
+        -- invisible (the 2 s sweep would finish in one frame).
+        local asked = MF._glintAt
+        MF._glintAt = nil
+        if asked and GetTime() - asked < 10 then
+            C_Timer.After(0.3, function()
+                if line:IsVisible() and ADDON.DB:Settings().motion then line.Shimmer() end
+            end)
+        end
+    end)
     line:SetScript("OnShow", function() MF:RefreshGold() end)
     self.goldLine = line
     self:RefreshGold()
@@ -1303,11 +1315,9 @@ function MF:RefreshGold()
     end
 end
 
--- One gold glint when the bank tops this character up (motion setting).
-function MF:GlintGold()
-    local line = self.goldLine
-    if line and line:IsVisible() and ADDON.DB:Settings().motion then line.Shimmer() end
-end
+-- One gold glint when the bank tops this character up (motion setting),
+-- once the gold arrives (the line's PLAYER_MONEY).
+function MF:GlintGold() self._glintAt = GetTime() end
 
 -- ---------------------------------------------------------------------------
 -- Views: which list the window shows. The accent follows it (Palette.brand
