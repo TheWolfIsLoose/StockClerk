@@ -516,6 +516,12 @@ do -- Minimum gold turns an account-wide auto gold option off, live, only when a
   br:TakeOverGold(); assert(synced == 1, "already off: nothing again")
   _G.EllesmereUIDB, _G.EllesmereUI, ADDON.Print, char.goldKeep = nil, nil, origPrint, keep
 end
+do -- Gold line's Need cell: 9,999 / 200k / 1.5m (fits 42px)
+  local sg = ADDON.MainFrame.ShortGold
+  for g, want in pairs({ [999] = "999", [150000] = "150k", [175999] = "175k", [2000000] = "2m", [1550000] = "1.5m", [9999999] = "9.9m" }) do
+    assert(sg(g) == want, ("ShortGold(%d) = %s, want %s"):format(g, sg(g), want))
+  end
+end
 do -- Restock from Bank planner: exact amounts, char bank first, top up stacks, bag space
   local plan, max20 = ADDON.BankRestock.PlanPulls, function() return 20 end
   local sources = { { bag = 6, slot = 1, itemID = 1, count = 10 }, { bag = 7, slot = 1, itemID = 2, count = 50 },

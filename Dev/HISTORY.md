@@ -14,7 +14,7 @@ or, where it had no entry, from that version's GitHub release notes.
 
 - Keep gold is now a floor only ("Minimum gold on this character", player 2026-11-02): below the amount, withdraw whole gold from the warband bank to reach it; at or above it, nothing moves. It never deposits. `BR.PlanGold` lost its deposit branch (smoke updated); the saved key stays `goldKeep`; the log formatter still reads old deposit entries.
 - Minimum gold wins over a bag addon's account-wide auto gold (one exact amount, both ways): with a floor set on this character, `BR:TakeOverGold` clears that option at login and when the floor is set, calls the addon's own sync so it stops at once, logs it and prints once (player 2026-11-02: off whenever a minimum is set).
-- Minimum gold moved out of Settings onto a Gold line pinned under the list (MF:BuildGoldLine): coin + gold on hand under Have (amber below the minimum, never red), the minimum as an edit box across Need and Cap ("min 50,000g" / "Set a minimum"). Window chrome, not a row: no sort, filter, short count or drag. One gold shimmer when the bank tops you up (motion setting); no constant motion. Shimmer takes an optional colour.
+- Minimum gold moved out of Settings onto a Gold line pinned under the list (MF:BuildGoldLine), built on the row grid: coin tile in the icon slot, "Gold" in the name slot, gold on hand under Have (red below the minimum, like a short Have), the minimum in a Need cell (9,999 / 200k / 1.5m; em dash when off). Not an item: black rule above, no grip, accent strip, Cap or Seen; never sorts, filters or counts towards Restock. One gold-tinted shimmer when the bank tops you up (motion setting). MakeCell moved to module level for it.
 
 ## v1.5.1 (2026-10-23)
 
