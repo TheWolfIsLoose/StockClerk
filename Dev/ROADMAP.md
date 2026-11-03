@@ -11,16 +11,15 @@ disagree), **Open** (needs an answer before build).
 
 ## Next session: start here
 
-**Status (2026-11-02):** last release v1.5.1 (2026-10-23: Restock pulse, newly short rows shimmer, gray / red row strip). On `dev`, unreleased (notes in `Dev/HISTORY.md` "Next", CHANGELOG under `## Next`): Keep gold became **Minimum gold on this character** (a floor only, never deposits), set on a new Gold line under the list; setting a minimum turns off a bag addon's account-wide auto gold so the two don't fight. Ships in the weekly Tuesday release once its in-game round passes. StockClerk is close to feature-complete; the player uses it and collects feedback.
+**Status (2026-11-03):** released v1.6.0 (2026-11-03): Minimum gold on this character (a floor only, never deposits) on a new Gold line under the list; setting a minimum turns off a bag addon's account-wide auto gold. Nothing unreleased on `dev`. StockClerk is close to feature-complete; the player uses it and collects feedback.
 
 CurseForge publishing stays on the webhook (decided 2026-10-23: no direct uploads). When it misses a tag, upload the release zip by hand with the CHANGELOG text.
 
 Open:
-1. **Check in game:** Minimum gold (withdraw to the floor, never deposit), the Gold line, and the bag addon's auto gold switching off with one chat line.
-2. **Suite rule (2026-10-30): no instruction tooltips.** Controls telegraph their use; tooltips carry insight only. Sweep any how-to lines out of tooltips; menus get the drawn chevron.
-3. Not yet seen in game (organic): buy on one character and switch before depositing (transit: not short there); a soulbound listed item at Deposit (red mark, footer); a full warband bank; the Warband portal for the minimum gold top-up.
-4. Tab deposit-filter preference, if the bank probe (`/clerk bankprobe <itemID>`) shows filters matter.
-5. Retake the CurseForge gallery shots (they show the old mint look); paste `Dev/CURSEFORGE.md` (now with Minimum gold) when it ships.
+1. **Suite rule (2026-10-30): no instruction tooltips.** Controls telegraph their use; tooltips carry insight only. Sweep any how-to lines out of tooltips; menus get the drawn chevron.
+2. Not yet seen in game (organic): buy on one character and switch before depositing (transit: not short there); a soulbound listed item at Deposit (red mark, footer); a full warband bank; the Warband portal for the minimum gold top-up.
+3. Tab deposit-filter preference, if the bank probe (`/clerk bankprobe <itemID>`) shows filters matter.
+4. Retake the CurseForge gallery shots (they show the old mint look); paste `Dev/CURSEFORGE.md` (now with Minimum gold).
 
 Session setup: Claude installs changed files into the game folder and stamps `Build.lua`; the player `/reload`s; Claude reads `WTF\Account\<account>\SavedVariables\StockClerk.lua` for logs. Local smoke: `lua5.1 Dev/smoke.lua .` (Lua 5.1 builds from github.com/lua/lua tag v5.1 when no package manager is reachable). Pushing needs the repo attached with push access. Wait for a release push's tag (`git ls-remote --tags origin`) before pushing again.
 
