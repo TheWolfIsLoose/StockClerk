@@ -1084,6 +1084,7 @@ function MF:Build()
         elseif br:IsActive() then return
         elseif action == "deposit" then br:Start(false, "deposit")
         elseif ADDON.bankOpen then br:Start()
+        elseif ADDON.merchantOpen then ADDON.Merchant:Restock()
         else loop:Start(false, action) end  -- "mine" or "warband"
     end)
     restockBtn:HookScript("OnEnter", function(self)
@@ -1448,6 +1449,12 @@ function MF:RestockState()
                  tip = "Restock from bank", action = "pull",
                  lines = { "Moves exactly what you're short from your bank, then your warband bank, into your bags." },
                  reason = n == 0 and "Nothing you're short on is in your bank or warband bank." or nil }
+    elseif ADDON.merchantOpen then
+        local n, cost = ADDON.Merchant:Preview()
+        return { label = n > 0 and (("Restock at vendor (%d) \194\183 %s"):format(n, MoneyText(cost, "gold"))) or "Restock at vendor",
+                 enabled = n > 0, tip = "Restock at vendor",
+                 lines = { "Buys what you're short that this vendor sells, in one click.", "Items above your cap are marked and passed over." },
+                 reason = n == 0 and "This vendor sells nothing you're short on." or nil }
     end
     local n = loop:PreviewShortfallCount()
     local ahOpen = AuctionHouseFrame and AuctionHouseFrame:IsShown()
@@ -1529,12 +1536,14 @@ function MF:SetCheckout(line1, line2)
 end
 
 -- ---------------------------------------------------------------------------
--- Docking to the AH window. The side panels are anchored to the main window,
+-- Docking to the AH or merchant window. The side panels are anchored to the main window,
 -- so they move with it.
 -- ---------------------------------------------------------------------------
-function MF:DockToAHIfOpen()
-    local f, host = self.frame, AuctionHouseFrame
-    if self._preDockPos or not (f and host and host:IsShown()) then return end
+function MF:DockIfOpen()
+    local f = self.frame
+    local host = AuctionHouseFrame and AuctionHouseFrame:IsShown() and AuctionHouseFrame
+              or ADDON.merchantOpen and MerchantFrame:IsShown() and MerchantFrame
+    if self._preDockPos or not (f and host) then return end
     local point, _, _, x, y = f:GetPoint()
     self._preDockPos = { point = point, x = x, y = y }
     f:ClearAllPoints()
@@ -1652,7 +1661,7 @@ function MF:Show()
     self:Build()
     self.frame:Show()
     self:Refresh()
-    self:DockToAHIfOpen()  -- opened while already at the AH
+    self:DockIfOpen()  -- opened while already at the AH or a vendor
 end
 
 function MF:Hide()

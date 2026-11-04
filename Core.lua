@@ -129,6 +129,8 @@ On("PLAYER_LOGIN", function()
     end
 
     On("MAIL_INBOX_UPDATE", function() ADDON.RestockLoop:_OnMailInboxUpdate() end)
+    On("MERCHANT_SHOW", function() ADDON:OnMerchantShow() end)
+    On("MERCHANT_CLOSED", function() ADDON:OnMerchantClosed() end)
 end)
 
 -- ---------------------------------------------------------------------------
@@ -145,7 +147,7 @@ function ADDON:OnAuctionHouseShow()
         mf.openedByAH = true
         mf:Show()  -- docks
     elseif mf.frame and mf.frame:IsShown() then
-        mf:DockToAHIfOpen()
+        mf:DockIfOpen()
     end
     -- Express restock: start buying once the AH frame settles, if anything is short.
     if not settings.autoRestock then C_Timer.After(0.3, function() mf:PulseRestock() end) end
@@ -209,6 +211,34 @@ function ADDON:OnBankClosed()
     mf:RefreshRestockBtn()
     if mf.openedByBank then
         mf.openedByBank = false
+        mf:Hide()
+    end
+end
+
+-- Merchant: like the AH, but the window only opens (docked) when this vendor
+-- sells something you're short; at any other vendor it stays out of the way.
+function ADDON:OnMerchantShow()
+    local mf = self.MainFrame
+    self.merchantOpen = true
+    if self.Merchant:Preview() > 0 and self.DB:Settings().autoOpenAtAH and not (mf.frame and mf.frame:IsShown()) then
+        mf.openedByMerchant = true
+        mf:Show()  -- docks
+    elseif mf.frame and mf.frame:IsShown() then
+        mf:DockIfOpen()
+    end
+    mf:RefreshRestockBtn()
+    C_Timer.After(0.3, function() mf:PulseRestock() end)
+end
+
+function ADDON:OnMerchantClosed()
+    if not self.merchantOpen then return end  -- MERCHANT_CLOSED can fire twice
+    self.merchantOpen = false
+    local mf = self.MainFrame
+    mf:ClearMarks()
+    mf:RefreshRestockBtn()
+    mf:Undock()
+    if mf.openedByMerchant then
+        mf.openedByMerchant = false
         mf:Hide()
     end
 end

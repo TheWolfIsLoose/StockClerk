@@ -24,6 +24,7 @@ AH.lua
 Core.lua
 RestockLoop.lua
 BankRestock.lua
+Merchant.lua
 
 UI\MainFrame.lua
 UI\BulkImport.lua

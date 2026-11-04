@@ -447,7 +447,7 @@ do -- Checkout bar, marks, drag and dock paths run without errors (layout itself
   assert(ADDON.MoneyText(74240000, "gold") == "7,424g" and ADDON.MoneyText(5000, "gold") == "50s", "gold text")
   local ahf = AuctionHouseFrame
   AuctionHouseFrame = { IsShown = function() return true end }
-  mf:DockToAHIfOpen(); mf:Undock()
+  mf:DockIfOpen(); mf:Undock()
   AuctionHouseFrame = ahf
   local row = Frame(nil); row._itemID = 42
   mf:BeginRowDrag(row); mf:EndRowDrag(true)
@@ -638,4 +638,32 @@ do -- Minimap icon follows its setting
   st.minimapIcon = false; M:Refresh(); assert(st.minimap.hide == true, "icon hides")
   st.minimapIcon = true;  M:Refresh(); assert(st.minimap.hide == false, "icon comes back")
   io.stdout:write("minimap OK\n")
+end
+do -- Restock at vendor: list order, batches, caps, gold and bag limits
+  local V, items, gb = ADDON.Merchant, ADDON.DB.char.items, ADDON.Inventory.GetBreakdown
+  ADDON.Inventory.GetBreakdown = function() return { bags = 0, bank = 0, warband = 0 } end
+  ADDON.DB.char.pendingBuys = {}
+  ADDON.DB.char.items = { [1] = { need = 30, sortOrder = 10 }, [2] = { need = 5, sortOrder = 20, maxPrice = 50 },
+                          [3] = { need = 1, sortOrder = 30 } }  -- 3: not sold here
+  local stock = { { id = 1, price = 100, stackCount = 5 }, { id = 2, price = 80, stackCount = 1 } }
+  GetMerchantNumItems = function() return #stock end
+  GetMerchantItemID = function(i) return stock[i].id end
+  C_MerchantFrame = { GetItemInfo = function(i) local s = stock[i]
+    return { price = s.price, stackCount = s.stackCount, numAvailable = -1, isPurchasable = true, hasExtendedCost = false } end }
+  GetMerchantItemMaxStack = function() return 20 end
+  C_Item.GetItemMaxStackSizeByID = function() return 20 end
+  local buys, money, free = {}, 10000, 16
+  BuyMerchantItem = function(i, q) buys[#buys + 1] = { i, q } end
+  GetMoney = function() return money end
+  C_Container.GetContainerNumFreeSlots = function(bag) return bag == 0 and free or 0, 0 end
+  local n, cost = V:Preview()
+  assert(n == 1 and cost == 600, "preview: 30 in batches of 5 = 6 x 100c, item 2 over cap")
+  V:Restock(); V:Restock()  -- the double click buys once
+  assert(#buys == 2 and buys[1][2] == 20 and buys[2][2] == 10, "bought 30 in calls of max 20")
+  buys, money, V.lockUntil = {}, 250, nil; V:Restock()
+  assert(#buys == 1 and buys[1][2] == 10, "gold limits to 2 batches")
+  buys, money, free, V.lockUntil = {}, 10000, 1, nil; V:Restock()
+  assert(#buys == 1 and buys[1][2] == 20, "one free slot holds 20")
+  ADDON.DB.char.items, ADDON.Inventory.GetBreakdown = items, gb
+  io.stdout:write("vendor OK\n")
 end
