@@ -10,6 +10,11 @@ or, where it had no entry, from that version's GitHub release notes.
 > There is no v1.1.2 stable: the v1.1.2 alphas are the start of v1.2.0
 > (efficiency pass). v1.2.0 plan: `Dev/ROADMAP.md`.
 
+## v1.7.0-beta1 (2026-11-04)
+
+- Restock at vendor (`Merchant.lua`, player 2026-11-04: "all the same methodology and logic, just at a merchant"): same list, targets, caps and order as the AH run. MERCHANT_SHOW opens the window docked to MerchantFrame (follows Auto-open at AH) only when the vendor sells something short; one click buys it all with BuyMerchantItem (no per-item Buy: vendor buys need no hardware event per item and prices are fixed). Gold-priced items only, vendor batch sizes and limited stock respected, stops at gold or plain-bag free slots, 1.5s lock against a double click. No Express at vendors (would spend with no click); personal list only. `MF:DockToAHIfOpen` became `MF:DockIfOpen`. Smoke covers batches, caps, gold and bag limits. Not yet tested in game.
+- TOC lists 16001 (WoW Forever, launched 2026-11-04) alongside 120105. Not yet seen running in Forever; warband bank and AH buying there unverified.
+
 ## v1.6.0 (2026-11-03)
 
 - Keep gold is now a floor only ("Minimum gold on this character", player 2026-11-02): below the amount, withdraw whole gold from the warband bank to reach it; at or above it, nothing moves. It never deposits. `BR.PlanGold` lost its deposit branch (smoke updated); the saved key stays `goldKeep`; the log formatter still reads old deposit entries.
