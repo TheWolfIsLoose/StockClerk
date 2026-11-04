@@ -19,7 +19,8 @@ Open:
 1. **Suite rule (2026-10-30): no instruction tooltips.** Controls telegraph their use; tooltips carry insight only. Sweep any how-to lines out of tooltips; menus get the drawn chevron.
 2. Not yet seen in game (organic): buy on one character and switch before depositing (transit: not short there); a soulbound listed item at Deposit (red mark, footer); a full warband bank; the Warband portal for the minimum gold top-up.
 3. Tab deposit-filter preference, if the bank probe (`/clerk bankprobe <itemID>`) shows filters matter.
-4. Retake the CurseForge gallery shots (they show the old mint look); paste `Dev/CURSEFORGE.md` (now with Minimum gold).
+4. **WoW Forever support (started 2026-11-04):** TOC loads on 16001. Check in game whether Forever has a warband bank (if not, hide the Warband list, deposits and Minimum gold there) and whether the AH buy loop works. Then: Restock from vendor (see Later).
+5. Retake the CurseForge gallery shots (they show the old mint look); paste `Dev/CURSEFORGE.md` (now with Minimum gold).
 
 Session setup: Claude installs changed files into the game folder and stamps `Build.lua`; the player `/reload`s; Claude reads `WTF\Account\<account>\SavedVariables\StockClerk.lua` for logs. Local smoke: `lua5.1 Dev/smoke.lua .` (Lua 5.1 builds from github.com/lua/lua tag v5.1 when no package manager is reachable). Pushing needs the repo attached with push access. Wait for a release push's tag (`git ls-remote --tags origin`) before pushing again.
 
@@ -755,7 +756,22 @@ Decided 2026-10-12, no work needed:
 
 ## Later (unscheduled)
 
-Nothing queued.
+### Restock from vendor (added 2026-11-04, priority: high)
+
+Vendor restocking matters a lot on WoW Forever (Classic-era content at
+level 60: food, water, reagents) and helps on Retail too. Today vendor items
+can sit on the list but StockClerk never buys them.
+
+- **Default:** with a merchant open, one button buys what you're short of
+  every listed item that merchant sells, at its fixed price (same one-click
+  feel as Restock from bank). Short count and total cost shown on the
+  button, like the AH restock.
+- **Open:** buy automatically when the merchant opens (like Express-Restock
+  at the bank) or button only? Respect caps, or ignore them since vendor
+  prices are fixed? Limited-supply items: buy what's available and say so.
+- **Open:** where the window sits at a merchant (dock beside it like the AH,
+  or float like at the bank).
+- Bag-space guardrail as for the bank pull ("Not enough bag space.").
 
 The full pre-1.0 backlog text is in git history (`Dev/NOTES.md`, removed
 in the commit that added this roadmap).
