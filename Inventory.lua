@@ -37,6 +37,7 @@ end
 function INV:OnInventoryChanged()
     self:Invalidate()
     ADDON.RestockLoop:Sweep()
-    local mf = ADDON.MainFrame
+    local mf = ADDON.UI
     if mf.frame and mf.frame:IsShown() then mf:Refresh() end
+    if ADDON.aesMode then ADDON.AESMode.Repaint() end  -- Have column on the AES tab
 end

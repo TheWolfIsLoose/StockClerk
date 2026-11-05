@@ -107,7 +107,7 @@ function AH:OnCommoditySearchUpdated(itemID)
     local cheapest = results[1] and results[1].unitPrice
     if cheapest then
         ADDON.DB:StampLastPrice(itemID, cheapest, s.priceSource)
-        ADDON.MainFrame:Refresh()
+        ADDON.UI:Refresh()
     end
     ADDON.Log:Emit("ah_search", itemID, { unitPriceCopper = cheapest, listings = #results })
     Finish(true, results)

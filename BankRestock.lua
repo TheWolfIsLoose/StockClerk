@@ -221,7 +221,7 @@ function BR:SettleGold()
     local gold = function(c) return ADDON.MoneyText(c, "gold") end
     if move < 0 and C_Bank.CanWithdrawMoney(acct) then
         C_Bank.WithdrawMoney(acct, -move)
-        ADDON.MainFrame:GlintGold()
+        ADDON.UI:GlintGold()
     elseif short == 0 then
         return
     else
@@ -242,7 +242,7 @@ function BR:IsActive() return self.active end
 -- dir: "pull" (default) or "deposit".
 function BR:Start(express, dir)
     if self.active then return end
-    local mf = ADDON.MainFrame
+    local mf = ADDON.UI
     if not ADDON.bankOpen then mf:SetStatus("Open the bank first."); return end
     if InCombatLockdown() then mf:SetStatus("|cffff6666Can't use the bank in combat.|r"); return end
     if GetCursorInfo() then mf:SetStatus("|cffff6666Put down the item on your cursor first.|r"); return end
@@ -264,7 +264,7 @@ function BR:Stop(reason)
     if not self.active then return end
     self.active = false
     if GetCursorInfo() then ClearCursor() end
-    local mf, deposit = ADDON.MainFrame, self.dir == "deposit"
+    local mf, deposit = ADDON.UI, self.dir == "deposit"
     local verb = deposit and "Deposited %d to the warband bank" or "Pulled %d from your bank"
     for itemID, m in pairs(mf.marks) do  -- stopped mid-move: that row isn't "current" any more
         local n = self.moved[itemID]
@@ -279,7 +279,14 @@ function BR:Stop(reason)
     ADDON.Inventory:Invalidate()
     ADDON.RestockLoop:Sweep()  -- deposited warband buys leave transit now, not at the next bag event
     mf:SetCheckout(nil)
-    return mf:SetStatus(deposit and self:_DepositReceipt(items, reason) or self:_PullReceipt(items, reason))
+    mf:SetStatus(deposit and self:_DepositReceipt(items, reason) or self:_PullReceipt(items, reason))
+    -- Deposit on open follows a finished pull (Core sets depositNext on bank open).
+    if self.depositNext and not deposit and not reason then  -- nil reason = finished
+        self.depositNext = false
+        C_Timer.After(0.3, function()
+            if ADDON.bankOpen and self:DepositableCount() > 0 then self:Start(true, "deposit") end
+        end)
+    end
 end
 
 function BR:_PullReceipt(items, reason)
@@ -304,7 +311,7 @@ function BR:_DepositReceipt(items, reason)
         or ("Stopped (" .. reason .. ")")
     local parts = { items > 0 and ("deposited %s to the warband"):format(plural(items, "item")) or "nothing deposited" }
     local _, _, refused = self:DepositPlan()
-    local mf = ADDON.MainFrame
+    local mf = ADDON.UI
     for _, id in ipairs(refused) do
         mf:Mark(id, "failed", "Can't go in the warband bank (soulbound or otherwise restricted)")
         ADDON.Log:Emit("deposit_skip", id, { reason = "refused" })
@@ -350,7 +357,7 @@ function BR:_Step(run)
     -- Same pattern as the AH checkout: the row being filled is current, and
     -- ticks once something has landed.
     local deposit = self.dir == "deposit"
-    local mf, name = ADDON.MainFrame, C_Item.GetItemNameByID(m.itemID) or ("item " .. m.itemID)
+    local mf, name = ADDON.UI, C_Item.GetItemNameByID(m.itemID) or ("item " .. m.itemID)
     local verb = deposit and "Deposited %d to the warband bank" or "Pulled %d from your bank"
     mf:Mark(m.itemID, "current", deposit and "Moving to your warband bank" or "Moving from your bank", deposit)
     local done = count(self.moved)

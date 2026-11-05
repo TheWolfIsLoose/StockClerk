@@ -17,6 +17,7 @@ local launcher = LibStub("LibDataBroker-1.1"):NewDataObject(addonName, {
     type = "launcher",
     icon = "Interface\\AddOns\\StockClerk\\icon.png",
     OnClick = function()
+        if ADDON.aesMode then return ADDON.AESMode:OpenSettings() end
         local mf = ADDON.MainFrame
         if mf.frame and mf.frame:IsShown() then mf:Hide() else mf:Show() end
     end,

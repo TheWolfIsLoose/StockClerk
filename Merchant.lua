@@ -69,7 +69,7 @@ local LOCK = 1.5
 function V:Restock()
     if GetTime() < (self.lockUntil or 0) then return end
     self.lockUntil = GetTime() + LOCK
-    local mf, money, free = ADDON.MainFrame, GetMoney(), FreeSlots()
+    local mf, money, free = ADDON.UI, GetMoney(), FreeSlots()
     local bought, spent, over, short = 0, 0, 0, nil
     mf:ClearMarks()
     for _, p in ipairs(self:Plan()) do

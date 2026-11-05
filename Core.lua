@@ -85,7 +85,7 @@ On("PLAYER_LOGIN", function()
     On("GET_ITEM_INFO_RECEIVED", function(itemID)
         -- Fires for every item any addon asks about (thousands in an AH scan):
         -- repaint only for ours, and only while the window shows.
-        local mf = ADDON.MainFrame
+        local mf = ADDON.UI
         local DB = ADDON.DB
         if (DB:GetItems()[itemID] or DB:GetItems("warband")[itemID]) and mf.frame and mf.frame:IsShown() then mf:Refresh() end
     end)
@@ -140,7 +140,7 @@ end)
 -- bank window). ADDON.bankOpen is the "at a banker" flag.
 -- ---------------------------------------------------------------------------
 function ADDON:OnAuctionHouseShow()
-    local mf, settings = self.MainFrame, self.DB:Settings()
+    local mf, settings = self.UI, self.DB:Settings()
     mf:RefreshRestockBtn()
     if settings.autoOpenAtAH then
         C_AddOns.LoadAddOn("Blizzard_AuctionHouseUI")  -- load-on-demand; AuctionHouseFrame must exist
@@ -150,8 +150,10 @@ function ADDON:OnAuctionHouseShow()
         mf:DockIfOpen()
     end
     -- Express restock: start buying once the AH frame settles, if anything is short.
-    if not settings.autoRestock then C_Timer.After(0.3, function() mf:PulseRestock() end) end
-    if settings.autoRestock then
+    -- Holding Shift while opening skips every on-open automation.
+    local express = settings.autoRestock and not IsShiftKeyDown()
+    if not express then C_Timer.After(0.3, function() mf:PulseRestock() end) end
+    if express then
         C_Timer.After(0.3, function()
             local loop = self.RestockLoop
             if AuctionHouseFrame and AuctionHouseFrame:IsShown() and not loop:IsActive()
@@ -166,7 +168,7 @@ function ADDON:OnAuctionHouseClosed()
     self.AH:OnAuctionHouseClosed()
     self.RestockLoop:Stop("AH closed")
     self.RestockLoop.lastLane = nil  -- the next visit starts with your own list
-    local mf = self.MainFrame
+    local mf = self.UI
     mf:ClearMarks()  -- a restock's row marks last until you leave the AH
     mf:RefreshRestockBtn()
     mf:Undock()  -- before hiding, so a later open comes up where the player left it
@@ -178,7 +180,7 @@ end
 
 function ADDON:OnBankShow()
     self.bankOpen = true
-    local mf = self.MainFrame
+    local mf = self.UI
     if self.DB:Settings().autoOpenAtBank and not (mf.frame and mf.frame:IsShown()) then
         mf.openedByBank = true
         mf:Show()
@@ -188,11 +190,17 @@ function ADDON:OnBankShow()
     -- pull's receipt replaces it later; Recent activity keeps it).
     local gold = self.BankRestock:SettleGold()
     local n, items = self.BankRestock:PullableCount()
-    if n > 0 and not self.DB:Settings().autoRestockBank then C_Timer.After(0.3, function() mf:PulseRestock() end) end
-    if n > 0 and self.DB:Settings().autoRestockBank then
-        -- Express restock at Bank, once the bank frame settles; the pull reports itself.
+    local settings, skip = self.DB:Settings(), IsShiftKeyDown()
+    local pull = n > 0 and settings.autoRestockBank and not skip
+    -- Deposit on open runs after the pull (BankRestock:Stop starts it), or alone.
+    local deposit = settings.autoDepositBank and not skip
+    self.BankRestock.depositNext = pull and deposit
+    if n > 0 and not pull then C_Timer.After(0.3, function() mf:PulseRestock() end) end
+    if pull or (deposit and self.BankRestock:DepositableCount() > 0) then
+        -- Express restock at Bank, once the bank frame settles; the run reports itself.
         C_Timer.After(0.3, function()
-            if self.bankOpen then self.BankRestock:Start(true) end
+            if not self.bankOpen then return end
+            self.BankRestock:Start(true, not pull and "deposit" or nil)
         end)
     elseif n > 0 then
         items = ("%d short item%s can come from your bank."):format(n, n == 1 and "" or "s")
@@ -206,7 +214,7 @@ end
 function ADDON:OnBankClosed()
     self.bankOpen = false
     self.BankRestock:Stop("bank closed")
-    local mf = self.MainFrame
+    local mf = self.UI
     mf:ClearMarks()
     mf:RefreshRestockBtn()
     if mf.openedByBank then
@@ -218,9 +226,17 @@ end
 -- Merchant: like the AH, but the window only opens (docked) when this vendor
 -- sells something you're short; at any other vendor it stays out of the way.
 function ADDON:OnMerchantShow()
-    local mf = self.MainFrame
+    local mf = self.UI
     self.merchantOpen = true
-    if self.Merchant:Preview() > 0 and self.DB:Settings().autoOpenAtAH and not (mf.frame and mf.frame:IsShown()) then
+    local settings = self.DB:Settings()
+    -- Unset: follows the AH setting, as before it had its own switch.
+    local open = settings.autoOpenAtVendor
+    if open == nil then open = settings.autoOpenAtAH end
+    local n = self.Merchant:Preview()
+    if n > 0 and settings.autoBuyVendor and not IsShiftKeyDown() then
+        C_Timer.After(0.3, function() if self.merchantOpen then self.Merchant:Restock() end end)
+    end
+    if n > 0 and open and not (mf.frame and mf.frame:IsShown()) then
         mf.openedByMerchant = true
         mf:Show()  -- docks
     elseif mf.frame and mf.frame:IsShown() then
@@ -233,7 +249,7 @@ end
 function ADDON:OnMerchantClosed()
     if not self.merchantOpen then return end  -- MERCHANT_CLOSED can fire twice
     self.merchantOpen = false
-    local mf = self.MainFrame
+    local mf = self.UI
     mf:ClearMarks()
     mf:RefreshRestockBtn()
     mf:Undock()
@@ -261,9 +277,9 @@ function ADDON:OnSlashCommand(msg)
     cmd = cmd:lower()
 
     if cmd == "" or cmd == "open" or cmd == "show" then
-        self.MainFrame:Show()
+        if self.aesMode then self.AESMode:OpenSettings() else self.UI:Show() end
     elseif cmd == "close" or cmd == "hide" then
-        self.MainFrame:Hide()
+        self.UI:Hide()
     elseif cmd == "log" then
         if rest:lower() == "clear" then
             self.Log:Clear()
@@ -276,7 +292,7 @@ function ADDON:OnSlashCommand(msg)
         for _, line in ipairs(HELP) do self:Print(line) end
     elseif cmd == "reset" then
         self.DB:ClearAll()
-        self.MainFrame:Refresh()
+        self.UI:Refresh()
         self:Print("This character's list has been cleared.")
     elseif cmd == "debug" then
         -- Trace steps go into the log until toggled off or /reload (never saved).
@@ -293,7 +309,7 @@ function ADDON:OnSlashCommand(msg)
             if not itemID then return self:Print("Couldn't add that: " .. tostring(name)) end
             self.DB:SetItem(itemID, 1)
             self:Print(("Added %s (id %d) with target 1. Change it in the window."):format(name, itemID))
-            self.MainFrame:Refresh()
+            self.UI:Refresh()
         end)
     end
 end

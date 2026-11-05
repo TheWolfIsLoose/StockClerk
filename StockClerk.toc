@@ -4,6 +4,7 @@
 ## Author: Jakerator
 ## Version: @project-version@
 ## IconTexture: Interface\AddOns\StockClerk\icon.png
+## OptionalDeps: atrocityEssentials
 ## SavedVariables: StockClerkDB
 ## SavedVariablesPerCharacter: StockClerkCharDB
 ## X-Category: Inventory
@@ -31,6 +32,9 @@ UI\BulkImport.lua
 UI\Sidecar.lua
 UI\Minimap.lua
 UI\LogPopup.lua
+
+AES\Panel.lua
+AES\Adapter.lua
 
 #@debug@
 Dev\BankProbe.lua

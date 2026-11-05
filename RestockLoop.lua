@@ -31,7 +31,7 @@ local function NewState()
 end
 Loop.state = NewState()
 
-local function Status(msg) ADDON.MainFrame:SetStatus(msg) end
+local function Status(msg) ADDON.UI:SetStatus(msg) end
 local function Ledger() return ADDON.DB.char.pendingBuys end
 local function Transit()
     local t, key = ADDON.DB.global.transit, ADDON.DB:CharKey()
@@ -129,7 +129,7 @@ local DEBOUNCE  = 0.5  -- no Buy within this long of the player's last click
 local PRICEY    = 1.25 -- "well above Last Seen": average unit price over 125% of it
 local AMBER, GREY = "|cffffd84a", "|cff8c8c8c"
 
-local function MF() return ADDON.MainFrame end
+local function MF() return ADDON.UI end
 
 -- How many of an item a lane is short.
 function Loop:Short(lane, itemID, need)

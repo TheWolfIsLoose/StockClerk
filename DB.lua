@@ -50,6 +50,9 @@ DB.defaults = {
             autoOpenAtBank  = true,
             autoRestock     = false,      -- Express restock at AH: opt-in, it starts a buying flow
             autoRestockBank = false,      -- Express restock at Bank: opt-in
+            autoDepositBank = false,      -- deposit surplus to the warband bank on open (after any pull)
+            autoBuyVendor   = false,      -- buy what you're short at a vendor on open
+            -- autoOpenAtVendor: unset follows autoOpenAtAH (see Core:OnMerchantShow)
             lastPriceTTL    = 24 * 3600,  -- Last Seen dims after 24h
             minimapIcon     = true,
             motion          = true,       -- pulse / shimmer on what just changed
