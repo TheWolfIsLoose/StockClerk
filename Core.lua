@@ -80,6 +80,8 @@ On("ADDON_LOADED", function(name)
 end)
 
 On("PLAYER_LOGIN", function()
+    -- AES carries our restocking and has it on: stay out of its way entirely.
+    if ADDON.AES.Merged() then return ADDON.AES.StepAside() end
     ADDON.Minimap:Refresh()
     ADDON.BankRestock:TakeOverGold()
     On("GET_ITEM_INFO_RECEIVED", function(itemID)
@@ -277,7 +279,8 @@ function ADDON:OnSlashCommand(msg)
     cmd = cmd:lower()
 
     if cmd == "" or cmd == "open" or cmd == "show" then
-        if self.aesMode then self.AESMode:OpenSettings() else self.UI:Show() end
+        if self.AES.Merged() then return self.AES.Notice() end
+        self.UI:Show()
     elseif cmd == "close" or cmd == "hide" then
         self.UI:Hide()
     elseif cmd == "log" then

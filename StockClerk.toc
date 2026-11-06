@@ -33,8 +33,7 @@ UI\Sidecar.lua
 UI\Minimap.lua
 UI\LogPopup.lua
 
-AES\Panel.lua
-AES\Adapter.lua
+AES.lua
 
 #@debug@
 Dev\BankProbe.lua

@@ -22,7 +22,7 @@ local ADDON     = _G[addonName]
 
 local MF = {}
 ADDON.MainFrame = MF
-ADDON.UI = MF  -- the UI the logic talks to; AES/Adapter.lua swaps in the AES panel
+ADDON.UI = MF  -- the UI the logic talks to
 
 local ROW_HEIGHT = 24
 local MoneyText  = ADDON.MoneyText
